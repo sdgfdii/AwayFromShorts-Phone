@@ -1,0 +1,15 @@
+# 构建产物
+dpc/build/
+blocker/build/
+
+# 临时/预览 APK
+preview.apk
+demo.apk
+*.idsig
+*.h264
+
+# 系统
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

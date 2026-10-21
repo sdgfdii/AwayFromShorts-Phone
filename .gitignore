@@ -13,3 +13,6 @@ demo.apk
 Thumbs.db
 .vscode/
 .idea/
+
+# 项目内部数据(记忆)
+.workbuddy/

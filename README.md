@@ -130,7 +130,7 @@ Git Bash 里没有 `zip`,脚本会用 Python 的 `zipfile` 追加写入 dex。
 
 ```bash
 bash dpc/test/run.sh        # 63 项,纯 Java,不需要手机
-bash blocker/test/run.sh    # 15 项 × 2 套窗口
+bash blocker/test/run.sh    # 27 项
 ```
 
 对拍的是"暴力逐分钟扫描"的结果 —— 跨午夜、多段时段、增删段的不可变性都在里面。

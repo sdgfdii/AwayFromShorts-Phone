@@ -20,11 +20,14 @@ import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -76,13 +79,22 @@ public class CheckinActivity extends Activity {
     private LinearLayout dots;
     private TextView topSub;
     private TextView footHint;
+    private TextView manageBtn;
+    /** 打开着的「学习目标」管理对话框；增删目标后关掉重开，列表才是新的。 */
+    private android.app.Dialog manageDialog;
     private View card;
     private View ghost;
     private TextView cardHint;
+    /** 横推时从侧面跟手进来的那张（下一个目标）；竖推和静止时是 null。 */
+    private View pre;
+    private int preIndex = -1;
+    private int preStep;
 
     /* 手势状态 */
     private int dir = DIR_NONE;
     private float downX, downY;
+    private float vX, vY;
+    private VelocityTracker vt;
     private boolean busy;
     private boolean thrFired;
     private boolean longFired;
@@ -180,41 +192,34 @@ public class CheckinActivity extends Activity {
         root.setBackgroundColor(bg);
         root.setFitsSystemWindows(true);
 
-        // ---- 顶部 ----
+        // ---- 顶部：只留一行状态 + 刷新 ----
+        // 原来这里有个 24sp 的"打卡"大标题，占掉一整条；
+        // 这一页除了打卡没别的意思，标题纯属浪费高度 —— 卡片才是主角。
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(20), dp(18), dp(16), dp(6));
+        head.setPadding(dp(22), dp(4), dp(12), dp(0));
 
-        LinearLayout titles = new LinearLayout(this);
-        titles.setOrientation(LinearLayout.VERTICAL);
-        TextView title = new TextView(this);
-        title.setText("打卡");
-        title.setTextColor(textC);
-        title.setTextSize(24);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        // 长按标题改 token：这个页面只有一个配置项，不值得开设置页
-        title.setOnLongClickListener(new View.OnLongClickListener() {
+        topSub = new TextView(this);
+        topSub.setTextColor(text2C);
+        topSub.setTextSize(11);
+        topSub.setMaxLines(1);
+        topSub.setEllipsize(TextUtils.TruncateAt.END);
+        // 长按这一行改 token：这个页面只有一个配置项，不值得开设置页
+        topSub.setOnLongClickListener(new View.OnLongClickListener() {
             public boolean onLongClick(View v) {
                 askToken();
                 return true;
             }
         });
-        titles.addView(title);
-
-        topSub = new TextView(this);
-        topSub.setTextColor(text2C);
-        topSub.setTextSize(12);
-        topSub.setPadding(0, dp(3), 0, 0);
-        titles.addView(topSub);
-        head.addView(titles, new LinearLayout.LayoutParams(0,
+        head.addView(topSub, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView refresh = new TextView(this);
         refresh.setText("刷新");
         refresh.setTextColor(ACCENT);
-        refresh.setTextSize(13);
-        refresh.setPadding(dp(14), dp(8), dp(2), dp(8));
+        refresh.setTextSize(12);
+        refresh.setPadding(dp(12), dp(6), dp(4), dp(6));
         refresh.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 topSub.setText("正在读取…");
@@ -223,6 +228,21 @@ public class CheckinActivity extends Activity {
             }
         });
         head.addView(refresh);
+
+        // 管理目标只在"手机自己就是学习台"时出现 ——
+        // 目标来自电脑的那条老链路里，手机上改目标等于跟电脑打架。
+        manageBtn = new TextView(this);
+        manageBtn.setText("管理");
+        manageBtn.setTextColor(ACCENT);
+        manageBtn.setTextSize(12);
+        manageBtn.setPadding(dp(12), dp(6), dp(8), dp(6));
+        manageBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                manage();
+            }
+        });
+        head.addView(manageBtn);
+        manageBtn.setVisibility(local() ? View.VISIBLE : View.GONE);
         root.addView(head);
 
         // ---- 卡片舞台 ----
@@ -235,7 +255,7 @@ public class CheckinActivity extends Activity {
         LinearLayout foot = new LinearLayout(this);
         foot.setOrientation(LinearLayout.VERTICAL);
         foot.setGravity(Gravity.CENTER);
-        foot.setPadding(dp(16), dp(6), dp(16), dp(18));
+        foot.setPadding(dp(16), dp(2), dp(16), dp(10));
 
         dots = new LinearLayout(this);
         dots.setOrientation(LinearLayout.HORIZONTAL);
@@ -245,9 +265,9 @@ public class CheckinActivity extends Activity {
         footHint = new TextView(this);
         footHint.setText("上推打卡 · 左右推换目标 · 长按改数量");
         footHint.setTextColor(text3C);
-        footHint.setTextSize(11);
+        footHint.setTextSize(10);
         footHint.setGravity(Gravity.CENTER);
-        footHint.setPadding(0, dp(8), 0, 0);
+        footHint.setPadding(0, dp(5), 0, 0);
         foot.addView(footHint);
 
         root.addView(foot);
@@ -257,11 +277,22 @@ public class CheckinActivity extends Activity {
     /* ==================== 渲染 ==================== */
 
     private void render() {
+        render(true);
+    }
+
+    /**
+     * @param animateIn 要不要自带一段"从下方淡入"。换目标时必须传 false ——
+     *                  入场由 {@link #enterFrom(int)} 或预摆卡负责，
+     *                  两段动画同时改 alpha/translation 会互相打架，看着一顿一顿的。
+     */
+    private void render(boolean animateIn) {
         stage.removeAllViews();
         dots.removeAllViews();
         card = null;
         ghost = null;
         cardHint = null;
+        pre = null;
+        preIndex = -1;
 
         if (goals.isEmpty()) {
             topSub.setText(CheckinStore.goalsAt(this).isEmpty()
@@ -291,14 +322,18 @@ public class CheckinActivity extends Activity {
         ghost.setTranslationY(dp(12));
         ghost.setAlpha(0.6f);
 
-        card = buildCard(goals.get(selected));
+        card = buildCard(goals.get(selected), selected);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        clp.setMargins(dp(16), dp(2), dp(16), dp(6));
+        clp.setMargins(dp(16), dp(6), dp(16), dp(6));
         stage.addView(card, clp);
-        card.setTranslationY(dp(56));
-        card.setAlpha(0f);
-        card.animate().translationY(0).alpha(1f).setDuration(210).start();
+        if (animateIn) {
+            card.setTranslationY(dp(56));
+            card.setAlpha(0f);
+            card.animate().translationY(0).alpha(1f)
+                    .setInterpolator(new DecelerateInterpolator(1.6f))
+                    .setDuration(210).start();
+        }
 
         renderDots();
         footHint.setText(pending() == 0
@@ -307,7 +342,11 @@ public class CheckinActivity extends Activity {
         footHint.setTextColor(pending() == 0 ? greenC : text3C);
     }
 
-    private View buildCard(final CheckinStore.Goal g) {
+    /**
+     * @param index 这张卡显示"第几张"。预摆的下一张不是当前下标，
+     *              所以不能直接用 {@link #selected} —— 否则角标会写错。
+     */
+    private View buildCard(final CheckinStore.Goal g, int index) {
         boolean done = g.hit();
 
         LinearLayout box = new LinearLayout(this);
@@ -331,7 +370,7 @@ public class CheckinActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView idx = new TextView(this);
-        idx.setText((selected + 1) + " / " + goals.size());
+        idx.setText((index + 1) + " / " + goals.size());
         idx.setTextColor(text3C);
         idx.setTextSize(11);
         top.addView(idx);
@@ -499,7 +538,7 @@ public class CheckinActivity extends Activity {
 
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        lp.setMargins(dp(16), dp(2), dp(16), dp(6));
+        lp.setMargins(dp(16), dp(6), dp(16), dp(6));
         box.setLayoutParams(lp);
         return box;
     }
@@ -523,28 +562,44 @@ public class CheckinActivity extends Activity {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (vt == null) {
+            vt = VelocityTracker.obtain();
+        }
         switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 downX = ev.getRawX();
                 downY = ev.getRawY();
+                vX = 0f;
+                vY = 0f;
                 dir = DIR_NONE;
                 thrFired = false;
                 longFired = false;
+                vt.clear();
+                vt.addMovement(ev);
                 ui.removeCallbacks(longPress);
-                if (card != null) {
+                if (card != null && !busy) {
+                    // 上一段的入场动画还没走完就又按住了：先收到终点。
+                    // 不然手指在改 translationX、动画也在改，两边抢 —— 摸起来像打滑
+                    settle();
                     ui.postDelayed(longPress, 480);
                 }
                 return super.dispatchTouchEvent(ev);
 
             case MotionEvent.ACTION_MOVE: {
+                vt.addMovement(ev);
                 float dx = ev.getRawX() - downX;
                 float dy = ev.getRawY() - downY;
                 if (dir == DIR_NONE) {
-                    // 先看往哪个方向走，再决定这个手势归谁 —— 
+                    // 先看往哪个方向走，再决定这个手势归谁 ——
                     // 一上来就抢会把"点一下"也吃掉
                     if (Math.abs(dx) > dp(12) || Math.abs(dy) > dp(12)) {
                         ui.removeCallbacks(longPress);
                         dir = Math.abs(dy) >= Math.abs(dx) ? DIR_VERT : DIR_HORIZ;
+                        if (dir == DIR_HORIZ) {
+                            // 一判出是横推就立刻把下一张摆进场，
+                            // 而不是等松手才让新卡凭空出现
+                            mountPre(dx < 0 ? 1 : -1);
+                        }
                     }
                 }
                 if (dir != DIR_NONE && card != null && !busy) {
@@ -556,17 +611,25 @@ public class CheckinActivity extends Activity {
 
             case MotionEvent.ACTION_UP: {
                 ui.removeCallbacks(longPress);
+                vt.addMovement(ev);
+                vt.computeCurrentVelocity(1000);
+                vX = vt.getXVelocity();
+                vY = vt.getYVelocity();
+                vt.recycle();
+                vt = null;
                 float dx = ev.getRawX() - downX;
                 float dy = ev.getRawY() - downY;
                 int d = dir;
                 dir = DIR_NONE;
                 if (longFired) {
-                    return true;   // 长按已经处理过，这次抬手不算数
+                    dropPre();     // 长按已经处理过，这次抬手不算数
+                    return true;
                 }
                 if (d != DIR_NONE && !busy) {
                     onUp(d, dx, dy);
                     return true;
                 }
+                dropPre();
                 return super.dispatchTouchEvent(ev);
             }
 
@@ -574,14 +637,24 @@ public class CheckinActivity extends Activity {
                 ui.removeCallbacks(longPress);
                 int d = dir;
                 dir = DIR_NONE;
+                if (vt != null) {
+                    vt.recycle();
+                    vt = null;
+                }
                 if (d != DIR_NONE && !busy) {
                     spring();
                     return true;
                 }
+                dropPre();
                 return super.dispatchTouchEvent(ev);
             }
         }
         return super.dispatchTouchEvent(ev);
+    }
+
+    private int stageWidth() {
+        int w = stage.getWidth();
+        return w > 0 ? w : getResources().getDisplayMetrics().widthPixels;
     }
 
     private int upThreshold() {
@@ -592,12 +665,94 @@ public class CheckinActivity extends Activity {
         return Math.max(dp(120), Math.min(dp(230), (int) (h * 0.26f)));
     }
 
+    /**
+     * 横推多远算换一张。
+     *
+     * 原来是屏宽的 28%（1260px 的机器上要拖 353px ≈ 三分之一屏），
+     * 手指根本走不到那么远 —— 每次都是"拖半天 → 弹回去"，这是僵硬的头号原因。
+     * 现在 18%，而且快甩不看距离（见 {@link #flingX()}）。
+     */
     private int sideThreshold() {
-        int w = stage.getWidth();
-        if (w <= 0) {
-            w = getResources().getDisplayMetrics().widthPixels;
+        return Math.max(dp(64), (int) (stageWidth() * 0.18f));
+    }
+
+    /** 甩到多快就算数。慢拖一般 <800px/s，快甩 >2500px/s。 */
+    private float flingX() {
+        return dp(420);
+    }
+
+    /**
+     * 把下一个目标那张卡摆进场，压在当前卡下面。
+     *
+     * 原来横推时只有后面那个空壳（ghost）在动，前面一张在飞、后面空空荡荡，
+     * 手感像在拖一张贴纸 —— 你不知道推过去会看见什么，所以越推越小心。
+     */
+    private void mountPre(int step) {
+        dropPre();
+        if (goals.size() < 2 || card == null) {
+            return;   // 只有一个目标：推了也没得换，让它带阻力晃一下就好
         }
-        return Math.max(dp(90), (int) (w * 0.28f));
+        int n = goals.size();
+        int idx = ((selected + step) % n + n) % n;
+        if (idx == selected) {
+            return;
+        }
+        TextView keep = cardHint;            // buildCard 会改这个字段，别把当前卡带偏
+        View v = buildCard(goals.get(idx), idx);
+        cardHint = keep;
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        lp.setMargins(dp(16), dp(6), dp(16), dp(6));
+        stage.addView(v, stage.indexOfChild(card), lp);
+        // 轮换式：下一张就是一整页宽地停在旁边，两者**不重叠**。
+        // 早先那版让它从后面 42% 处缩着浮上来，那是"抽卡/覆盖"的手感 ——
+        // 两张叠着一起动，看着糊，也看不出到底翻没翻页。
+        v.setTranslationX(stageWidth() * step);
+        v.setAlpha(1f);
+
+        // 后面那个空壳在横推时没有任何意义了（旁边就有一张真卡），先隐掉
+        if (ghost != null) {
+            ghost.setAlpha(0f);
+        }
+
+        pre = v;
+        preIndex = idx;
+        preStep = step;
+    }
+
+    /** 撤掉预摆的那张。 */
+    private void dropPre() {
+        if (pre == null) {
+            preIndex = -1;
+            return;
+        }
+        View v = pre;
+        pre = null;
+        preIndex = -1;
+        v.animate().cancel();
+        stage.removeView(v);
+    }
+
+    /** 把卡片收到静止状态（打断还没跑完的入场动画）。 */
+    private void settle() {
+        if (card == null) {
+            return;
+        }
+        card.animate().cancel();
+        card.setTranslationX(0f);
+        card.setTranslationY(0f);
+        card.setRotation(0f);
+        card.setAlpha(1f);
+        if (ghost != null) {
+            ghost.animate().cancel();
+            ghost.setScaleX(0.94f);
+            ghost.setScaleY(0.94f);
+            ghost.setTranslationX(0f);
+            ghost.setTranslationY(dp(12));
+            ghost.setAlpha(0.6f);
+        }
+        dropPre();
     }
 
     private void onMove(float dx, float dy) {
@@ -629,18 +784,30 @@ public class CheckinActivity extends Activity {
                 cardHint.setTextColor(p >= 1f ? greenC : ACCENT);
             }
         } else {
-            card.setTranslationX(dx);
-            card.setRotation(dx / Math.max(1, stage.getWidth()) * 9f);
-            float p = Math.min(1f, Math.abs(dx) / sideThreshold());
-            card.setAlpha(1f - 0.25f * p);
-            if (!busy && p >= 1f && !thrFired) {
+            // 只有一个目标时左右推是死路：给一个很重的阻尼。
+            // 拉不动比"能拉动、但结果还是自己"更诚实
+            boolean alone = goals.size() < 2;
+            float eff = alone ? dx * 0.26f : dx;
+            card.setTranslationX(eff);
+            float p = Math.min(1f, Math.abs(eff) / sideThreshold());
+
+            if (pre != null) {
+                // 两张卡同步平移：当前这张走多少，旁边那张就补多少 ——
+                // 这就是"轮换"，手指下面是一条卡片带，不是两张叠着的卡
+                pre.setTranslationX(stageWidth() * preStep + eff);
+            }
+
+            if (!busy && !alone && p >= 1f && !thrFired) {
                 thrFired = true;
                 buzz(8);
             } else if (p < 1f) {
                 thrFired = false;
             }
             if (cardHint != null) {
-                if (p >= 1f) {
+                if (alone) {
+                    cardHint.setText("只有一个目标");
+                    cardHint.setTextColor(text3C);
+                } else if (p >= 1f) {
                     cardHint.setText(dx < 0 ? "松手，看下一个 →" : "← 松手，看上一个");
                     cardHint.setTextColor(ACCENT);
                 } else {
@@ -654,31 +821,59 @@ public class CheckinActivity extends Activity {
 
     private void onUp(int d, float dx, float dy) {
         if (d == DIR_VERT) {
+            dropPre();
             if (-dy >= upThreshold()) {
                 commit();
             } else {
                 spring();
             }
+            return;
+        }
+        if (goals.size() < 2) {
+            spring();
+            return;
+        }
+        // 距离够 —— 或者甩得够快。原来只认距离：快甩一下没拖满 28% 就弹回去，
+        // 手指明明在动、卡却不认，这是"僵硬"最直接的来源。
+        int step = 0;
+        if (dx <= -sideThreshold() || (vX < -flingX() && dx < -dp(24))) {
+            step = 1;     // 往左推 = 下一个（新卡从右边进）
+        } else if (dx >= sideThreshold() || (vX > flingX() && dx > dp(24))) {
+            step = -1;    // 往右推 = 上一个
+        }
+        if (step == 0) {
+            spring();
         } else {
-            // 往左推 = 看下一个（卡片从右边进来），往右推 = 回上一个
-            if (dx <= -sideThreshold()) {
-                flyTo(1);
-            } else if (dx >= sideThreshold()) {
-                flyTo(-1);
-            } else {
-                spring();
-            }
+            flyTo(step);
         }
     }
 
     private void spring() {
         if (card != null) {
             card.animate().translationX(0).translationY(0).rotation(0).alpha(1f)
-                    .setDuration(180).start();
+                    .setInterpolator(new DecelerateInterpolator(1.6f))
+                    .setDuration(190).start();
         }
         if (ghost != null) {
-            ghost.animate().scaleX(0.94f).scaleY(0.94f)
-                    .translationY(dp(12)).alpha(0.6f).setDuration(180).start();
+            ghost.animate().scaleX(0.94f).scaleY(0.94f).translationX(0)
+                    .translationY(dp(12)).alpha(0.6f)
+                    .setInterpolator(new DecelerateInterpolator(1.6f))
+                    .setDuration(190).start();
+        }
+        if (pre != null) {
+            // 没换成就滑回旁边那一格，不能直接删 —— 直接删等于"啪"地消失
+            final View v = pre;
+            final int st = preStep;
+            pre = null;
+            preIndex = -1;
+            v.animate().translationX(stageWidth() * st)
+                    .setInterpolator(new DecelerateInterpolator(1.6f))
+                    .setDuration(170)
+                    .withEndAction(new Runnable() {
+                        public void run() {
+                            stage.removeView(v);
+                        }
+                    }).start();
         }
         if (cardHint != null && selected >= 0 && selected < goals.size()) {
             CheckinStore.Goal g = goals.get(selected);
@@ -687,46 +882,69 @@ public class CheckinActivity extends Activity {
         }
     }
 
-    /** 换目标：卡片从一边飞出去，新的从另一边进来。 */
+    /**
+     * 换目标：当前这张飞出去，预摆的那张接手。
+     *
+     * ★ 两张一起动。原来只有当前卡飞走，新的要等 190ms 后才从 64dp 外淡进来，
+     *   中间那段空场就是"顿一下"的来源；而且 render() 自己还有一段从 y+56 的入场，
+     *   两段动画叠在一起，看着是糊的。
+     */
     private void flyTo(final int step) {
-        busy = true;
         if (card == null) {
-            busy = false;
             stepBy(step);
+            render();
             return;
         }
-        float w = stage.getWidth() <= 0
-                ? getResources().getDisplayMetrics().widthPixels : stage.getWidth();
-        card.animate().translationX(-step * w * 1.15f)
-                .rotation(-step * 14f).alpha(0f).setDuration(190)
+        busy = true;
+        final View out = card;
+        final View in = pre;
+        pre = null;
+        preIndex = -1;
+
+        float w = stageWidth();
+        // 出去 = 整整一页宽，进来那张从整整一页宽处补位：轮换，不是盖上去
+        out.animate().translationX(-step * w)
+                .setInterpolator(new DecelerateInterpolator(1.8f))
+                .setDuration(170)
                 .withEndAction(new Runnable() {
                     public void run() {
-                        busy = false;
+                        if (in != null) {
+                            stage.removeView(in);
+                        }
                         stepBy(step);
-                        enterFrom(step);
+                        render(false);      // 只重排，不再自带一段入场
+                        busy = false;
+                        if (in == null) {
+                            enterFrom(step);   // 没有预摆卡时补一段入场
+                        }
                     }
                 }).start();
+
+        if (in != null) {
+            in.animate().translationX(0)
+                    .setInterpolator(new DecelerateInterpolator(1.8f))
+                    .setDuration(170).start();
+        }
     }
 
+    /** 只改下标，不重排 —— 重排要等动画走到位。 */
     private void stepBy(int step) {
         if (goals.isEmpty()) {
             return;
         }
         int n = goals.size();
         selected = ((selected + step) % n + n) % n;
-        render();
     }
 
-    /** 新卡从缝隙里滑进来的方向：和刚飞出去的那张相反。 */
+    /** 新卡从哪一侧补进来：和刚出去的那张相反，正好一格。 */
     private void enterFrom(int step) {
         if (card == null) {
             return;
         }
-        float x = dp(64) * step;
-        card.setTranslationX(x);
-        card.setAlpha(0f);
-        card.setRotation(-step * 3f);
-        card.animate().translationX(0).rotation(0).alpha(1f).setDuration(190).start();
+        card.setTranslationX(stageWidth() * step);
+        card.animate().translationX(0)
+                .setInterpolator(new DecelerateInterpolator(1.8f))
+                .setDuration(200).start();
     }
 
     /* ==================== 提交 ==================== */
@@ -754,14 +972,15 @@ public class CheckinActivity extends Activity {
                 if (next >= 0) {
                     selected = next;
                 }
-                render();
+                render(false);     // 入场交给 enterFromUp，别再叠一段从下往上
                 enterFromUp();
             }
         };
         if (c != null) {
             // 让卡片先飞出去再重排 —— 重排会把这张卡换掉，动画就断了
             c.animate().translationY(-stage.getHeight() * 1.1f).alpha(0f)
-                    .setDuration(230).withEndAction(after).start();
+                    .setInterpolator(new DecelerateInterpolator(1.8f))
+                    .setDuration(210).withEndAction(after).start();
         } else {
             after.run();
         }
@@ -773,11 +992,24 @@ public class CheckinActivity extends Activity {
         }
         card.setTranslationY(dp(40));
         card.setAlpha(0f);
-        card.animate().translationY(0).alpha(1f).setDuration(190).start();
+        card.animate().translationY(0).alpha(1f)
+                .setInterpolator(new DecelerateInterpolator(1.8f))
+                .setDuration(190).start();
     }
 
     /** 记账 + 立刻告诉闸门还剩几个（不用等 Gist 往返和 10 分钟节流）。 */
     private void record(CheckinStore.Goal g, double amount) {
+        if (local()) {
+            // 本机就是学习台：直接落盘，闸门由 StudyStore 触发的 invalidate 重算
+            StudyStore.check(this, g.id, amount, StudyStore.today());
+            g.localHit = true;
+            buzz(24);
+            toast("已打卡 " + g.name + "  +" + fmt(amount) + " " + g.unit);
+            android.util.Log.i(Guard.TAG, "checkin(local): " + g.name + " +" + fmt(amount)
+                    + " " + g.unit + " → pending=" + (pending() - 1));
+            syncGuard();
+            return;
+        }
         CheckinStore.add(this, g, amount, CheckinStore.today());
         g.localHit = true;
         // 先落盘：首页那边可能正好在拉数据，mergeFresh 要靠盘上的状态守住这个绿勾
@@ -846,15 +1078,43 @@ public class CheckinActivity extends Activity {
 
     private void loadLocal() {
         goals.clear();
-        goals.addAll(CheckinStore.goals(this));
-        selected = firstPending();
-        // 上次没推成功的记录还在本地：闸门那边也要知道，不然重启一次就又冻上了
-        if (!CheckinStore.pending(this).isEmpty() && !goals.isEmpty()) {
-            StudyGate.noteLocalPending(pending());
+        if (local()) {
+            goals.addAll(StudyStore.uiGoals(this));
+        } else {
+            goals.addAll(CheckinStore.goals(this));
+            // 上次没推成功的记录还在本地：闸门那边也要知道，不然重启一次就又冻上了
+            if (!CheckinStore.pending(this).isEmpty() && !goals.isEmpty()) {
+                StudyGate.noteLocalPending(pending());
+            }
         }
+        selected = firstPending();
+    }
+
+    /** 本机有学习目标 → 手机就是学习台，整条链路不用联网。 */
+    private boolean local() {
+        return StudyStore.hasGoals(this);
+    }
+
+    private int indexOf(String id) {
+        for (int i = 0; i < goals.size(); i++) {
+            if (goals.get(i).id.equals(id)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private void refreshAsync() {
+        if (local()) {
+            // 没有"拉"这回事：重新读一遍本机文件就够了
+            String keepId = current() == null ? "" : current().id;
+            goals.clear();
+            goals.addAll(StudyStore.uiGoals(this));
+            int idx = indexOf(keepId);
+            selected = idx >= 0 ? idx : firstPending();
+            render();
+            return;
+        }
         final String prevDate = CheckinStore.goalsDate(this);
         CheckinSync.fetch(this, new CheckinSync.Sink() {
             public void onData(List<CheckinStore.Goal> fresh, String date, String at, Exception err) {
@@ -882,6 +1142,9 @@ public class CheckinActivity extends Activity {
     }
 
     private void pushAsync() {
+        if (local()) {
+            return;   // 本机就是源数据，没有什么要"推"的
+        }
         final List<CheckinStore.Item> pend = CheckinStore.pending(this);
         if (pend.isEmpty()) {
             return;
@@ -910,8 +1173,11 @@ public class CheckinActivity extends Activity {
     /** 状态行：还剩几个待打卡 + 同步情况。 */
     private String statusLine() {
         int pending = pending();
-        String head = goals.isEmpty() ? "还没读到学习台数据"
+        String head = goals.isEmpty() ? "还没有学习目标 · 点右上「管理」加一个"
                 : (pending == 0 ? "今天的都打完了" : "还有 " + pending + " 个待打卡");
+        if (local()) {
+            return head + " · 本机";
+        }
         int q = CheckinStore.pending(this).size();
         String sync;
         if (q > 0) {
@@ -1020,6 +1286,221 @@ public class CheckinActivity extends Activity {
                 })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    /* ==================== 目标管理（手机自己就是学习台时才有） ==================== */
+
+    // 对话框是系统样式（白底），不跟随页面的深色主题 ——
+    // 文字用页面变量的话，深色模式下近白的字打在白底上直接隐形。这里固定用深色。
+    private static final int DLG_TEXT = 0xFF18191C;
+    private static final int DLG_TEXT2 = 0xFF61666D;
+    private static final int DLG_LINE = 0xFFE3E5E7;
+
+    /** 管理入口：目标列表 + 新建 + 联动时段。目标一多也只是在对话框里滚。 */
+    private void manage() {
+        ScrollView sc = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), dp(12));
+
+        for (final CheckinStore.Goal g : goals) {
+            TextView row = new TextView(this);
+            StudyStore.G src = StudyStore.find(this, g.id);
+            String due = src == null ? "" : src.due;
+            row.setText(g.name + "（" + g.unit + "）\n"
+                    + fmt(g.done) + " / " + fmt(g.total)
+                    + (due.isEmpty() ? " · 不限期" : " · " + due + " 截止"));
+            row.setTextColor(DLG_TEXT);
+            row.setTextSize(14);
+            row.setPadding(0, dp(10), 0, dp(10));
+            row.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    manageOne(g.id);
+                }
+            });
+            box.addView(row);
+            box.addView(line());
+        }
+
+        TextView add = new TextView(this);
+        add.setText("＋ 新目标");
+        add.setTextColor(ACCENT);
+        add.setTextSize(14);
+        add.setPadding(0, dp(14), 0, dp(4));
+        add.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                askGoal(null);
+            }
+        });
+        box.addView(add);
+
+        TextView span = new TextView(this);
+        String s = StudyStore.spanStart(this), e = StudyStore.spanEnd(this);
+        span.setText("联动冻结时段：" + s + " – " + e);
+        span.setTextColor(DLG_TEXT2);
+        span.setTextSize(12);
+        span.setPadding(0, dp(16), 0, dp(2));
+        span.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                askSpan();
+            }
+        });
+        box.addView(span);
+
+        sc.addView(box);
+        android.app.AlertDialog d = new AlertDialog.Builder(this)
+                .setTitle("学习目标")
+                .setView(sc)
+                .setPositiveButton("完成", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface di, int w) {
+                        manageDialog = null;
+                        loadLocal();
+                        render();
+                    }
+                })
+                .show();
+        manageDialog = d;
+    }
+
+    /** 数据变了：把管理对话框关掉重开一份，列表才会反映最新状态。 */
+    private void reopenManage() {
+        if (manageDialog != null) {
+            manageDialog.dismiss();
+            manageDialog = null;
+        }
+        manage();
+    }
+
+    /** 单个目标的操作：编辑 / 删除。 */
+    private void manageOne(final String id) {
+        new AlertDialog.Builder(this)
+                .setItems(new CharSequence[]{"编辑", "删除"}, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int w) {
+                        if (w == 0) {
+                            askGoal(StudyStore.find(CheckinActivity.this, id));
+                        } else {
+                            StudyStore.remove(CheckinActivity.this, id);
+                            refreshAsync();
+                            reopenManage();
+                            toast("已删除");
+                        }
+                    }
+                })
+                .show();
+    }
+
+    /** 新建 / 编辑一个目标。old 为 null 表示新建。 */
+    private void askGoal(final StudyStore.G old) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(6), dp(20), dp(4));
+
+        final EditText name = field("名字，如：读论文", false);
+        final EditText unit = field("单位（篇 / 小时 / 个）", false);
+        final EditText total = field("总量", true);
+        final EditText due = field("截止日 yyyy-MM-dd（空 = 不限期）", false);
+        box.addView(name);
+        box.addView(unit);
+        box.addView(total);
+        box.addView(due);
+
+        if (old != null) {
+            name.setText(old.name);
+            unit.setText(old.unit);
+            total.setText(old.total % 1 == 0
+                    ? String.valueOf((long) old.total) : String.valueOf(old.total));
+            due.setText(old.due);
+        } else {
+            due.setHint("截止日（空 = 30 天后自动）");
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(old == null ? "新目标" : "编辑目标")
+                .setView(box)
+                .setPositiveButton("保存", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int w) {
+                        String n = name.getText().toString().trim();
+                        double t;
+                        try {
+                            t = Double.parseDouble(total.getText().toString().trim());
+                        } catch (Throwable x) {
+                            t = 0;
+                        }
+                        if (n.isEmpty() || !(t > 0)) {
+                            toast("名字和总量都得填");
+                            return;
+                        }
+                        StudyStore.G g = old == null ? new StudyStore.G() : old;
+                        g.name = n;
+                        g.unit = unit.getText().toString().trim();
+                        if (g.unit.isEmpty()) {
+                            g.unit = "个";
+                        }
+                        g.total = t;
+                        String dd = due.getText().toString().trim();
+                        g.due = dd.isEmpty() ? StudyStore.plusDays(30) : dd;
+                        StudyStore.upsert(CheckinActivity.this, g);
+                        refreshAsync();
+                        reopenManage();
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    /** 联动冻结时段：目标没打完时，这个区间里延长冻结。 */
+    private void askSpan() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.HORIZONTAL);
+        box.setPadding(dp(20), dp(6), dp(20), dp(4));
+        final EditText start = field("22:00", false);
+        final EditText end = field("23:00", false);
+        start.setText(StudyStore.spanStart(this));
+        end.setText(StudyStore.spanEnd(this));
+        box.addView(start, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView dash = new TextView(this);
+        dash.setText(" – ");
+        box.addView(dash);
+        box.addView(end, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        new AlertDialog.Builder(this)
+                .setTitle("联动冻结时段")
+                .setMessage("学习目标没打完时，这个时间段里娱乐应用继续冻结。")
+                .setView(box)
+                .setPositiveButton("保存", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int w) {
+                        String s = start.getText().toString().trim();
+                        String e = end.getText().toString().trim();
+                        if (!s.matches("\\d{1,2}:\\d{2}") || !e.matches("\\d{1,2}:\\d{2}")) {
+                            toast("时间写成 HH:mm");
+                            return;
+                        }
+                        StudyStore.setSpan(CheckinActivity.this, s, e);
+                        reopenManage();
+                        toast("已保存");
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private EditText field(String hint, boolean number) {
+        EditText ed = new EditText(this);
+        ed.setHint(hint);
+        ed.setSingleLine(true);
+        if (number) {
+            ed.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        }
+        ed.setPadding(0, dp(10), 0, dp(10));
+        return ed;
+    }
+
+    private View line() {
+        View v = new View(this);
+        v.setBackgroundColor(DLG_LINE);
+        return v;
     }
 
     private CheckinStore.Goal current() {

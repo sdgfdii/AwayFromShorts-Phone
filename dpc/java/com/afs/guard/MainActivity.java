@@ -59,6 +59,8 @@ public class MainActivity extends Activity {
     private Button checkinBtn;
     private Button appsBtn;
     private Button applyBtn;
+    private Button detectBtn;
+    private FrostView frost;
 
     private final java.util.List<View> surfaces = new java.util.ArrayList<>();
     private final java.util.List<TextView> labels = new java.util.ArrayList<>();
@@ -134,6 +136,34 @@ public class MainActivity extends Activity {
             }
         });
 
+        // 人工检测：闸门的数据最坏要等 10 分钟节流才刷新一遍，
+        // "我打完了怎么还冻着"这种时刻不该让人等机器的调度。
+        detectBtn = button(root, "立即检测", SURFACE, TEXT);
+        detectBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                detectBtn.setText("检测中…");
+                detectBtn.setEnabled(false);
+                new Thread(new Runnable() {
+                    public void run() {
+                        try {
+                            StudyGate.refreshNow(MainActivity.this);
+                        } catch (Throwable t) {
+                            android.util.Log.w(Guard.TAG, "refreshNow failed: " + t);
+                        } finally {
+                            // 按钮必须恢复：网络挂了 / 判定炸了都不能把入口焊死
+                            runOnUiThread(new Runnable() {
+                                public void run() {
+                                    detectBtn.setEnabled(true);
+                                    runApply();
+                                    toast("已重新检测学习台");
+                                }
+                            });
+                        }
+                    }
+                }).start();
+            }
+        });
+
         result = card(root, 12);
         result.setTextColor(TEXT2);
 
@@ -145,7 +175,13 @@ public class MainActivity extends Activity {
         foot.setPadding(0, dp(18), 0, 0);
         root.addView(foot);
 
-        setContentView(scroll);
+        // 薄霜层盖在内容上面：全屏蔽时有"被冻住"的体感，平时不画
+        android.widget.FrameLayout shell = new android.widget.FrameLayout(this);
+        shell.addView(scroll);
+        frost = new FrostView(this);
+        frost.setVisibility(View.GONE);
+        shell.addView(frost);
+        setContentView(shell);
         Guard.ensureService(this);   // 每次打开 App 顺手保证常驻守护在跑
         CheckinStore.seedToken(this); // 带 token 的构建第一次打开就落盘
         render();
@@ -227,9 +263,13 @@ public class MainActivity extends Activity {
             lockNote.setVisibility(View.GONE);
         }
 
+        if (frost != null) {
+            frost.setVisibility(dark && !grace ? View.VISIBLE : View.GONE);
+        }
         appsBtn.setText("黑名单 · " + total + " 个应用");
         styleSecondary(appsBtn, false);
         styleSecondary(applyBtn, false);
+        styleSecondary(detectBtn, false);
         styleCheckin();
 
         result.setTextColor(dark ? TEXT2_DARK : TEXT2);
@@ -250,7 +290,9 @@ public class MainActivity extends Activity {
         if (checkinBtn == null) {
             return;
         }
-        int pend = CheckinStore.pendingToday(this);
+        // 手机自己就是学习台时，数字直接从本机算；老链路才看 CheckinStore 的缓存
+        int pend = StudyGate.isLocalMode(this)
+                ? StudyStore.pendingToday(this) : CheckinStore.pendingToday(this);
         if (pend > 0) {
             checkinBtn.setText("打卡 · 还有 " + pend + " 个目标");
             checkinBtn.setAlpha(1f);

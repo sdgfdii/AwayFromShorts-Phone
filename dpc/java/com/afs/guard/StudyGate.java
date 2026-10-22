@@ -305,6 +305,9 @@ public final class StudyGate {
     private static final String FILE = "afs_gate";
     private static final String K_RAW = "last_json";
     private static final String K_FETCHED = "fetched_at";
+    /** 学习台导入格式的版本；v3 = 清库后重新拉一份最新 gate 数据再导。 */
+    private static final String K_IMPORT_VER = "study_import_ver";
+    private static final String K_REIMPORT_AT = "reimport_at";
 
     private static volatile Snapshot cached;
     /**
@@ -421,18 +424,150 @@ public final class StudyGate {
 
     /** 进程起来后从盘里恢复上一次的快照（重启后不空窗）。 */
     public static void init(Context c) {
-        if (cached != null) {
+        String raw = "";
+        if (cached == null) {
+            try {
+                raw = sp(c).getString(K_RAW, "");
+                long at = sp(c).getLong(K_FETCHED, 0L);
+                if (raw.length() > 0) {
+                    String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                            .format(new Date(at));
+                    cached = parse(raw, today, at);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        // 学习台导入 v4：库里有 PC 导入的目标（id 前缀 goal-）或干脆是空的，
+        // 就清掉重来 —— 先拉一份**当下**的 gate 数据再导。
+        // 电脑端刚记过账、本地数据被弄乱（删错目标）、上次导入半路失败，都靠这条路自愈。
+        // 只库内全是用户手建的目标（g* 前缀）才跳过。没网时导入静默失败，
+        // 1 小时节流后随 init 重试。
+        if (sp(c).getInt(K_IMPORT_VER, 0) < 4) {
+            boolean has = StudyStore.hasGoals(c);
+            boolean fromPc = StudyStore.hasImportedGoals(c);
+            if (has && !fromPc) {
+                sp(c).edit().putInt(K_IMPORT_VER, 4).apply();   // 全是手建的，不碰
+            } else {
+                if (has) {
+                    StudyStore.wipeForReimport(c);
+                }
+                long now = System.currentTimeMillis();
+                if (now - sp(c).getLong(K_REIMPORT_AT, 0L) > 3600000L) {
+                    sp(c).edit().putLong(K_REIMPORT_AT, now).apply();
+                    final Context cc = c.getApplicationContext();
+                    new Thread(new Runnable() {
+                        public void run() {
+                            try {
+                                String fresh = fetchRaw(
+                                        rawUrl() + "?t=" + System.currentTimeMillis());
+                                sp(cc).edit().putString(K_RAW, fresh)
+                                        .putLong(K_FETCHED, System.currentTimeMillis()).apply();
+                                if (StudyStore.importFromGateJson(cc, fresh)) {
+                                    sp(cc).edit().putInt(K_IMPORT_VER, 4).apply();
+                                    invalidate(cc);
+                                }
+                            } catch (Throwable t) {
+                                Log.w(TAG, "study reimport: " + t);
+                            }
+                        }
+                    }).start();
+                }
+            }
+        }
+        // 本机有学习目标 → 立刻用本机数据判，别等那趟网络
+        if (localMode(c)) {
+            applyLocal(c);
+        }
+    }
+
+    /**
+     * 人工检测：不等 10 分钟节流，立刻重拉 / 重算一遍并落地。
+     *
+     * 给「我明明打完了，怎么还冻着」这种时刻用 —— 用户不该背机器的调度延迟。
+     * 主线程别直接调：里面可能有一趟网络（走的是 refreshIfNeeded 自己的线程）。
+     */
+    public static void refreshNow(final Context c) {
+        lastTryMs = 0L;
+        localModeAt = 0L;
+        localWholeAt = 0L;
+        fetching = false;   // 上一次要是卡住了，也当它没卡
+        refreshIfNeeded(c);
+        if (localMode(c)) {
+            try {
+                Guard.apply(c);
+            } catch (Throwable t) {
+                Log.w(TAG, "refreshNow apply failed: " + t);
+            }
+        }
+    }
+
+    /**
+     * 本机有没有学习台数据。
+     *
+     * 有 → 「手机自己就是学习台」，完全离线：不拉 Gist、没有"数据超龄"这一说。
+     * 没有 → 保持老链路（电脑推 Gist，手机只读），老用户升级上来不断档。
+     *
+     * 缓存 5 秒：holding() 会被每个应用的判定各调一次（22 个应用 = 22 次），
+     * 每次都读文件太浪费。
+     */
+    private static volatile boolean localMode;
+    private static volatile long localModeAt;
+
+    static boolean localMode(Context c) {
+        long now = System.currentTimeMillis();
+        if (now - localModeAt > 5000L) {
+            localMode = StudyStore.hasGoals(c);
+            localModeAt = now;
+        }
+        return localMode;
+    }
+
+    /** 给外面用的只读版本：本机是不是学习台（决定首页按钮文案等）。 */
+    public static boolean isLocalMode(Context c) {
+        return localMode(c);
+    }
+
+    /** 本机数据变了（打卡 / 改目标 / 改时段）：下一拍立刻重算。 */
+    public static void invalidate(Context c) {
+        localModeAt = 0L;
+        localWholeAt = 0L;
+    }
+
+    private static volatile long localWholeAt;
+
+    /**
+     * 用本机数据重算一次快照。
+     *
+     * 2 秒节流：holding() 在一轮 apply 里会被调用几十次，没必要每次都重建 JSON。
+     * 打卡后 {@link #invalidate} 会把节流清零，所以"打完了立刻解闸"还是实时的。
+     */
+    private static void applyLocal(Context c) {
+        long now = System.currentTimeMillis();
+        if (now - localWholeAt < 2000L) {
             return;
         }
+        localWholeAt = now;
         try {
-            String raw = sp(c).getString(K_RAW, "");
-            long at = sp(c).getLong(K_FETCHED, 0L);
-            if (raw.length() > 0) {
-                String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US)
-                        .format(new Date(at));
-                cached = parse(raw, today, at);
+            String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date(now));
+            Snapshot next = parse(StudyStore.snapshotJson(c), today, now);
+            Snapshot old = cached;
+            cached = next;
+            // 本机是源数据，队列那套"先解闸"的中间态就没意义了 —— 清掉，
+            // 否则旧的 queuePending=0 会让卡片一直显示"等电脑记账"。
+            queuePending = -1;
+            localPending = -1;
+            boolean changed = old == null
+                    || old.allDone != next.allDone
+                    || old.enabled != next.enabled
+                    || old.startMin != next.startMin
+                    || old.endMin != next.endMin;
+            if (changed) {
+                Log.i(TAG, "study-gate local: allDone=" + next.allDone
+                        + " hold=" + shouldHold(next, Calendar.getInstance()));
+                Guard.apply(c);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.w(TAG, "study-gate local failed: " + t);
         }
     }
 
@@ -441,6 +576,11 @@ public final class StudyGate {
      * 拉完立即 apply 一遍 —— 闸门状态变了要在下一拍就落地，不等下一个 30 秒。
      */
     public static void refreshIfNeeded(final Context c) {
+        // 本机学习台：没有"拉取"这回事，算完就完事
+        if (localMode(c)) {
+            applyLocal(c);
+            return;
+        }
         long now = System.currentTimeMillis();
         boolean stuck = fetching && now - fetchStartedAt > FETCH_LIVENESS_MS;
         if ((fetching && !stuck) || now - lastTryMs < REFRESH_MS) {

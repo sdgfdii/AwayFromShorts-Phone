@@ -69,6 +69,7 @@ public class AppListActivity extends Activity {
     private TextView empty;
     private Button addBtn;
     private Button pkgBtn;
+    private Button batchBtn;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final java.util.List<Row> rows = new ArrayList<>();
@@ -168,6 +169,23 @@ public class AppListActivity extends Activity {
         plp.topMargin = dp(6);
         root.addView(pkgBtn, plp);
 
+        // 批量设时段：十几个应用要同一个规则时，逐个点进去改太反人类
+        batchBtn = new Button(this);
+        batchBtn.setText("⏱ 批量设时段");
+        batchBtn.setAllCaps(false);
+        batchBtn.setTextSize(14);
+        batchBtn.setTextColor(BRAND);
+        batchBtn.setBackgroundColor(SURFACE);
+        batchBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                batchSetRule();
+            }
+        });
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        blp.topMargin = dp(6);
+        root.addView(batchBtn, blp);
+
         setContentView(scroll);
         rebuild();
     }
@@ -198,9 +216,11 @@ public class AppListActivity extends Activity {
         if (picked != null) {
             want.addAll(picked);
         }
+        java.util.List<String> added = new java.util.ArrayList<>();
         for (String p : want) {
             if (!cur.contains(p)) {
                 RuleStore.put(this, p, RuleStore.defaultRule(this));
+                added.add(p);
             }
         }
         int refused = 0;
@@ -218,6 +238,10 @@ public class AppListActivity extends Activity {
         }
         rebuild();
         applyInBackground();
+        // 一次加了好几个：直接问要不要统一设时段（默认规则多半不是想要的）
+        if (!added.isEmpty()) {
+            askBatchForNew(added);
+        }
     }
 
     /* ==================== 列表 ==================== */
@@ -347,6 +371,9 @@ public class AppListActivity extends Activity {
         pkgBtn.setTextColor(can ? text2 : 0xFF9A9AA0);
         pkgBtn.setBackgroundColor(can ? surface : (dark ? OFF_DARK : OFF_LIGHT));
         pkgBtn.setAlpha(can ? 1f : 0.55f);
+        batchBtn.setTextColor(BRAND);
+        batchBtn.setBackgroundColor(surface);
+        batchBtn.setAlpha(1f);
 
         hint.setText("点一行改它的放行时段。只进不出：加入后不能移出（刚加的 10 分钟内除外）。");
         hint.setTextColor(text2);
@@ -384,165 +411,238 @@ public class AppListActivity extends Activity {
 
     /* ==================== 编辑一个应用的时段 ==================== */
 
+    /**
+     * 规则编辑器：星期 + 多段时段。
+     * 抽出来是为了「单个编辑」和「批量套用」共用同一套 UI —— 两处各写一遍迟早不一致。
+     */
+    private final class RuleEditor {
+        final ScrollView view;
+        private final int[] mask;
+        private final java.util.List<int[]> wins = new java.util.ArrayList<int[]>();
+        private final TextView daysText;
+        private final TextView winText;
+        private final LinearLayout winBox;
+        private final Button[] dayBtns = new Button[7];
+
+        RuleEditor(Rule start) {
+            mask = new int[] { start.days };
+            for (int i = 0; i < start.windowCount(); i++) {
+                wins.add(new int[] { start.startAt(i), start.endAt(i) });
+            }
+
+            LinearLayout box = new LinearLayout(AppListActivity.this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            box.setPadding(dp(20), dp(8), dp(20), 0);
+
+            daysText = new TextView(AppListActivity.this);
+            daysText.setTextSize(12);
+            daysText.setTextColor(TEXT2);
+            daysText.setText("放行星期（没选中的日子整天冻结）");
+            box.addView(daysText);
+
+            // 速选：最常用的几条规则。批量给十几个应用设时段时，
+            // 逐个点 7 个星期 + 拨两次时间太费手，点一下就够。
+            LinearLayout quick = new LinearLayout(AppListActivity.this);
+            quick.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            qlp.topMargin = dp(8);
+            String[] qLabels = { "每天 22-23", "每天 21-23", "全天冻结" };
+            for (int i = 0; i < qLabels.length; i++) {
+                final int which = i;
+                Button qb = new Button(AppListActivity.this);
+                qb.setText(qLabels[i]);
+                qb.setTextSize(12);
+                qb.setAllCaps(false);
+                qb.setPadding(0, 0, 0, 0);
+                qb.setTextColor(TEXT);
+                qb.setBackgroundColor(LINE);
+                qb.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        applyPreset(which);
+                    }
+                });
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(38), 1f);
+                lp.rightMargin = dp(4);
+                quick.addView(qb, lp);
+            }
+            box.addView(quick, qlp);
+
+            LinearLayout dayRow = new LinearLayout(AppListActivity.this);
+            dayRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dlp.topMargin = dp(6);
+            for (int i = 0; i < 7; i++) {
+                final int idx = i;
+                Button b = new Button(AppListActivity.this);
+                b.setText(Rule.DAY_NAMES[i]);
+                b.setTextSize(13);
+                b.setAllCaps(false);
+                b.setPadding(0, 0, 0, 0);
+                b.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        mask[0] ^= (1 << idx);
+                        styleDays();
+                    }
+                });
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(40), 1f);
+                lp.rightMargin = dp(3);
+                dayRow.addView(b, lp);
+                dayBtns[i] = b;
+            }
+            box.addView(dayRow, dlp);
+
+            winText = new TextView(AppListActivity.this);
+            winText.setTextSize(13);
+            winText.setTextColor(TEXT);
+            winText.setPadding(0, dp(14), 0, dp(4));
+            box.addView(winText);
+
+            winBox = new LinearLayout(AppListActivity.this);
+            winBox.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            wlp.topMargin = dp(4);
+            box.addView(winBox, wlp);
+
+            // 内容可能超过一屏（7 个星期按钮 + 多段时段），套一层滚动
+            view = new ScrollView(AppListActivity.this);
+            view.addView(box);
+
+            styleDays();
+            refreshWins();
+        }
+
+        private void styleDays() {
+            for (int k = 0; k < 7; k++) {
+                boolean on = Rule.dayOn(mask[0], k);
+                dayBtns[k].setTextColor(on ? 0xFFFFFFFF : TEXT2);
+                dayBtns[k].setBackgroundColor(on ? BRAND : LINE);
+            }
+            daysText.setText("放行星期 " + Rule.daysText(mask[0]));
+        }
+
+        /** 0=每天 22-23 / 1=每天 21-23 / 2=全天冻结（一天都不选）。 */
+        private void applyPreset(int which) {
+            wins.clear();
+            if (which == 0) {
+                mask[0] = Rule.ALL_DAYS;
+                wins.add(new int[] { 22 * 60, 23 * 60 });
+            } else if (which == 1) {
+                mask[0] = Rule.ALL_DAYS;
+                wins.add(new int[] { 21 * 60, 23 * 60 });
+            } else {
+                mask[0] = 0;   // 一天都不选 = 整天冻结
+            }
+            styleDays();
+            refreshWins();
+        }
+
+        private void refreshWins() {
+            winBox.removeAllViews();
+            if (wins.isEmpty()) {
+                TextView none = new TextView(AppListActivity.this);
+                none.setText("没有任何时段 = 整天冻结");
+                none.setTextSize(12);
+                none.setTextColor(TEXT2);
+                winBox.addView(none);
+            }
+            for (int i = 0; i < wins.size(); i++) {
+                final int idx = i;
+                LinearLayout row = new LinearLayout(AppListActivity.this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                TextView tv = new TextView(AppListActivity.this);
+                tv.setText((i + 1) + ".　" + Rule.hm(wins.get(i)[0] / 60, wins.get(i)[0] % 60)
+                        + " - " + Rule.hm(wins.get(i)[1] / 60, wins.get(i)[1] % 60));
+                tv.setTextSize(14);
+                tv.setTextColor(TEXT);
+                row.addView(tv, new LinearLayout.LayoutParams(0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                Button chg = new Button(AppListActivity.this);
+                chg.setText("改");
+                chg.setTextSize(12);
+                chg.setAllCaps(false);
+                chg.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        pickWindow(wins, idx, new Runnable() {
+                            public void run() {
+                                refreshWins();
+                            }
+                        });
+                    }
+                });
+                row.addView(chg, new LinearLayout.LayoutParams(dp(56), dp(38)));
+
+                Button del = new Button(AppListActivity.this);
+                del.setText("删");
+                del.setTextSize(12);
+                del.setAllCaps(false);
+                del.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        wins.remove(idx);
+                        refreshWins();
+                    }
+                });
+                LinearLayout.LayoutParams dlp2 = new LinearLayout.LayoutParams(dp(56), dp(38));
+                dlp2.leftMargin = dp(4);
+                row.addView(del, dlp2);
+                winBox.addView(row, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
+
+            Button add = new Button(AppListActivity.this);
+            add.setText("＋ 加一段");
+            add.setTextSize(12);
+            add.setAllCaps(false);
+            add.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    pickWindow(wins, -1, new Runnable() {
+                        public void run() {
+                            refreshWins();
+                        }
+                    });
+                }
+            });
+            LinearLayout.LayoutParams alp2 = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
+            alp2.topMargin = dp(6);
+            winBox.addView(add, alp2);
+            winText.setText("放行时段　" + joinWins(wins));
+        }
+
+        Rule result() {
+            int[][] w = new int[wins.size()][2];
+            for (int i = 0; i < wins.size(); i++) {
+                w[i][0] = wins.get(i)[0];
+                w[i][1] = wins.get(i)[1];
+            }
+            return new Rule(mask[0], w);
+        }
+    }
+
+    /* ==================== 单个编辑 ==================== */
+
     private void edit(final String pkg) {
         if (Guard.lockedNow(this, pkg)) {
             toast("它正在自己的屏蔽时间里，等它的放行时段才能改");
             return;
         }
 
-        final Rule cur = RuleStore.get(this, pkg);
-
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(20), dp(8), dp(20), 0);
-
-        final TextView daysText = new TextView(this);
-        daysText.setTextSize(12);
-        daysText.setTextColor(TEXT2);
-        daysText.setText("放行星期（没选中的日子整天冻结）");
-        box.addView(daysText);
-
-        final LinearLayout dayRow = new LinearLayout(this);
-        dayRow.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = dp(6);
-        final int[] mask = { cur.days };
-        final Button[] days = new Button[7];
-        for (int i = 0; i < 7; i++) {
-            final int idx = i;
-            Button b = new Button(this);
-            b.setText(Rule.DAY_NAMES[i]);
-            b.setTextSize(13);
-            b.setAllCaps(false);
-            b.setPadding(0, 0, 0, 0);
-            b.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    mask[0] ^= (1 << idx);
-                    for (int k = 0; k < 7; k++) {
-                        boolean on = Rule.dayOn(mask[0], k);
-                        days[k].setTextColor(on ? 0xFFFFFFFF : TEXT2);
-                        days[k].setBackgroundColor(on ? BRAND : LINE);
-                    }
-                    daysText.setText("放行星期 " + Rule.daysText(mask[0]));
-                }
-            });
-            boolean on = Rule.dayOn(mask[0], i);
-            b.setTextColor(on ? 0xFFFFFFFF : TEXT2);
-            b.setBackgroundColor(on ? BRAND : LINE);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(40), 1f);
-            lp.rightMargin = dp(3);
-            dayRow.addView(b, lp);
-            days[i] = b;
-        }
-        box.addView(dayRow, dlp);
-
-        // ---- 多段时段 ----
-        final java.util.List<int[]> wins = new java.util.ArrayList<int[]>();
-        for (int i = 0; i < cur.windowCount(); i++) {
-            wins.add(new int[] { cur.startAt(i), cur.endAt(i) });
-        }
-        final TextView winText = new TextView(this);
-        winText.setTextSize(13);
-        winText.setTextColor(TEXT);
-        winText.setPadding(0, dp(14), 0, dp(4));
-        box.addView(winText);
-
-        final LinearLayout winBox = new LinearLayout(this);
-        winBox.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        wlp.topMargin = dp(4);
-        box.addView(winBox, wlp);
-
-        final class Refresher implements Runnable {
-            public void run() {
-                final Refresher self = Refresher.this;
-                winBox.removeAllViews();
-                if (wins.isEmpty()) {
-                    TextView none = new TextView(AppListActivity.this);
-                    none.setText("没有任何时段 = 整天冻结");
-                    none.setTextSize(12);
-                    none.setTextColor(TEXT2);
-                    winBox.addView(none);
-                }
-                for (int i = 0; i < wins.size(); i++) {
-                    final int idx = i;
-                    LinearLayout row = new LinearLayout(AppListActivity.this);
-                    row.setOrientation(LinearLayout.HORIZONTAL);
-                    row.setGravity(Gravity.CENTER_VERTICAL);
-                    TextView tv = new TextView(AppListActivity.this);
-                    tv.setText((i + 1) + ".　" + Rule.hm(wins.get(i)[0] / 60, wins.get(i)[0] % 60)
-                            + " - " + Rule.hm(wins.get(i)[1] / 60, wins.get(i)[1] % 60));
-                    tv.setTextSize(14);
-                    tv.setTextColor(TEXT);
-                    row.addView(tv, new LinearLayout.LayoutParams(0,
-                            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-                    Button chg = new Button(AppListActivity.this);
-                    chg.setText("改");
-                    chg.setTextSize(12);
-                    chg.setAllCaps(false);
-                    chg.setOnClickListener(new View.OnClickListener() {
-                        public void onClick(View v) {
-                            pickWindow(wins, idx, new Runnable() { public void run() {
-                                winText.setText("放行时段　" + joinWins(wins));
-                                self.run();
-                            } });
-                        }
-                    });
-                    row.addView(chg, new LinearLayout.LayoutParams(dp(56), dp(38)));
-                    Button del = new Button(AppListActivity.this);
-                    del.setText("删");
-                    del.setTextSize(12);
-                    del.setAllCaps(false);
-                    del.setOnClickListener(new View.OnClickListener() {
-                        public void onClick(View v) {
-                            wins.remove(idx);
-                            self.run();
-                        }
-                    });
-                    LinearLayout.LayoutParams dlp2 = new LinearLayout.LayoutParams(dp(56), dp(38));
-                    dlp2.leftMargin = dp(4);
-                    row.addView(del, dlp2);
-                    winBox.addView(row, new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-                }
-                Button add = new Button(AppListActivity.this);
-                add.setText("＋ 加一段");
-                add.setTextSize(12);
-                add.setAllCaps(false);
-                add.setOnClickListener(new View.OnClickListener() {
-                    public void onClick(View v) {
-                        pickWindow(wins, -1, new Runnable() { public void run() {
-                            winText.setText("放行时段　" + joinWins(wins));
-                            self.run();
-                        } });
-                    }
-                });
-                LinearLayout.LayoutParams alp2 = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
-                alp2.topMargin = dp(6);
-                winBox.addView(add, alp2);
-                winText.setText("放行时段　" + joinWins(wins));
-            }
-        }
-        Refresher refresher = new Refresher();
-        refresher.run();
+        final RuleEditor ed = new RuleEditor(RuleStore.get(this, pkg));
 
         new AlertDialog.Builder(this)
                 .setTitle(Guard.labelOf(getPackageManager(), pkg))
-                .setView(box)
+                .setView(ed.view)
                 .setPositiveButton("保存", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
-                        int[][] w = new int[wins.size()][2];
-                        for (int i = 0; i < wins.size(); i++) {
-                            w[i][0] = wins.get(i)[0];
-                            w[i][1] = wins.get(i)[1];
-                        }
-                        if (mask[0] == 0) {
+                        Rule r = ed.result();
+                        if (r.days == 0) {
                             toast("一天都没选 = 整天冻结，已保存");
                         }
-                        RuleStore.put(AppListActivity.this, pkg, new Rule(mask[0], w));
+                        RuleStore.put(AppListActivity.this, pkg, r);
                         rebuild();
                         applyInBackground();
                     }
@@ -559,6 +659,141 @@ public class AppListActivity extends Activity {
                         applyInBackground();
                     }
                 })
+                .show();
+    }
+
+    /* ==================== 批量设时段 ==================== */
+
+    /**
+     * 一次给多个应用套用同一条规则。
+     *
+     * 正在自己屏蔽时段内的应用会被跳过（与单个编辑的锁定逻辑一致）——
+     * 否则「先批量放开时段」就是一条绕过路径。
+     */
+    private void batchSetRule() {
+        final java.util.List<String> pkgs =
+                new java.util.ArrayList<>(RuleStore.packages(this));
+        if (pkgs.isEmpty()) {
+            toast("黑名单是空的，先添加应用");
+            return;
+        }
+        final String[] labels = new String[pkgs.size()];
+        final boolean[] checked = new boolean[pkgs.size()];
+        final boolean[] locked = new boolean[pkgs.size()];
+        for (int i = 0; i < pkgs.size(); i++) {
+            String p = pkgs.get(i);
+            String name = Guard.labelOf(getPackageManager(), p);
+            locked[i] = Guard.lockedNow(this, p);
+            labels[i] = locked[i] ? (name + "（屏蔽中，跳过）") : name;
+        }
+
+        // ★ 自己画行，不用 setMultiChoiceItems：
+        //   系统 simple_list_item_multiple_choice 里的 CheckedTextView 在 ColorOS 上是
+        //   clickable="false"，点整行根本勾不上（实测点了没反应，只好自己接管点击）。
+        android.widget.ArrayAdapter<String> ad =
+                new android.widget.ArrayAdapter<String>(this, 0, labels) {
+                    @Override
+                    public View getView(final int pos, View convert, ViewGroup parent) {
+                        LinearLayout row = new LinearLayout(AppListActivity.this);
+                        row.setOrientation(LinearLayout.HORIZONTAL);
+                        row.setGravity(Gravity.CENTER_VERTICAL);
+                        row.setPadding(dp(18), dp(12), dp(18), dp(12));
+
+                        final android.widget.CheckBox cb = new android.widget.CheckBox(AppListActivity.this);
+                        cb.setChecked(checked[pos]);
+                        cb.setClickable(false);
+                        cb.setFocusable(false);
+                        row.addView(cb);
+
+                        TextView tv = new TextView(AppListActivity.this);
+                        tv.setText(labels[pos]);
+                        tv.setTextSize(15);
+                        tv.setTextColor(locked[pos] ? 0xFF9A9AA0 : TEXT);
+                        tv.setPadding(dp(10), 0, 0, 0);
+                        row.addView(tv, new LinearLayout.LayoutParams(0,
+                                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                        if (!locked[pos]) {
+                            row.setOnClickListener(new View.OnClickListener() {
+                                public void onClick(View v) {
+                                    checked[pos] = !checked[pos];
+                                    cb.setChecked(checked[pos]);
+                                }
+                            });
+                        }
+                        return row;
+                    }
+                };
+
+        new AlertDialog.Builder(this)
+                .setTitle("选要一起设时段的 " + pkgs.size() + " 个应用")
+                .setAdapter(ad, null)
+                .setPositiveButton("下一步", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) {
+                        java.util.List<String> picked = new java.util.ArrayList<>();
+                        for (int i = 0; i < pkgs.size(); i++) {
+                            if (checked[i] && !Guard.lockedNow(AppListActivity.this, pkgs.get(i))) {
+                                picked.add(pkgs.get(i));
+                            }
+                        }
+                        if (picked.isEmpty()) {
+                            toast("没选应用（屏蔽中的会被跳过）");
+                            return;
+                        }
+                        applyRuleTo(picked);
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    /** 弹出规则编辑器，套用到这批应用。 */
+    private void applyRuleTo(final java.util.List<String> picked) {
+        final RuleEditor ed = new RuleEditor(RuleStore.defaultRule(this));
+        new AlertDialog.Builder(this)
+                .setTitle("给这 " + picked.size() + " 个应用套用")
+                .setView(ed.view)
+                .setPositiveButton("套用", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) {
+                        Rule r = ed.result();
+                        for (String p : picked) {
+                            RuleStore.put(AppListActivity.this, p, r);
+                        }
+                        rebuild();
+                        applyInBackground();
+                        toast("已套用：" + Rule.daysText(r.days) + " " + r.windowText()
+                                + " · " + picked.size() + " 个");
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    /**
+     * 刚添加了一批应用：直接问要不要统一设时段。
+     * 不设也能用（沿用上次规则），但一次加十几个时逐个点进去改太反人类。
+     */
+    private void askBatchForNew(final java.util.List<String> added) {
+        StringBuilder names = new StringBuilder();
+        int show = Math.min(added.size(), 3);
+        for (int i = 0; i < show; i++) {
+            if (i > 0) {
+                names.append("、");
+            }
+            names.append(Guard.labelOf(getPackageManager(), added.get(i)));
+        }
+        if (added.size() > show) {
+            names.append(" 等 ").append(added.size()).append(" 个");
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("新加了 " + added.size() + " 个应用")
+                .setMessage(names + "\n\n现在统一套一条放行时段？之后也可以单独改。")
+                .setPositiveButton("现在设", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int w) {
+                        applyRuleTo(added);
+                    }
+                })
+                .setNegativeButton("用默认的", null)
                 .show();
     }
 

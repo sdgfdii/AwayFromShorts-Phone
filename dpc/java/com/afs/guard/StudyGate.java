@@ -44,6 +44,10 @@ public final class StudyGate {
     /** 同步 Gist（PC 端「账号/同步」建的同一个，secret：raw URL 知道就能读）。 */
     public static final String GIST_ID = "9c5c1f32f5159e085b3686d7a00a8f77";
     public static final String GIST_FILE = "study-gate.json";
+    /**
+     * 手机打卡队列。手机写、PC 记账后清空 —— 两边谁也不覆盖谁的文件。
+     */
+    public static final String QUEUE_FILE = "checkin-queue.json";
 
     /** 数据超龄线：PC 每 15 分钟推一次，45 分钟没更新视为失效（与 PC fail-open 一致）。 */
     public static final long STALE_MS = 45L * 60L * 1000L;
@@ -268,6 +272,20 @@ public final class StudyGate {
      * 数据不可信、开关关、已全部打卡 → false（放行）。
      */
     public static boolean shouldHold(Snapshot snap, Calendar now) {
+        return shouldHold(snap, now, queuePending);
+    }
+
+    /**
+     * @param queuedPending 合并手机打卡后还剩几个没打（-1 = 队列里没有今天的记录）
+     *
+     * ★ 这一层是「先解闸」的落点：手机把最后几个目标打完，队列里就带着
+     *   pendingAfter=0，守卫这边立刻不再 hold，不用干等 PC 那 15 分钟的同步。
+     *   等 PC 记完账把队列清空，判定自然回到 allDone 那条线上 —— 是收敛的。
+     */
+    public static boolean shouldHold(Snapshot snap, Calendar now, int queuedPending) {
+        if (queuedPending == 0) {
+            return false;
+        }
         if (snap == null) {
             return false;
         }
@@ -289,6 +307,17 @@ public final class StudyGate {
     private static final String K_FETCHED = "fetched_at";
 
     private static volatile Snapshot cached;
+    /**
+     * 把手机队列里的打卡也算进去之后，今天还剩几个目标没打卡。
+     *
+     *   -1 = 队列里没有今天的记录（手机没打过卡，按 PC 的数据判）
+     *    0 = 全部打完了（手机补齐了最后几个）→ 放行
+     *   >0 = 还剩这么多个     → 继续判
+     *
+     * ★ 不能"队列非空就放行"：那等于打一个目标就全解锁，
+     *   22:00 打 0.5 篇就能把剩下两个目标一起豁免 —— 闸门就废了。
+     */
+    private static volatile int queuePending = -1;
     private static volatile boolean fetching;
     private static volatile long lastTryMs;
     private static volatile long fetchStartedAt;
@@ -305,6 +334,51 @@ public final class StudyGate {
     static String rawUrl() {
         return "https://gist.githubusercontent.com/sdgfdii/" + GIST_ID
                 + "/raw/" + GIST_FILE;
+    }
+
+    static String queueUrl() {
+        // 带上时间戳绕开 CDN：gist raw 会缓存几十秒，刚打完卡读到的还是旧的空队列
+        return "https://gist.githubusercontent.com/sdgfdii/" + GIST_ID
+                + "/raw/" + QUEUE_FILE + "?t=" + System.currentTimeMillis();
+    }
+
+    /**
+     * 从队列文件里读「合上手机这些打卡之后，还剩几个目标没打」。
+     *
+     * 返回 -1 表示队列里没有今天的东西（或字段缺失 / 读不懂），调用方按 PC 的数据判。
+     * 0 表示手机把目标补齐了 —— 这才是「立刻解闸」的唯一凭据。
+     *
+     * 纯函数、不引 org.json（android.jar 里它是 stub，离线回归跑不了），
+     * 所以用"压掉空白 + 找字段"的笨办法。格式由打卡 App 和 PC 两边固定，够用。
+     */
+    static int parsePendingAfter(String json, String today) {
+        if (json == null || today == null || json.length() == 0) {
+            return -1;
+        }
+        String flat = json.replaceAll("\\s+", "");
+        if (flat.indexOf("\"date\":\"" + today + "\"") < 0) {
+            return -1;
+        }
+        int i = flat.indexOf("\"pendingAfter\":");
+        if (i < 0) {
+            return -1;
+        }
+        i += "\"pendingAfter\":".length();
+        int j = i;
+        while (j < flat.length()) {
+            char ch = flat.charAt(j);
+            if ((ch >= '0' && ch <= '9') || ch == '-') {
+                j++;
+            } else {
+                break;
+            }
+        }
+        try {
+            int v = Integer.parseInt(flat.substring(i, j));
+            return v < 0 ? -1 : v;
+        } catch (Throwable t) {
+            return -1;
+        }
     }
 
     /** 进程起来后从盘里恢复上一次的快照（重启后不空窗）。 */
@@ -358,6 +432,18 @@ public final class StudyGate {
                                    || old.endMin != next.endMin);
                         Log.i(TAG, "study-gate fetched: hold=" + shouldHold(next, Calendar.getInstance())
                                 + " allDone=" + next.allDone + " enabled=" + next.enabled);
+                        // 顺带拉一次打卡队列。读失败就保持上一次的值——
+                        // 网络抖一下就把"已打卡"抹成"未打卡"，比不更新难受得多。
+                        try {
+                            int q = parsePendingAfter(fetchRaw(queueUrl()), today);
+                            if (q != queuePending) {
+                                queuePending = q;
+                                changed = true;
+                            }
+                            Log.i(TAG, "study-gate queue: pendingAfter=" + q);
+                        } catch (Throwable tq) {
+                            Log.w(TAG, "study-gate queue failed: " + tq);
+                        }
                     } else {
                         // ★ 成功但 body 空 —— 也必须留痕, 否则线上静默没法诊断
                         Log.w(TAG, "study-gate fetch empty body");
@@ -379,9 +465,13 @@ public final class StudyGate {
 
     /** 同步 GET raw；任何失败抛异常，由调用方兜住。 */
     static String fetchRaw() throws Exception {
+        return fetchRaw(rawUrl());
+    }
+
+    static String fetchRaw(String url) throws Exception {
         HttpURLConnection conn = null;
         try {
-            conn = (HttpURLConnection) new URL(rawUrl()).openConnection();
+            conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setConnectTimeout(8000);
             conn.setReadTimeout(8000);
             conn.setRequestMethod("GET");
@@ -429,9 +519,19 @@ public final class StudyGate {
     public static final int ST_DONE    = 3;   // 今天目标全部打卡
     public static final int ST_ACTIVE  = 4;   // 闸门正在生效（正在延长冻结）
     public static final int ST_PENDING = 5;   // 还有目标没打卡，但还没到区间
+    public static final int ST_QUEUED  = 6;   // 手机上已打卡，等 PC 记账
 
     /** 纯判定（离线可测）：快照 → 卡片状态。 */
     public static int stateOf(Snapshot s, Calendar now) {
+        return stateOf(s, now, queuePending);
+    }
+
+    public static int stateOf(Snapshot s, Calendar now, int queuedPending) {
+        // 手机把最后一个目标也打完了：先显示"已打卡"，别让人以为没生效。
+        // 注意只有 ==0 才算 —— 还有剩的目标就仍是"没打完"，该冻还是冻。
+        if (queuedPending == 0) {
+            return ST_QUEUED;
+        }
         if (s == null || !s.valid) {
             return ST_NONE;
         }
@@ -458,7 +558,11 @@ public final class StudyGate {
 
     /** 纯文案（离线可测）。 */
     public static String textOf(Snapshot s, Calendar now) {
-        int st = stateOf(s, now);
+        return textOf(s, now, queuePending);
+    }
+
+    public static String textOf(Snapshot s, Calendar now, int queuedPending) {
+        int st = stateOf(s, now, queuedPending);
         String span = spanOf(s);
         switch (st) {
             case ST_STALE: {
@@ -479,6 +583,8 @@ public final class StudyGate {
                 return "学习联动\n今天目标已全部打卡（" + span + "）";
             case ST_ACTIVE:
                 return "学习联动 · 生效中\n今天还有目标没打卡，" + span + " 继续冻结";
+            case ST_QUEUED:
+                return "学习联动 · 已打卡\n手机上已打卡，等电脑记账后同步到学习台";
             case ST_PENDING:
                 return "学习联动\n今天还有目标没打卡 · " + span + " 到点继续冻结";
             default:
@@ -506,6 +612,9 @@ public final class StudyGate {
         }
         if (st == ST_ACTIVE) {
             return "学习联动　今天还有目标没打卡（" + span + " 延长冻结·生效中）";
+        }
+        if (st == ST_QUEUED) {
+            return "学习联动　手机上已打卡（等电脑记账）";
         }
         if (st == ST_PENDING) {
             return "学习联动　今天还有目标没打卡（" + span + " 延长冻结）";
@@ -547,6 +656,9 @@ public final class StudyGate {
         }
         if (st == ST_PENDING) {
             return "今天目标没完成 · " + spanOf(s) + " 起继续冻结";
+        }
+        if (st == ST_QUEUED) {
+            return "今天已打卡 · 等电脑记账";
         }
         if (st == ST_STALE) {
             return "⚠ 学习进度已过期，保护失效";

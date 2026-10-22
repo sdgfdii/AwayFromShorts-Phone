@@ -26,6 +26,7 @@ public final class GuardTest {
         textTests();
         groupKeyTests();
         studyGate();
+        phoneCheckin();
 
         System.out.println();
         System.out.println("== " + pass + " PASS / " + fail + " FAIL ==");
@@ -250,6 +251,63 @@ public final class GuardTest {
         ok(!new Rule(0x7F, new int[0][2]).groupKey()
                 .equals(new Rule(0x1F, new int[0][2]).groupKey()),
                 "空时段下星期不同仍是不同键");
+    }
+
+    /* ---------- 8.5 手机打卡队列 ---------- */
+
+    /**
+     * 手机上滑打完卡 -> Gist 队列里有今天的条目 -> 守卫立刻不再 hold。
+     * 这条如果判错，用户要么白等 PC 那 15 分钟，要么打完卡还被继续冻着。
+     */
+    private static void phoneCheckin() {
+        System.out.println("---- 手机打卡队列 ----");
+
+        // 队列里带 pendingAfter：合并手机打卡后还剩几个目标
+        String q = "{\"date\":\"2026-10-22\",\"active\":3,\"pendingAfter\":0,"
+                + "\"items\":[{\"id\":\"ck_1\",\"date\":\"2026-10-22\",\"amount\":20}]}";
+        eq(StudyGate.parsePendingAfter(q, "2026-10-22"), 0, "打完最后一个 → 0");
+        eq(StudyGate.parsePendingAfter(q, "2026-10-21"), -1, "日期对不上 → -1（不参与）");
+
+        String q2 = "{\"date\":\"2026-10-22\",\"active\":3,\"pendingAfter\":2,\"items\":[]}";
+        eq(StudyGate.parsePendingAfter(q2, "2026-10-22"), 2, "还剩 2 个 → 2");
+
+        eq(StudyGate.parsePendingAfter("{\"items\":[]}", "2026-10-22"), -1, "空队列 → -1");
+        eq(StudyGate.parsePendingAfter("", "2026-10-22"), -1, "空字符串 → -1");
+        eq(StudyGate.parsePendingAfter(null, "2026-10-22"), -1, "null → -1");
+        eq(StudyGate.parsePendingAfter("{\"date\":\"2026-10-22\"}", "2026-10-22"), -1,
+                "没有 pendingAfter 字段 → -1");
+
+        // Python 的 json.dumps 默认带空格，PC 写回来的可能长这样
+        eq(StudyGate.parsePendingAfter(
+                "{\"date\": \"2026-10-22\", \"pendingAfter\": 1, \"items\": []}", "2026-10-22"), 1,
+                "带空格的 JSON 也能读");
+        // 日期不能被别的字段前缀骗到
+        eq(StudyGate.parsePendingAfter(
+                "{\"date\":\"2026-10-221\",\"pendingAfter\":0}", "2026-10-22"), -1,
+                "带引号匹配，2026-10-221 不算今天");
+
+        StudyGate.Snapshot s = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
+                        + "\"allDone\":false,\"pending\":2,\"checkedAt\":\"2026-10-22 22:30\"}",
+                "2026-10-22", stampMs("2026-10-22 22:30"));
+        Calendar at2230 = at(2026, 10, 22, 22, 30);
+
+        ok(StudyGate.shouldHold(s, at2230, -1), "手机没打卡 → 继续冻");
+        ok(StudyGate.shouldHold(s, at2230, 2), "手机只打了 1 个、还剩 2 个 → 还是冻（不能打一个就全豁免）");
+        ok(!StudyGate.shouldHold(s, at2230, 0), "手机把目标补齐了 → 立刻放行（先解闸）");
+        eq(StudyGate.stateOf(s, at2230, -1), StudyGate.ST_ACTIVE, "没打卡 → 生效中");
+        eq(StudyGate.stateOf(s, at2230, 2), StudyGate.ST_ACTIVE, "还剩 2 个 → 仍是生效中");
+        eq(StudyGate.stateOf(s, at2230, 0), StudyGate.ST_QUEUED, "补齐 → 已打卡待记账");
+
+        // 数据过期时队列仍优先：手机确实打了卡，不该显示"保护已失效 + 继续冻结"
+        StudyGate.Snapshot old = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
+                        + "\"allDone\":false,\"pending\":2,\"checkedAt\":\"2026-10-22 20:00\"}",
+                "2026-10-22", stampMs("2026-10-22 20:00"));
+        eq(StudyGate.stateOf(old, at2230, -1), StudyGate.ST_STALE, "过期 → 保护已失效");
+        eq(StudyGate.stateOf(old, at2230, 0), StudyGate.ST_QUEUED, "过期但手机补齐 → 已打卡");
+        ok(StudyGate.textOf(old, at2230, 0).contains("已打卡"),
+                "过期 + 手机补齐 → 文案要写已打卡");
     }
 
     /* ---------- 9. 学习闸门 ---------- */

@@ -118,11 +118,12 @@ public final class Guard {
 
     /**
      * 这个应用现在是否该冻结。
-     * 两条路：① 不在自己的放行窗口里；② 学习闸门生效（到解锁时段但今天目标没打完）。
+     * 两条路：① 不在自己的放行窗口里；② 它参与学习闸门、且闸门正在生效。
      */
     public static boolean blockedNow(Context ctx, String pkg) {
         Calendar c = Calendar.getInstance();
-        return blocked(RuleStore.get(ctx, pkg), c) || StudyGate.holding(ctx, c);
+        Rule r = RuleStore.get(ctx, pkg);
+        return blocked(r, c) || (r.gate && StudyGate.holding(ctx, c));
     }
 
     /** 这个应用现在是否在自己的放行窗口里（不看学习闸门）。 */
@@ -177,9 +178,17 @@ public final class Guard {
 
     public static int blockedCount(Context ctx) {
         Calendar now = Calendar.getInstance();
+        // 必须把学习闸门算进去，否则状态卡显示"5 个冻结"、下面结果却是"12 个冻结"
+        boolean gate = StudyGate.holding(ctx, now);
+        PackageManager pm = ctx.getPackageManager();
         int n = 0;
-        for (Rule r : RuleStore.all(ctx).values()) {
-            if (blocked(r, now)) {
+        for (Map.Entry<String, Rule> e : RuleStore.all(ctx).entrySet()) {
+            // 与 apply() 的统计口径一致：没装的应用不算"冻结中"
+            if (!installed(pm, e.getKey())) {
+                continue;
+            }
+            Rule r = e.getValue();
+            if (blocked(r, now) || (gate && r.gate)) {
                 n++;
             }
         }
@@ -226,7 +235,7 @@ public final class Guard {
         boolean gateHold = StudyGate.holding(ctx, now);
         boolean anyBlocked = false;
         for (Rule r : rules.values()) {
-            if (blocked(r, now) || gateHold) {
+            if (blocked(r, now) || (gateHold && r.gate)) {
                 anyBlocked = true;
                 break;
             }
@@ -254,7 +263,10 @@ public final class Guard {
                 sb.append("- ").append(pkg).append("：未安装\n");
                 continue;
             }
-            boolean block = blocked(r, now) || gateHold;
+            // ★ 只有 gate=true 的应用才被学习闸门牵连。日常工具（微信/相机/文件管理，
+            //   每天放行十几小时）不该因为"目标没打完"被锁 —— 那是另一个问题。
+            boolean gateBlock = gateHold && r.gate;
+            boolean block = blocked(r, now) || gateBlock;
             try {
                 d.setUninstallBlocked(a, pkg, true);
             } catch (Throwable ignored) {
@@ -262,7 +274,9 @@ public final class Guard {
             String state;
             try {
                 d.setPackagesSuspended(a, new String[] { pkg }, block);
-                state = block ? (gateHold && !blocked(r, now) ? "冻结（学习闸门）" : "已冻结") : "放行中";
+                state = block
+                        ? (gateBlock && !blocked(r, now) ? "冻结（学习闸门）" : "已冻结")
+                        : "放行中";
             } catch (Throwable t) {
                 state = "冻结失败：" + t.getClass().getSimpleName();
             }
@@ -318,6 +332,17 @@ public final class Guard {
             } catch (Throwable ignored) {
             }
         }
+        // ★ Android 13+ 的通知是运行时权限，没授就 importance=NONE —— 常驻通知
+        //   （也就是"今天目标没完成"的唯一提醒渠道）根本不会显示。
+        //   DO 可以代授，用户不用去设置里点。
+        if (Build.VERSION.SDK_INT >= 33) {
+            try {
+                d.setPermissionGrantState(a, ctx.getPackageName(),
+                        "android.permission.POST_NOTIFICATIONS",
+                        DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED);
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     private static void add(DevicePolicyManager d, ComponentName a, String restriction) {
@@ -353,7 +378,9 @@ public final class Guard {
         if (r.days == 0) {
             return "没选放行星期 · 整天冻结";
         }
-        return "放行 " + r.summary();
+        // 标出"不受学习目标影响"：日常工具（微信/相机）不该因为目标没打完被锁，
+        // 列表里不标的话用户看不出自己那几个为什么没跟着灰。
+        return "放行 " + r.summary() + (r.gate ? "" : " · 不受学习目标影响");
     }
 
     private static boolean installed(PackageManager pm, String pkg) {

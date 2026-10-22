@@ -85,10 +85,9 @@ public final class RuleStore {
     public static Rule defaultRule(Context c) {
         String raw = sp(c).getString(K_LAST, "");
         try {
-            JSONObject o = new JSONObject(raw);
-            return new Rule(o.optInt("d", Rule.ALL_DAYS),
-                    o.optInt("s", FALLBACK_START),
-                    o.optInt("e", FALLBACK_END));
+            // 走 parseRule：setLast 存的是 w=[...] 格式，以前这里读 s/e 读不到，
+            // 于是"沿用上次的规则"一直悄悄回落到 21:00-23:00。
+            return parseRule(new JSONObject(raw.length() == 0 ? "{}" : raw));
         } catch (Throwable ignored) {
             return new Rule(Rule.ALL_DAYS, FALLBACK_START, FALLBACK_END);
         }
@@ -141,6 +140,7 @@ public final class RuleStore {
     /** 解析一条规则：v2 是 w=[[s,e],...]，v1 是 s/e 单段（老用户升级自动迁移）。 */
     private static Rule parseRule(JSONObject r) {
         int days = r.optInt("d", Rule.ALL_DAYS);
+        // 老数据没有 "g" 字段 → 按规则本身的放行时长自动判断（见 Rule.autoGate）
         org.json.JSONArray w = r.optJSONArray("w");
         if (w != null && w.length() > 0) {
             int[][] wins = new int[w.length()][2];
@@ -156,11 +156,17 @@ public final class RuleStore {
             if (n > 0) {
                 int[][] trimmed = new int[n][2];
                 System.arraycopy(wins, 0, trimmed, 0, n);
-                return new Rule(days, trimmed);
+                boolean g = r.has("g") ? r.optBoolean("g", true) : Rule.autoGate(trimmed);
+                return new Rule(days, trimmed, g);
             }
-            return new Rule(days, new int[0][2]);   // 显式清空 = 整天冻结
+            // 显式清空 = 整天冻结（这种显然要跟着闸门走）
+            return new Rule(days, new int[0][2], r.optBoolean("g", true));
         }
-        return new Rule(days, r.optInt("s", FALLBACK_START), r.optInt("e", FALLBACK_END));
+        int s = r.optInt("s", FALLBACK_START);
+        int e = r.optInt("e", FALLBACK_END);
+        boolean g = r.has("g") ? r.optBoolean("g", true)
+                : Rule.autoGate(new int[][] { { s, e } });
+        return new Rule(days, s, e, g);
     }
 
     private static JSONObject raw(Context c) {
@@ -185,6 +191,7 @@ public final class RuleStore {
             for (Map.Entry<String, Rule> e : m.entrySet()) {
                 JSONObject r = new JSONObject();
                 r.put("d", e.getValue().days);
+                r.put("g", e.getValue().gate);
                 org.json.JSONArray w = new org.json.JSONArray();
                 for (int i = 0; i < e.getValue().windowCount(); i++) {
                     org.json.JSONArray seg = new org.json.JSONArray();
@@ -209,6 +216,7 @@ public final class RuleStore {
         try {
             JSONObject o = new JSONObject();
             o.put("d", r.days);
+            o.put("g", r.gate);
             org.json.JSONArray w = new org.json.JSONArray();
             for (int i = 0; i < r.windowCount(); i++) {
                 org.json.JSONArray seg = new org.json.JSONArray();

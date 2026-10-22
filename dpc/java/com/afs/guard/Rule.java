@@ -17,17 +17,63 @@ public final class Rule {
     public static final int ALL_DAYS = 0x7F;
     public static final String[] DAY_NAMES = {"一", "二", "三", "四", "五", "六", "日"};
 
+    /** 每天可用时长不超过这个数，就默认当"娱乐应用"，受学习闸门约束。 */
+    public static final int GATE_MAX_MINUTES = 6 * 60;
+
     public final int days;
+    /**
+     * 是否参与学习闸门（目标没打完时跟着继续冻结）。
+     *
+     * ★ 这个字段是必须的：闸门如果对黑名单里所有应用生效，会把微信、相机、
+     *   文件管理这些日常工具一起冻住 —— 它们虽然也在名单里，但每天放行 18 小时，
+     *   明显不是"要戒掉的东西"。默认按每天可用时长自动判断，用户也可以手动改。
+     */
+    public final boolean gate;
     private final int[][] windows;   // 每段 {start, end}，已规范化，按 start 升序
 
     public Rule(int days, int[][] windows) {
+        this(days, windows, autoGate(windows));
+    }
+
+    public Rule(int days, int[][] windows, boolean gate) {
         this.days = days & ALL_DAYS;
         this.windows = normalize(windows);
+        this.gate = gate;
     }
 
     /** 单段便捷构造。 */
     public Rule(int days, int start, int end) {
         this(days, new int[][] { { start, end } });
+    }
+
+    public Rule(int days, int start, int end, boolean gate) {
+        this(days, new int[][] { { start, end } }, gate);
+    }
+
+    /**
+     * 按"每天总共能放行多久"猜要不要受闸门约束。
+     * 每天只给几小时 → 娱乐应用，目标没打完就该继续锁；
+     * 放行十几个小时 → 日常工具（微信/相机/文件管理），不该被学习目标牵连。
+     */
+    public static boolean autoGate(int[][] wins) {
+        int total = 0;
+        if (wins != null) {
+            for (int i = 0; i < wins.length; i++) {
+                if (wins[i] == null || wins[i].length < 2) {
+                    continue;
+                }
+                int s = norm(wins[i][0]);
+                int e = norm(wins[i][1]);
+                if (s == e) {
+                    total += 24 * 60;            // 起止相同 = 全天
+                } else if (s < e) {
+                    total += e - s;
+                } else {
+                    total += (24 * 60 - s) + e;  // 跨午夜
+                }
+            }
+        }
+        return total > 0 && total <= GATE_MAX_MINUTES;
     }
 
     private static int[][] normalize(int[][] in) {
@@ -81,7 +127,7 @@ public final class Rule {
     }
 
     public Rule withDays(int d) {
-        return new Rule(d, windows);
+        return new Rule(d, windows, gate);
     }
 
     /** 改第 i 段的起止。 */
@@ -89,7 +135,7 @@ public final class Rule {
         int[][] w = windows();
         w[i][0] = norm(s);
         w[i][1] = norm(e);
-        return new Rule(days, w);
+        return new Rule(days, w, gate);
     }
 
     public Rule addWindow(int s, int e) {
@@ -100,7 +146,7 @@ public final class Rule {
         }
         w[windows.length][0] = norm(s);
         w[windows.length][1] = norm(e);
-        return new Rule(days, w);
+        return new Rule(days, w, gate);
     }
 
     public Rule removeWindow(int i) {
@@ -114,11 +160,16 @@ public final class Rule {
             w[n][1] = windows[k][1];
             n++;
         }
-        return new Rule(days, w);
+        return new Rule(days, w, gate);
+    }
+
+    /** 换一个"是否受学习闸门约束"的取值。 */
+    public Rule withGate(boolean g) {
+        return new Rule(days, windows, g);
     }
 
     public boolean same(Rule o) {
-        if (o == null || o.days != days || o.windowCount() != windowCount()) {
+        if (o == null || o.days != days || o.windowCount() != windowCount() || o.gate != gate) {
             return false;
         }
         for (int i = 0; i < windows.length; i++) {

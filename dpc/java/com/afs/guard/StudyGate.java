@@ -532,4 +532,35 @@ public final class StudyGate {
     public static boolean activeNow(Context c, Calendar now) {
         return holding(c, now);
     }
+
+    /**
+     * 常驻通知用的一行短文案（不超过十几个字，通知栏放得下）。
+     * 目标没完成时把通知本身变成提醒 —— 这是"只提醒不冻结"唯一能落地的地方：
+     * Android 没有"图标变灰但还能用"的 API，图标灰 = 已被 suspend = 点不开。
+     */
+    public static String noticeLine(Context c, Calendar now) {
+        init(c);
+        Snapshot s = cached;
+        int st = stateOf(s, now);
+        if (st == ST_ACTIVE) {
+            return "⚠ 今天目标没完成 · 正在延长冻结";
+        }
+        if (st == ST_PENDING) {
+            return "今天目标没完成 · " + spanOf(s) + " 起继续冻结";
+        }
+        if (st == ST_STALE) {
+            return "⚠ 学习进度已过期，保护失效";
+        }
+        if (st == ST_DONE) {
+            return "今天目标已完成 · 按时间表放行";
+        }
+        return "到点自动冻结 / 放行（CPU 常驻，略耗电）";
+    }
+
+    /** 是否需要把通知做成警示样式（目标没完成 / 保护失效）。 */
+    public static boolean noticeWarn(Context c, Calendar now) {
+        init(c);
+        int st = stateOf(cached, now);
+        return st == ST_ACTIVE || st == ST_PENDING || st == ST_STALE;
+    }
 }

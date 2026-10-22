@@ -13,6 +13,8 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Log;
 
+import java.util.Calendar;
+
 /**
  * 常驻守护：每 30 秒把状态落一遍。
  *
@@ -34,6 +36,7 @@ public class GuardService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private PowerManager.WakeLock wakeLock;
     private int tickCount;
+    private String lastNoticeText;
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -45,6 +48,7 @@ public class GuardService extends Service {
                 }
                 tickCount++;
                 Guard.apply(GuardService.this);   // 内部只有状态变化时才调 setPackagesSuspended
+                updateNotice();
             } catch (Throwable t) {
                 Log.e(Guard.TAG, "tick failed", t);
             }
@@ -128,6 +132,30 @@ public class GuardService extends Service {
         }
     }
 
+    /**
+     * 常驻通知随学习闸门状态变化。
+     *
+     * 为什么要这么干：Android 没有"只让图标变灰、但应用还能用"的能力 ——
+     * 图标灰 = 已被 suspend = 点不开。所以"提醒但不惩罚"只能落在通知上：
+     * 目标没完成时，常驻通知本身就是那句提醒，每 30 秒跟着状态刷新。
+     * 只在文案真的变了才 notify，避免每 30 秒刷一次通知栏。
+     */
+    private void updateNotice() {
+        try {
+            String text = StudyGate.noticeLine(this, Calendar.getInstance());
+            if (text.equals(lastNoticeText)) {
+                return;
+            }
+            lastNoticeText = text;
+            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.notify(NOTI_ID, buildNotification());
+            }
+        } catch (Throwable t) {
+            Log.w(Guard.TAG, "updateNotice failed: " + t);
+        }
+    }
+
     private Notification buildNotification() {
         Notification.Builder b;
         if (Build.VERSION.SDK_INT >= 26) {
@@ -143,8 +171,12 @@ public class GuardService extends Service {
         } else {
             b = new Notification.Builder(this);
         }
-        b.setContentTitle("按时间表工作")
-         .setContentText("到点自动冻结 / 放行（CPU 常驻，略耗电）")
+        Calendar now = Calendar.getInstance();
+        boolean warn = StudyGate.noticeWarn(this, now);
+        String text = StudyGate.noticeLine(this, now);
+        lastNoticeText = text;
+        b.setContentTitle(warn ? "AwayFromShorts · 今天还没学完" : "按时间表工作")
+         .setContentText(text)
          .setSmallIcon(android.R.drawable.ic_lock_lock)
          .setOngoing(true);
         return b.build();

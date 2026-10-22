@@ -423,6 +423,7 @@ public class AppListActivity extends Activity {
         private final TextView winText;
         private final LinearLayout winBox;
         private final Button[] dayBtns = new Button[7];
+        private final android.widget.CheckBox gateCb;
 
         RuleEditor(Rule start) {
             mask = new int[] { start.days };
@@ -506,6 +507,16 @@ public class AppListActivity extends Activity {
             wlp.topMargin = dp(4);
             box.addView(winBox, wlp);
 
+            // 是否受学习闸门牵连。默认值按放行时长自动判断（≤6 小时/天算娱乐），
+            // 这里让用户能改 —— 不然微信这种每天放行 18 小时的工具也会被锁。
+            gateCb = new android.widget.CheckBox(AppListActivity.this);
+            gateCb.setText("目标没完成时也一起锁（参与学习闸门）");
+            gateCb.setTextSize(13);
+            gateCb.setTextColor(TEXT);
+            gateCb.setChecked(start.gate);
+            gateCb.setPadding(0, dp(12), 0, 0);
+            box.addView(gateCb);
+
             // 内容可能超过一屏（7 个星期按钮 + 多段时段），套一层滚动
             view = new ScrollView(AppListActivity.this);
             view.addView(box);
@@ -535,6 +546,8 @@ public class AppListActivity extends Activity {
             } else {
                 mask[0] = 0;   // 一天都不选 = 整天冻结
             }
+            // 三个预设都是"娱乐型"规则，勾上闸门才符合直觉
+            gateCb.setChecked(true);
             styleDays();
             refreshWins();
         }
@@ -619,7 +632,7 @@ public class AppListActivity extends Activity {
                 w[i][0] = wins.get(i)[0];
                 w[i][1] = wins.get(i)[1];
             }
-            return new Rule(mask[0], w);
+            return new Rule(mask[0], w, gateCb.isChecked());
         }
     }
 

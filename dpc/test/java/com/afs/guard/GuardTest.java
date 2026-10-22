@@ -402,6 +402,27 @@ public final class GuardTest {
                 StudyGate.ST_NONE, "EMPTY → ST_NONE");
         ok(StudyGate.textOf(null, at(2026, 10, 22, 22, 30)).contains("暂无数据"),
                 "无数据文案");
+
+        // 8.10 闸门的作用范围：只有 gate=true 的应用被牵连
+        System.out.println("  · 闸门作用范围 autoGate");
+        ok(new Rule(0x7F, 22 * 60, 23 * 60).gate, "每天放行 1 小时 → 参与闸门");
+        ok(!new Rule(0x7F, 6 * 60, 0).gate, "放行 06:00-00:00（18 小时）→ 不参与闸门");
+        ok(new Rule(0x7F, new int[][] { { 12 * 60, 13 * 60 }, { 17 * 60, 18 * 60 } }).gate,
+                "两段共 2 小时 → 参与闸门");
+        ok(!Rule.autoGate(new int[][] { { 0, 0 } }), "全天放行 → 不参与闸门");
+        ok(!new Rule(0x7F, 22 * 60, 23 * 60, false).gate, "显式关闭生效");
+        ok(!new Rule(0x7F, 22 * 60, 23 * 60).withGate(false).gate, "withGate(false) 生效");
+        ok(new Rule(0x7F, 22 * 60, 23 * 60).withGate(false).withGate(true).gate,
+                "withGate(true) 能改回来");
+        ok(Guard.allowText(new Rule(0x7F, 6 * 60, 0)).contains("不受学习目标影响"),
+                "★ 不参与闸门的要在文案里标出来");
+        ok(!Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)).contains("不受学习目标"),
+                "参与闸门的不加后缀");
+        // 闸门命中时：只有 gate=true 的被冻
+        Rule gateOn = new Rule(0x7F, 22 * 60, 23 * 60);
+        Rule gateOff = new Rule(0x7F, 6 * 60, 0);
+        ok(!Guard.blocked(gateOn, at2230) && gateOn.gate, "抖音类 22:30 本该放行，但受闸门管");
+        ok(!Guard.blocked(gateOff, at2230) && !gateOff.gate, "工具类 22:30 放行，且不受闸门管");
     }
 
     /* ---------- 工具 ---------- */

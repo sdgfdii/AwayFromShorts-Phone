@@ -75,6 +75,41 @@ public final class RuleStore {
         return all(c).size();
     }
 
+    /* ---------- 关键应用名单 ---------- */
+
+    /**
+     * 关键应用 = gate=false 的那批：学习目标没完成时**不**延长冻结，
+     * 只按它自己的放行时段走。
+     *
+     * 名单直接由规则里的 gate 反推，不另存一份 —— 两份状态必然会不同步
+     * （在编辑器里关掉开关、名单却没变，这种 bug 最难查）。
+     */
+    public static Set<String> keyApps(Context c) {
+        Set<String> s = new LinkedHashSet<>();
+        for (Map.Entry<String, Rule> e : all(c).entrySet()) {
+            if (!e.getValue().gate) {
+                s.add(e.getKey());
+            }
+        }
+        return s;
+    }
+
+    /** 整批设置名单：勾上的 gate=false（关键应用），没勾的 gate=true（受闸门管）。 */
+    public static void setKeyApps(Context c, Set<String> keys) {
+        Map<String, Rule> m = all(c);
+        boolean changed = false;
+        for (Map.Entry<String, Rule> e : m.entrySet()) {
+            boolean g = !keys.contains(e.getKey());
+            if (e.getValue().gate != g) {
+                e.setValue(e.getValue().withGate(g));
+                changed = true;
+            }
+        }
+        if (changed) {
+            save(c, m);
+        }
+    }
+
     /** 取某个应用的规则；没有就退回默认（不会写盘）。 */
     public static Rule get(Context c, String pkg) {
         Rule r = all(c).get(pkg);

@@ -378,9 +378,9 @@ public final class Guard {
         if (r.days == 0) {
             return "没选放行星期 · 整天冻结";
         }
-        // 标出"不受学习目标影响"：日常工具（微信/相机）不该因为目标没打完被锁，
-        // 列表里不标的话用户看不出自己那几个为什么没跟着灰。
-        return "放行 " + r.summary() + (r.gate ? "" : " · 不受学习目标影响");
+        // 标出"关键应用"：用户自己列的（微信/工作工具），不该因为目标没打完被锁。
+        // 列表里不标的话，用户看不出自己那几个为什么没跟着灰。
+        return "放行 " + r.summary() + (r.gate ? "" : " · 关键应用");
     }
 
     private static boolean installed(PackageManager pm, String pkg) {
@@ -507,6 +507,10 @@ public final class Guard {
         sb.append("设备所有者　").append(isOwner(ctx) ? "是（已锁死）" : "否 —— 冻结不会生效").append('\n');
         sb.append("当前时间　").append(stamp(now.getTimeInMillis())).append('\n');
         sb.append("应用　　　").append(total).append(" 个，").append(frozen).append(" 个冻结中").append('\n');
+        // 关键应用名单：用户自己列的，学习目标没完成时只按自己的时段走。
+        // 不显示这一行的话，用户没法确认"我列的那几个到底生效了没有"。
+        int keys = RuleStore.keyApps(ctx).size();
+        sb.append("关键应用　").append(keys).append(" 个（学习目标未完成也不延长冻结）").append('\n');
         // 学习联动不在这里 —— 首页有它自己的卡片（StudyGate.cardText），
         // 埋在这个同色同字号的文本块里没人看得见，而且重复。
         sb.append("下次切换　").append(total == 0 ? "—（没添加应用）" : stamp(nextFlipMillis(ctx))).append('\n');

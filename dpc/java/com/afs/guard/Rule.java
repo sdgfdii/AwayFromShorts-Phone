@@ -168,6 +168,25 @@ public final class Rule {
         return new Rule(days, windows, g);
     }
 
+    /**
+     * 分组键：规则**完全一致**（放行星期 + 每段时段 + 是否受学习闸门约束）的应用，
+     * 在黑名单页里合成一张卡片。
+     *
+     * ★ 为什么把 gate 也算进去：批量套用时段后，gate 可能不同（微信这种关键应用
+     *   是 false）。行为不一样的应用合在一张卡里，卡上写的"不受学习目标影响"
+     *   会对其中一部分撒谎 —— 分开才说得清。
+     *
+     * 纯函数，无 Android 依赖，离线回归可直接断言。
+     */
+    public String groupKey() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(days).append('|').append(gate ? '1' : '0');
+        for (int i = 0; i < windows.length; i++) {
+            sb.append('|').append(windows[i][0]).append('-').append(windows[i][1]);
+        }
+        return sb.toString();
+    }
+
     public boolean same(Rule o) {
         if (o == null || o.days != days || o.windowCount() != windowCount() || o.gate != gate) {
             return false;

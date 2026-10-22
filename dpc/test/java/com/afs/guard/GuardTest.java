@@ -24,6 +24,7 @@ public final class GuardTest {
         multiApp();
         twoWindows();
         textTests();
+        groupKeyTests();
         studyGate();
 
         System.out.println();
@@ -213,7 +214,45 @@ public final class GuardTest {
                 "跨午夜要在文案里标出来");
     }
 
-    /* ---------- 8. 学习闸门 ---------- */
+    /* ---------- 8. 分组键（黑名单折叠成卡片） ---------- */
+
+    /**
+     * 分组键决定"哪些应用折成同一张卡"，判错的后果是：
+     * 卡上写着"每天 22:00-23:00 放行"，里面却混进一个 21:00-23:00 的 —— 
+     * 用户照着卡上的信息去理解行为，只会得出错误结论。
+     */
+    private static void groupKeyTests() {
+        System.out.println("---- 分组键 ----");
+        Rule a = new Rule(0x7F, 22 * 60, 23 * 60);
+        Rule b = new Rule(0x7F, 22 * 60, 23 * 60);
+        eq(a.groupKey(), b.groupKey(), "同规则同键（可折叠）");
+        ok(a.same(b), "同规则的 same() 也成立");
+
+        Rule c = new Rule(0x7F, 21 * 60, 23 * 60);
+        ok(!a.groupKey().equals(c.groupKey()), "时段不同 → 不同键");
+
+        Rule d = new Rule(0x1F, 22 * 60, 23 * 60);
+        ok(!a.groupKey().equals(d.groupKey()), "放行星期不同 → 不同键");
+
+        Rule e = a.withGate(false);
+        ok(!a.groupKey().equals(e.groupKey()), "gate 不同 → 不同键（关键应用要单独一张卡）");
+
+        // 段的顺序不影响分组：构造时就按 start 排好了
+        Rule f = new Rule(0x7F, new int[][] { { 21 * 60, 23 * 60 }, { 12 * 60, 13 * 60 } });
+        Rule g = new Rule(0x7F, new int[][] { { 12 * 60, 13 * 60 }, { 21 * 60, 23 * 60 } });
+        eq(f.groupKey(), g.groupKey(), "段顺序不同但内容相同 → 同一张卡");
+
+        Rule h = new Rule(0x7F, new int[][] { { 12 * 60, 13 * 60 } });
+        ok(!f.groupKey().equals(h.groupKey()), "段数不同 → 不同键");
+
+        eq(new Rule(0, new int[0][2]).groupKey(), new Rule(0, new int[0][2]).groupKey(),
+                "空规则同键（都是整天冻结）");
+        ok(!new Rule(0x7F, new int[0][2]).groupKey()
+                .equals(new Rule(0x1F, new int[0][2]).groupKey()),
+                "空时段下星期不同仍是不同键");
+    }
+
+    /* ---------- 9. 学习闸门 ---------- */
 
     private static void studyGate() {
         System.out.println("---- 学习闸门：解析 / 判定 / fail-open ----");
@@ -414,15 +453,34 @@ public final class GuardTest {
         ok(!new Rule(0x7F, 22 * 60, 23 * 60).withGate(false).gate, "withGate(false) 生效");
         ok(new Rule(0x7F, 22 * 60, 23 * 60).withGate(false).withGate(true).gate,
                 "withGate(true) 能改回来");
-        ok(Guard.allowText(new Rule(0x7F, 6 * 60, 0)).contains("不受学习目标影响"),
-                "★ 不参与闸门的要在文案里标出来");
-        ok(!Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)).contains("不受学习目标"),
+        ok(Guard.allowText(new Rule(0x7F, 6 * 60, 0)).contains("关键应用"),
+                "★ 不参与闸门的要在文案里标成「关键应用」");
+        ok(!Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)).contains("关键应用"),
                 "参与闸门的不加后缀");
         // 闸门命中时：只有 gate=true 的被冻
         Rule gateOn = new Rule(0x7F, 22 * 60, 23 * 60);
         Rule gateOff = new Rule(0x7F, 6 * 60, 0);
         ok(!Guard.blocked(gateOn, at2230) && gateOn.gate, "抖音类 22:30 本该放行，但受闸门管");
         ok(!Guard.blocked(gateOff, at2230) && !gateOff.gate, "工具类 22:30 放行，且不受闸门管");
+
+        // ---- 关键应用名单：用户自己列的，只在自身时段外冻结 ----
+        System.out.println("  · 关键应用名单");
+        Rule key = new Rule(0x7F, 6 * 60, 0);   // 06:00–00:00，跨午夜到 0 点
+        ok(!Guard.blocked(key, at(2026, 10, 22, 14, 0)), "关键应用白天放行");
+        ok(!Guard.blocked(key, at(2026, 10, 22, 22, 30)),
+                "★ 关键应用在闸门时段（22:30）不因学习目标被冻");
+        ok(Guard.blocked(key, at(2026, 10, 23, 2, 0)),
+                "★ 关键应用在午夜 02:00（自己时段外）照常冻结");
+        ok(!key.gate, "★ 午夜冻结来自时间表，与学习闸门无关（gate=false）");
+
+        // 名单切换只能改 gate，绝不能顺手洗掉时段/星期
+        Rule two = new Rule(0x3, new int[][] { { 12 * 60, 13 * 60 }, { 17 * 60, 18 * 60 } }, true);
+        Rule toKey = two.withGate(false);
+        eq(toKey.windowCount(), 2, "withGate 不动段数");
+        eq(toKey.startAt(0), 12 * 60, "withGate 不动第一段起点");
+        eq(toKey.endAt(1), 18 * 60, "withGate 不动第二段终点");
+        eq(toKey.days, 0x3, "withGate 不动放行星期");
+        ok(!toKey.gate && toKey.withGate(true).gate, "withGate 双向可切换");
     }
 
     /* ---------- 工具 ---------- */

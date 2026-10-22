@@ -46,7 +46,10 @@ bash deploy.sh
 
 ### 在手机上是什么样
 
-- 首页只有一行状态 + 一个「黑名单 · N 个应用」入口 + 「立即应用」
+- 首页只有一行状态 + 「打卡」+ 一个「黑名单 · N 个应用」入口 + 「立即应用」
+- **打卡页就在这个 App 里**(不再单独装一个):一屏一张竖卡,往上推 = 打卡,
+  左右推 = 换目标,长按改这一笔的数量。打完最后一笔会**当场解除**学习联动延长冻结
+  —— 不用等 PC 每 15 分钟那趟同步。细节见 [`dpc/CHECKIN.md`](dpc/CHECKIN.md)
 - 黑名单页一行一个应用,点行改星期 / 多段时段(可以加好几段),长按移除
 - **黑名单只进不出**:随时可以加,移出去只在「刚加 10 分钟内」或首次宽限期内允许
   —— 防的就是"先移出来再放宽时段"这条绕路
@@ -121,15 +124,21 @@ bash blocker/build.sh   # → blocker/afs-blocker.apk
 手工链:`aapt2 compile → link → javac(-source 8) → jar → d8 → 塞 classes.dex → zipalign -p 4 → apksigner`。
 Git Bash 里没有 `zip`,脚本会用 Python 的 `zipfile` 追加写入 dex。
 
+> **token 默认不注入。** 打卡要写 Gist 得有个只授 `gist` 权限的 token,
+> 而 APK 里 grep 得到 `gho_` 前缀 —— 所以仓库里这份 APK 是**不带 token** 的公开构建,
+> 装完第一次用打卡时长按标题「打卡」粘一次即可(存在 App 私有目录里)。
+> 想出"装上就能打卡"的包:`echo "<token>" > dpc/token.local && AFS_PREFILL=1 bash dpc/build.sh`。
+> `token.local` 和产物都别外传。
+
 签名库在 `dpc/keystore/afs.keystore`(密码 `afsguard`)。**换 key 就无法覆盖升级**,自己编译就自己生成一个并保管好。
 
 > ⚠️ `build.sh` 内部的 `grep -v warning` 会顺手吞掉 javac 的错误。构建"成功"但 APK 只有 12KB,
-> 就是编译其实失败了。装之前先验:`aapt2 dump badging afs-guard.apk | grep versionName`(正常体积 37–41KB)。
+> 就是编译其实失败了。装之前先验:`aapt2 dump badging afs-guard.apk | grep versionName`(正常体积 68–72KB)。
 
 ## 回归测试
 
 ```bash
-bash dpc/test/run.sh        # 63 项,纯 Java,不需要手机
+bash dpc/test/run.sh        # 179 项,纯 Java,不需要手机
 bash blocker/test/run.sh    # 27 项
 ```
 

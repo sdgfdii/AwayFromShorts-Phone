@@ -9,8 +9,9 @@ cd "$(dirname "$0")"
 find_sdk() {
   local c
   for c in "${AFS_SDK:-}" "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}" \
+           "$HOME/.afs-android/sdk" \
            "$HOME/AppData/Local/Android/Sdk" "$HOME/Android/Sdk" \
-           "$HOME/Library/Android/sdk" "/usr/lib/android-sdk"; do
+           "$HOME/Library/Android/sdk" "/usr/lib/android-sdk" "C:/AndroidSDK"; do
     [ -n "$c" ] && [ -d "$c/platforms" ] && { echo "$c"; return 0; }
   done
   return 0
@@ -68,8 +69,8 @@ echo "[2/6] aapt2 link"
   --java "$OUT/gen" \
   --min-sdk-version 24 \
   --target-sdk-version 34 \
-  --version-code 1800 \
-  --version-name 1.8.0 \
+  --version-code 1905 \
+  --version-name 1.9.5 \
   "$OUT"/flat/*.flat
 
 # ---------- 3. 编译 Java ----------

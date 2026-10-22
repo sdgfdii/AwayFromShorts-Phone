@@ -8,7 +8,8 @@ import java.util.Calendar;
  *
  * 判定已经完全参数化：每个应用一个 {@link Rule}（星期掩码 + 起止分钟），
  * 一个进程里就能把多套规则、多个应用一起跑，不用 sed 改常量重编第二份。
- * 没有强制模式：冻结与否完全由时间表决定，到点自动换挡。
+ * 学习闸门的判定也是纯函数（{@link StudyGate#parse} / {@link StudyGate#shouldHold}），
+ * 在这里一起对拍。
  */
 public final class GuardTest {
 
@@ -23,6 +24,7 @@ public final class GuardTest {
         multiApp();
         twoWindows();
         textTests();
+        studyGate();
 
         System.out.println();
         System.out.println("== " + pass + " PASS / " + fail + " FAIL ==");
@@ -109,7 +111,7 @@ public final class GuardTest {
         eq(blocked(r, 2026, 10, 23, 22, 30), true, "周五 22:30 屏蔽");
     }
 
-    /* ---------- 6. 多个应用互不影响 ---------- */
+    /* ---------- 5. 多个应用互不影响 ---------- */
 
     private static void multiApp() {
         System.out.println("---- 多应用：各自时段 / 取最早的翻转 ----");
@@ -139,7 +141,7 @@ public final class GuardTest {
         ok(none > noon().getTimeInMillis(), "没有应用时也要给出未来的时刻");
     }
 
-    /* ---------- 6.5 一个应用两段时段 ---------- */
+    /* ---------- 6. 一个应用两段时段 ---------- */
 
     private static void twoWindows() {
         System.out.println("---- 一个应用两段时段（12:00-13:00 + 21:00-23:00）----");
@@ -211,7 +213,209 @@ public final class GuardTest {
                 "跨午夜要在文案里标出来");
     }
 
+    /* ---------- 8. 学习闸门 ---------- */
+
+    private static void studyGate() {
+        System.out.println("---- 学习闸门：解析 / 判定 / fail-open ----");
+
+        // 8.1 inSpan 区间判定（含跨午夜，语义与 Rule.inWindow 一致）
+        System.out.println("  · 区间判定 inSpan");
+        ok(StudyGate.inSpan(22 * 60, 22 * 60, 23 * 60), "22:00 落在 [22:00,23:00)");
+        ok(StudyGate.inSpan(22 * 60 + 59, 22 * 60, 23 * 60), "22:59 落在区间");
+        ok(!StudyGate.inSpan(23 * 60, 22 * 60, 23 * 60), "23:00 不在区间（左闭右开）");
+        ok(!StudyGate.inSpan(21 * 60 + 59, 22 * 60, 23 * 60), "21:59 不在区间");
+        ok(StudyGate.inSpan(22 * 60, 22 * 60, 22 * 60), "起止相同 = 全天");
+        ok(StudyGate.inSpan(23 * 60 + 30, 23 * 60, 1 * 60), "23:30 落在跨午夜区间 [23:00,01:00)");
+        ok(StudyGate.inSpan(0 * 60 + 30, 23 * 60, 1 * 60), "00:30 仍在跨午夜区间");
+        ok(!StudyGate.inSpan(1 * 60, 23 * 60, 1 * 60), "01:00 不在跨午夜区间（右开）");
+        ok(!StudyGate.inSpan(12 * 60, 23 * 60, 1 * 60), "中午不在跨午夜区间");
+        ok(!StudyGate.inSpan(22 * 60, -1, 23 * 60), "起点不合法 = 不 hold");
+
+        // 8.2 解析：好 JSON
+        System.out.println("  · 解析 parse");
+        StudyGate.Snapshot ok1 = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":false,\"pending\":2,"
+              + "\"checkedAt\":\"2026-10-22 22:00\"}",
+                "2026-10-22", stampMs("2026-10-22 22:10"));
+        ok(ok1.valid, "好 JSON 解析成功");
+        ok(ok1.enabled, "enabled=true");
+        eq(ok1.startMin, 22 * 60, "start=22:00");
+        eq(ok1.endMin, 23 * 60, "end=23:00");
+        ok(!ok1.allDone, "allDone=false");
+        ok(ok1.trustworthy("2026-10-22", stampMs("2026-10-22 22:30")),
+                "30 分钟前检查的数据可信（45 分钟新鲜线内）");
+
+        // 8.3 fail-open：各种不可信数据都必须放行
+        System.out.println("  · fail-open");
+        StudyGate.Snapshot bad1 = StudyGate.parse("not a json", "2026-10-22", 0L);
+        ok(!bad1.valid, "坏 JSON → 不可信");
+        StudyGate.Snapshot bad2 = StudyGate.parse(
+                "{\"date\":\"2026-10-21\",\"enabled\":true,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":false,\"checkedAt\":\"2026-10-21 20:00\"}",
+                "2026-10-22", stampMs("2026-10-22 20:10"));
+        ok(!bad2.trustworthy("2026-10-22", stampMs("2026-10-22 20:10")),
+                "日期不是今天 → 不可信");
+        StudyGate.Snapshot bad3 = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":false,\"checkedAt\":\"2026-10-22 11:00\"}",
+                "2026-10-22", stampMs("2026-10-22 20:10"));
+        ok(!bad3.trustworthy("2026-10-22", stampMs("2026-10-22 20:10")),
+                "checkedAt 超过 45 分钟 → 不可信（fail-open 与 PC 一致）");
+        StudyGate.Snapshot bad4 = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"error\":\"flag-error\",\"checkedAt\":\"2026-10-22 20:00\"}",
+                "2026-10-22", stampMs("2026-10-22 20:10"));
+        ok(!bad4.valid, "PC 端报 error 字段 → 不可信");
+        ok(StudyGate.parse("", "2026-10-22", 0L) == StudyGate.Snapshot.EMPTY
+                || !StudyGate.parse("", "2026-10-22", 0L).valid,
+                "空串 → 不可信");
+        StudyGate.Snapshot nullSnap = null;
+        ok(!StudyGate.shouldHold(nullSnap, at(2026, 10, 22, 22, 30)), "null 快照 → 放行");
+
+        // 8.4 shouldHold 判定
+        System.out.println("  · 生效判定 shouldHold");
+        Calendar at2230 = at(2026, 10, 22, 22, 30);
+        ok(StudyGate.shouldHold(ok1, at2230),
+                "开启+可信+未打卡+22:30 在区间 → hold");
+        ok(!StudyGate.shouldHold(ok1, at(2026, 10, 22, 21, 59)),
+                "21:59 不在区间 → 放行");
+        ok(!StudyGate.shouldHold(ok1, at(2026, 10, 22, 23, 0)),
+                "23:00 区间结束 → 放行（右开）");
+
+        StudyGate.Snapshot done = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":true,\"checkedAt\":\"2026-10-22 22:00\"}",
+                "2026-10-22", stampMs("2026-10-22 22:10"));
+        ok(!StudyGate.shouldHold(done, at2230), "全部打卡 → 放行");
+
+        StudyGate.Snapshot off = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":false,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":false,\"checkedAt\":\"2026-10-22 22:00\"}",
+                "2026-10-22", stampMs("2026-10-22 22:10"));
+        ok(!StudyGate.shouldHold(off, at2230), "PC 端开关关 → 放行");
+
+        StudyGate.Snapshot badHold = StudyGate.parse(
+                "{\"date\":\"2026-10-21\",\"enabled\":true,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":false,\"checkedAt\":\"2026-10-21 20:00\"}",
+                "2026-10-21", stampMs("2026-10-22 20:10"));
+        ok(!StudyGate.shouldHold(badHold, at2230),
+                "数据过期(旧日期) → 必须放行，不锁死");
+
+        // 8.5 解析细节
+        System.out.println("  · 解析细节");
+        eq(StudyGate.parseHm("22:00"), 22 * 60, "parseHm 22:00");
+        eq(StudyGate.parseHm("7:05"), 7 * 60 + 5, "parseHm 7:05（单数字小时）");
+        ok(StudyGate.parseHm("25:00") < 0, "25:00 不合法");
+        ok(StudyGate.parseHm("22") < 0, "没有冒号不合法");
+        ok(StudyGate.parseHm("") < 0, "空串不合法");
+        ok(StudyGate.parseHm(null) < 0, "null 不合法");
+        StudyGate.Snapshot legacy = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":false,\"checkedAt\":\"2026-10-22\"}",
+                "2026-10-22", stampMs("2026-10-22 20:10"));
+        ok(legacy.checkedAtMs > 0, "checkedAt 只有日期也能解析（按 00:00 算）");
+
+        // 8.6 跨午夜闸门区间
+        // 跨午夜时"凌晨那半段"属于下一拍：date/checkedAt 都是次日推送的数据
+        System.out.println("  · 跨午夜区间");
+        StudyGate.Snapshot cross = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"23:00\","
+              + "\"end\":\"01:00\",\"allDone\":false,\"checkedAt\":\"2026-10-22 23:20\"}",
+                "2026-10-22", stampMs("2026-10-22 23:30"));
+        ok(StudyGate.shouldHold(cross, at(2026, 10, 22, 23, 30)), "23:30 hold");
+        ok(!StudyGate.shouldHold(cross, at(2026, 10, 22, 12, 0)), "中午放行");
+        StudyGate.Snapshot crossAm = StudyGate.parse(
+                "{\"date\":\"2026-10-23\",\"enabled\":true,\"start\":\"23:00\","
+              + "\"end\":\"01:00\",\"allDone\":false,\"checkedAt\":\"2026-10-23 00:20\"}",
+                "2026-10-23", stampMs("2026-10-23 00:30"));
+        ok(StudyGate.shouldHold(crossAm, at(2026, 10, 23, 0, 30)), "00:30 hold（凌晨段）");
+
+        // 8.7 与 Guard.blocked 的叠加语义（文档化行为：纯函数不含闸门）
+        System.out.println("  · 与时间表的叠加");
+        Rule douyin = new Rule(0x7F, 22 * 60, 23 * 60);
+        ok(!Guard.blocked(douyin, at2230), "22:30 抖音按时间表是放行");
+        ok(StudyGate.shouldHold(ok1, at2230) && !Guard.blocked(douyin, at2230),
+                "闸门命中时 = 时间表放行 + 闸门延长 → apply() 里取 ||");
+
+        // 8.8 展示文案必须写明"放行"（否则被读成"这段时间冻结"）
+        System.out.println("  · 放行文案");
+        eq(Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)), "放行 每天 22:00-23:00",
+                "普通规则带「放行」前缀");
+        ok(Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)).startsWith("放行"),
+                "★ 文案必须以「放行」开头，不能只写时间");
+        eq(Guard.allowText(new Rule(0x7F, new int[0][2])), "无放行时段 · 整天冻结",
+                "空时段说清楚是整天冻结");
+        eq(Guard.allowText(new Rule(0, 22 * 60, 23 * 60)), "没选放行星期 · 整天冻结",
+                "没选星期说清楚是整天冻结");
+
+        // 8.9 卡片状态：过期必须显式报"保护已失效"，不能乐观地显示"到点继续冻结"
+        System.out.println("  · 卡片状态 cardState / cardText");
+
+        // 区间内、未打卡 → 生效中
+        eq(StudyGate.stateOf(ok1, at(2026, 10, 22, 22, 30)), StudyGate.ST_ACTIVE,
+                "22:30 未打卡 → 生效中");
+        ok(StudyGate.textOf(ok1, at(2026, 10, 22, 22, 30)).contains("生效中"),
+                "生效中文案");
+
+        // 区间外、未打卡、数据新鲜 → 待命
+        StudyGate.Snapshot fresh2000 = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":false,\"checkedAt\":\"2026-10-22 20:00\"}",
+                "2026-10-22", stampMs("2026-10-22 20:00"));
+        eq(StudyGate.stateOf(fresh2000, at(2026, 10, 22, 20, 30)), StudyGate.ST_PENDING,
+                "20:30 未到区间 → 待命");
+        ok(StudyGate.textOf(fresh2000, at(2026, 10, 22, 20, 30)).contains("到点继续冻结"),
+                "待命文案");
+
+        // 超龄 90 分钟 → 保护已失效（关键：不能显示成"到点继续冻结"）
+        int stStale = StudyGate.stateOf(fresh2000, at(2026, 10, 22, 21, 30));
+        eq(stStale, StudyGate.ST_STALE, "90 分钟没更新 → ST_STALE");
+        String staleTxt = StudyGate.textOf(fresh2000, at(2026, 10, 22, 21, 30));
+        ok(staleTxt.contains("保护已失效"), "★ 过期文案必须写「保护已失效」：" + staleTxt);
+        ok(staleTxt.contains("90 分钟"), "过期文案要说明多久没更新：" + staleTxt);
+        ok(!staleTxt.contains("到点继续冻结"), "★ 过期时绝不能显示乐观文案");
+
+        // 跨天 → 保护已失效，且要说清"进度还停在哪天"
+        StudyGate.Snapshot yesterday = StudyGate.parse(
+                "{\"date\":\"2026-10-21\",\"enabled\":true,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":false,\"checkedAt\":\"2026-10-21 23:00\"}",
+                "2026-10-21", stampMs("2026-10-21 23:00"));
+        eq(StudyGate.stateOf(yesterday, at(2026, 10, 22, 10, 0)), StudyGate.ST_STALE,
+                "昨天的数据 → ST_STALE");
+        ok(StudyGate.textOf(yesterday, at(2026, 10, 22, 10, 0)).contains("2026-10-21"),
+                "跨天文案要点出日期");
+
+        // 已打卡 / 关闭 / 无数据
+        eq(StudyGate.stateOf(StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":true,\"checkedAt\":\"2026-10-22 22:00\"}",
+                "2026-10-22", stampMs("2026-10-22 22:00")), at(2026, 10, 22, 22, 30)),
+                StudyGate.ST_DONE, "全部打卡 → ST_DONE");
+        eq(StudyGate.stateOf(StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":false,\"start\":\"22:00\","
+              + "\"end\":\"23:00\",\"allDone\":false,\"checkedAt\":\"2026-10-22 22:00\"}",
+                "2026-10-22", stampMs("2026-10-22 22:00")), at(2026, 10, 22, 22, 30)),
+                StudyGate.ST_OFF, "开关关 → ST_OFF");
+        eq(StudyGate.stateOf(null, at(2026, 10, 22, 22, 30)), StudyGate.ST_NONE,
+                "null → ST_NONE");
+        eq(StudyGate.stateOf(StudyGate.Snapshot.EMPTY, at(2026, 10, 22, 22, 30)),
+                StudyGate.ST_NONE, "EMPTY → ST_NONE");
+        ok(StudyGate.textOf(null, at(2026, 10, 22, 22, 30)).contains("暂无数据"),
+                "无数据文案");
+    }
+
     /* ---------- 工具 ---------- */
+
+    private static long stampMs(String s) {
+        try {
+            java.text.SimpleDateFormat f =
+                    new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US);
+            f.setLenient(false);
+            return f.parse(s).getTime();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private static void flipProperty(Rule r) {
         int bad = 0;

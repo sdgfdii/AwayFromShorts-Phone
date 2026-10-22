@@ -15,11 +15,13 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.Calendar;
+
 /**
  * 主界面：只看状态，不进列表。
  *
  * 应用一多，把每个应用都铺在首页就得一直往下滑 —— 那本来是个"黑名单"，
- * 平时不需要看。所以这里只留状态、强制模式和两个动作，
+ * 平时不需要看。所以这里只留状态和两个动作，
  * 黑名单和每条时段都在 {@link AppListActivity} 里，一行一个。
  */
 public class MainActivity extends Activity {
@@ -45,6 +47,7 @@ public class MainActivity extends Activity {
     private TextView title;
     private TextView sub;
     private TextView status;
+    private TextView studyCard;
     private TextView lockNote;
     private TextView result;
     private TextView foot;
@@ -84,13 +87,15 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         sub = new TextView(this);
-        sub.setText("设备所有者模式 · 每个应用各自的时段");
+        sub.setText("设备所有者模式 · 每个应用各自的放行时段，以外一律冻结");
         sub.setTextSize(13);
         sub.setTextColor(TEXT2);
         sub.setPadding(0, dp(4), 0, dp(14));
         root.addView(sub);
 
         status = card(root, 13);
+        // 学习联动单独一张卡：埋在上面那块同色同字号的状态文本里，等于没写
+        studyCard = card(root, 13);
         lockNote = card(root, 12);
         lockNote.setTextColor(RED);
 
@@ -165,6 +170,7 @@ public class MainActivity extends Activity {
 
         status.setText(Guard.describe(this));
         status.setTextColor(owner ? (dark ? TEXT_DARK : TEXT) : (dark ? RED_DARK : RED));
+        applyStudyCard(dark);
 
         if (dark && !grace) {
             lockNote.setVisibility(View.VISIBLE);
@@ -190,6 +196,28 @@ public class MainActivity extends Activity {
 
     private boolean darkState = false;
     private boolean themeApplied = false;
+
+    /**
+     * 学习联动卡片：生效中 / 保护已失效 用警示红，关闭 / 无数据用次要色，其余正常色。
+     * 每秒跟 render 一起刷（holding 内部有 10 分钟节流，不会打网络）。
+     */
+    private void applyStudyCard(boolean dark) {
+        if (studyCard == null) {
+            return;
+        }
+        Calendar now = Calendar.getInstance();
+        int st = StudyGate.cardState(this, now);
+        studyCard.setText(StudyGate.cardText(this, now));
+        int color;
+        if (st == StudyGate.ST_ACTIVE || st == StudyGate.ST_STALE) {
+            color = dark ? RED_DARK : RED;          // 正在拦 / 保护失效，都得让人看见
+        } else if (st == StudyGate.ST_OFF || st == StudyGate.ST_NONE) {
+            color = dark ? TEXT2_DARK : TEXT2;
+        } else {
+            color = dark ? TEXT_DARK : TEXT;
+        }
+        studyCard.setTextColor(color);
+    }
 
     /** 整页配色：全部屏蔽时是深色，否则浅色。 */
     private void applyDark(boolean d) {

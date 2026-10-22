@@ -263,7 +263,8 @@ public class AppListActivity extends Activity {
         left.addView(r.name);
 
         TextView sub = new TextView(this);
-        sub.setText(RuleStore.get(this, pkg).summary());
+        // 写明"放行"：只写 "每天 22:00-23:00" 会被读成"这段时间冻结"，语义正好相反
+        sub.setText(Guard.allowText(RuleStore.get(this, pkg)));
         sub.setTextSize(12);
         sub.setTextColor(TEXT2);
         sub.setPadding(0, dp(2), 0, 0);

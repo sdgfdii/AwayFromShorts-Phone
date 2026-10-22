@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- 需要枚举已安装的可启动应用，让用户勾选要冻结哪些 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- 学习闸门：拉取 PC 推到 secret Gist 的 study-gate.json（secret raw 免鉴权） -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <queries>
         <intent>

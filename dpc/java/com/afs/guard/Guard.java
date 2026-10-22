@@ -24,6 +24,7 @@ import java.util.Map;
  * 图标变灰、点不开、后台被杀，而且没有「忽略限制」「延长 15 分钟」这种口子。
  *
  * 每个应用有自己的 {@link Rule}（放行星期 + 放行时段），判定一律按包名走。
+ * 另有 {@link StudyGate}：到解锁时段但今天学习目标没打完 → 继续冻结。
  */
 public final class Guard {
 
@@ -94,6 +95,7 @@ public final class Guard {
     /**
      * 纯判定：现在是否该冻结 = 不在自己的放行窗口里。
      * 不碰 Context —— 离线回归直接调它。
+     * 学习闸门不在这里：它依赖 Context（拉数据），走 blockedNow / apply。
      */
     public static boolean blocked(Rule r, Calendar c) {
         return !r.inWindow(c);
@@ -116,13 +118,14 @@ public final class Guard {
 
     /**
      * 这个应用现在是否该冻结。
-     * 强制模式开着 → 全部冻结；否则看它自己的窗口。
+     * 两条路：① 不在自己的放行窗口里；② 学习闸门生效（到解锁时段但今天目标没打完）。
      */
     public static boolean blockedNow(Context ctx, String pkg) {
-        return blocked(RuleStore.get(ctx, pkg), Calendar.getInstance());
+        Calendar c = Calendar.getInstance();
+        return blocked(RuleStore.get(ctx, pkg), c) || StudyGate.holding(ctx, c);
     }
 
-    /** 这个应用现在是否在自己的放行窗口里（不看强制模式）。 */
+    /** 这个应用现在是否在自己的放行窗口里（不看学习闸门）。 */
     public static boolean inWindowNow(Context ctx, String pkg) {
         return RuleStore.get(ctx, pkg).inWindow(Calendar.getInstance());
     }
@@ -130,8 +133,8 @@ public final class Guard {
     /**
      * 这个应用现在能不能改设置。
      *
-     * ★ 只看它自己的窗口，不看强制模式 —— 否则强制模式一开就永远"锁定"，
-     * 连放行时段也关不掉，自己把自己锁死。
+     * ★ 只看它自己的窗口，不看学习闸门 —— 否则闸门一生效就永远"锁定"，
+     * 连放行时段也改不了，自己把自己锁死。
      */
     public static boolean lockedNow(Context ctx, String pkg) {
         if (Config.inGrace(ctx)) {
@@ -188,6 +191,9 @@ public final class Guard {
      *
      * 每个应用各有各的窗口，闹钟只能排最早的一个边界；响了之后
      * apply() 会把所有应用重新判一遍，并重新排下一次。
+     *
+     * 学习闸门不参与排点：它的数据 ~10 分钟才刷一次，精确排到它的结束点
+     * 没有意义 —— 常驻服务 30 秒一次 tick 就是它的兜底节拍。
      */
     public static long nextFlipMillis(Context ctx) {
         return nextFlipOf(RuleStore.all(ctx).values(), Calendar.getInstance());
@@ -208,14 +214,19 @@ public final class Guard {
             return "尚未成为设备所有者，什么都没做。\n请先按 README 用 adb 执行 set-device-owner。";
         }
 
+        // 顺手触发学习闸门的数据刷新（内部节流 10 分钟 + 后台线程，绝不阻塞）
+        StudyGate.refreshIfNeeded(ctx);
+
         ComponentName a = admin(ctx);
         applyRestrictions(ctx, d, a);
 
         Map<String, Rule> rules = RuleStore.all(ctx);
         Calendar now = Calendar.getInstance();
+        // 学习闸门：整轮判一次。true = 今天目标没打完且此刻在延长区间里
+        boolean gateHold = StudyGate.holding(ctx, now);
         boolean anyBlocked = false;
         for (Rule r : rules.values()) {
-            if (blocked(r, now)) {
+            if (blocked(r, now) || gateHold) {
                 anyBlocked = true;
                 break;
             }
@@ -243,7 +254,7 @@ public final class Guard {
                 sb.append("- ").append(pkg).append("：未安装\n");
                 continue;
             }
-            boolean block = blocked(r, now);
+            boolean block = blocked(r, now) || gateHold;
             try {
                 d.setUninstallBlocked(a, pkg, true);
             } catch (Throwable ignored) {
@@ -251,16 +262,16 @@ public final class Guard {
             String state;
             try {
                 d.setPackagesSuspended(a, new String[] { pkg }, block);
-                state = block ? "已冻结" : "放行中";
+                state = block ? (gateHold && !blocked(r, now) ? "冻结（学习闸门）" : "已冻结") : "放行中";
             } catch (Throwable t) {
                 state = "冻结失败：" + t.getClass().getSimpleName();
             }
             if (block) {
                 frozen++;
             }
-            // 应用名给人看，包名方便核对是哪个版本，后面带它自己的时段
+            // 应用名给人看，包名方便核对是哪个版本，后面带它自己的放行时段
             sb.append("- ").append(labelOf(pm, pkg)).append("（").append(pkg).append("）：")
-                    .append(state).append(" · ").append(r.summary()).append('\n');
+                    .append(state).append(" · ").append(allowText(r)).append('\n');
         }
         RuleStore.setApplied(ctx, rules.keySet());
 
@@ -283,7 +294,8 @@ public final class Guard {
         // 而 schedule() 原本只在开机/闹钟/Job 回调里调用 —— 装完就再也排不上了。
         schedule(ctx);
 
-        String head = "结果：" + rules.size() + " 个应用，" + frozen + " 个冻结\n";
+        String head = "结果：" + rules.size() + " 个应用，" + frozen + " 个冻结"
+                + (gateHold ? "（学习闸门生效中）" : "") + "\n";
         return head + sb.toString();
     }
 
@@ -325,6 +337,23 @@ public final class Guard {
         } catch (Throwable t) {
             return pkg;
         }
+    }
+
+    /**
+     * 规则的展示文案。
+     *
+     * ★ 必须写明"放行"两个字 —— 光写 "每天 22:00-23:00"，谁都会读成
+     *   "每天 22:00-23:00 冻结"，而实际语义正好相反：这段是唯一能用的时间，
+     *   其余 23 小时全冻结。这是最容易误读的地方。
+     */
+    static String allowText(Rule r) {
+        if (r.windowCount() == 0) {
+            return "无放行时段 · 整天冻结";
+        }
+        if (r.days == 0) {
+            return "没选放行星期 · 整天冻结";
+        }
+        return "放行 " + r.summary();
     }
 
     private static boolean installed(PackageManager pm, String pkg) {
@@ -451,6 +480,8 @@ public final class Guard {
         sb.append("设备所有者　").append(isOwner(ctx) ? "是（已锁死）" : "否 —— 冻结不会生效").append('\n');
         sb.append("当前时间　").append(stamp(now.getTimeInMillis())).append('\n');
         sb.append("应用　　　").append(total).append(" 个，").append(frozen).append(" 个冻结中").append('\n');
+        // 学习联动不在这里 —— 首页有它自己的卡片（StudyGate.cardText），
+        // 埋在这个同色同字号的文本块里没人看得见，而且重复。
         sb.append("下次切换　").append(total == 0 ? "—（没添加应用）" : stamp(nextFlipMillis(ctx))).append('\n');
         sb.append('\n');
         sb.append("加固项　").append(restrictionSummary()).append('\n');

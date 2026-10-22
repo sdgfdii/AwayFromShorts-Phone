@@ -33,11 +33,17 @@ public class GuardService extends Service {
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private PowerManager.WakeLock wakeLock;
+    private int tickCount;
 
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
             try {
+                // 低频心跳：诊断"进程活着但 tick 死了"这种事 —— 没有它永远查不出来
+                if (tickCount % 10 == 0) {
+                    Log.i(Guard.TAG, "tick alive #" + tickCount);
+                }
+                tickCount++;
                 Guard.apply(GuardService.this);   // 内部只有状态变化时才调 setPackagesSuspended
             } catch (Throwable t) {
                 Log.e(Guard.TAG, "tick failed", t);

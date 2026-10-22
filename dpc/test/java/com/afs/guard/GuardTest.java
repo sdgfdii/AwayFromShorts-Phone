@@ -27,6 +27,7 @@ public final class GuardTest {
         groupKeyTests();
         studyGate();
         phoneCheckin();
+        localPendingMerge();
 
         System.out.println();
         System.out.println("== " + pass + " PASS / " + fail + " FAIL ==");
@@ -311,6 +312,36 @@ public final class GuardTest {
     }
 
     /* ---------- 9. 学习闸门 ---------- */
+
+    /**
+     * 合并成一个 App 之后多出来的一件事：闸门有两份"还剩几个"。
+     * 远端（Gist，可能还是十分钟前的）和本地（打卡页刚算的）。
+     * 取小 = 早解闸，这条口径错了会直接表现为"打完了还在冻"。
+     */
+    private static void localPendingMerge() {
+        System.out.println("---- 远端/本地 pending 合并 ----");
+
+        eq(StudyGate.mergePending(-1, -1), -1, "两边都没数 → -1（按 PC 的 allDone 判）");
+        eq(StudyGate.mergePending(-1, 0), 0, "只有本地说打完了 → 0（立刻解闸）");
+        eq(StudyGate.mergePending(0, -1), 0, "只有远端说打完了 → 0");
+        eq(StudyGate.mergePending(2, 0), 0, "远端落后、本地已补齐 → 取 0");
+        eq(StudyGate.mergePending(0, 2), 0, "本地落后、远端已补齐 → 取 0");
+        eq(StudyGate.mergePending(2, 3), 2, "都还有剩 → 取小的");
+        eq(StudyGate.mergePending(3, 2), 2, "都还有剩 → 取小的（换序）");
+        eq(StudyGate.mergePending(-1, 2), 2, "远端没数、本地还有 2 个 → 2");
+
+        StudyGate.Snapshot s = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
+                        + "\"allDone\":false,\"pending\":2,\"checkedAt\":\"2026-10-22 22:30\"}",
+                "2026-10-22", stampMs("2026-10-22 22:30"));
+        Calendar at2230 = at(2026, 10, 22, 22, 30);
+        ok(!StudyGate.shouldHold(s, at2230, StudyGate.mergePending(2, 0)),
+                "远端还写着剩 2 个，但本地刚补齐 → 不冻（别让人以为打卡没生效）");
+        ok(StudyGate.shouldHold(s, at2230, StudyGate.mergePending(-1, 2)),
+                "本地只剩 2 个目标 → 照冻结");
+    }
+
+    /* ---------- 10. 学习闸门 ---------- */
 
     private static void studyGate() {
         System.out.println("---- 学习闸门：解析 / 判定 / fail-open ----");

@@ -1,18 +1,8 @@
-# 构建产物
-dpc/build/
-blocker/build/
-
-# 临时/预览 APK
-preview.apk
-demo.apk
+# 构建产物 / 本机凭据，不入库
+checkin.apk
+dpc/token.local
+checkin/token.local
 *.idsig
-*.h264
-
-# 系统
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-
-# 项目内部数据(记忆)
-.workbuddy/
+dpc/build/
+checkin/build/
+*.keystore

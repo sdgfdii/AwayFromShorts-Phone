@@ -1,4 +1,4 @@
-package com.afs.checkin;
+package com.afs.guard;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -6,11 +6,17 @@ import android.content.SharedPreferences;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * 本地状态：token、待同步队列、上次拉到的目标列表。
+ * 打卡页的本地状态：token、待同步队列、上次拉到的目标列表。
+ *
+ * 原来是独立 App（com.afs.checkin）里的 Store，并进守卫之后名字加个前缀，
+ * 免得和 {@link RuleStore} 混起来（那个存的是黑名单规则，两码事）。
  *
  * 队列的语义（这块想清楚之前别乱改）：
  *   pushed  = 已经写进 Gist（不代表 PC 已经记进学习台）
@@ -19,16 +25,16 @@ import java.util.List;
  * 推送时把所有 !applied 的条目一起推上去，PC 端用 localId 去重，
  * 所以重复推不会重复记账 —— 手机这边就不必猜"到底推没推成功"。
  */
-final class Store {
+final class CheckinStore {
 
-    private static final String FILE = "checkin";
+    private static final String FILE = "afs_checkin";
     private static final String K_TOKEN = "token";
     private static final String K_QUEUE = "queue";
     private static final String K_GOALS = "goals";
     private static final String K_DATE = "goalsDate";
     private static final String K_AT = "goalsAt";
 
-    private Store() {
+    private CheckinStore() {
     }
 
     private static SharedPreferences sp(Context c) {
@@ -39,10 +45,28 @@ final class Store {
 
     static String token(Context c) {
         String t = sp(c).getString(K_TOKEN, "");
-        if (t == null || t.trim().isEmpty()) {
-            return BuildConfig.PREFILL_TOKEN == null ? "" : BuildConfig.PREFILL_TOKEN.trim();
+        if (t != null && !t.trim().isEmpty()) {
+            return t.trim();
         }
-        return t.trim();
+        return BuildConfig.PREFILL_TOKEN == null ? "" : BuildConfig.PREFILL_TOKEN.trim();
+    }
+
+    /**
+     * 把构建期注入的 token 落到 prefs（只在 prefs 还空着时）。
+     *
+     * 为什么要落盘：仓库里发的那份 APK 是不带 token 的公开构建，
+     * 本机这份带 token。如果只读 BuildConfig，换成公开构建覆盖安装之后，
+     * 打卡就突然推不动了 —— 落到 prefs 里就与后续装的是哪份包无关。
+     */
+    static void seedToken(Context c) {
+        String cur = sp(c).getString(K_TOKEN, "");
+        if (cur != null && !cur.trim().isEmpty()) {
+            return;
+        }
+        String pre = BuildConfig.PREFILL_TOKEN == null ? "" : BuildConfig.PREFILL_TOKEN.trim();
+        if (!pre.isEmpty()) {
+            sp(c).edit().putString(K_TOKEN, pre).apply();
+        }
     }
 
     static void setToken(Context c, String t) {
@@ -65,6 +89,10 @@ final class Store {
         boolean todayHit;
         /** 本地刚打过卡（还没被 PC 记账），用来立刻显示"已打"。 */
         boolean localHit;
+
+        boolean hit() {
+            return todayHit || localHit;
+        }
     }
 
     static String goalsJson(Context c) {
@@ -79,8 +107,23 @@ final class Store {
         return sp(c).getString(K_AT, "");
     }
 
-    static void saveGoals(Context c, String json, String date, String at) {
-        sp(c).edit().putString(K_GOALS, json == null ? "" : json)
+    static void saveGoals(Context c, List<Goal> list, String date, String at) {
+        JSONArray arr = new JSONArray();
+        for (Goal g : list) {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("id", g.id);
+                o.put("name", g.name);
+                o.put("unit", g.unit);
+                o.put("total", g.total);
+                o.put("done", g.done);
+                o.put("suggest", g.suggest);
+                o.put("todayHit", g.hit());
+                arr.put(o);
+            } catch (Throwable ignored) {
+            }
+        }
+        sp(c).edit().putString(K_GOALS, arr.toString())
                 .putString(K_DATE, date == null ? "" : date)
                 .putString(K_AT, at == null ? "" : at).apply();
     }
@@ -115,6 +158,23 @@ final class Store {
         return out;
     }
 
+    /**
+     * 今天还剩几个目标没打。首页按钮上的"还有 N 个"用它。
+     * 数据不是今天的就返回 -1（宁可不显示，也不显示昨天的数字）。
+     */
+    static int pendingToday(Context c) {
+        if (!today().equals(goalsDate(c))) {
+            return -1;
+        }
+        int n = 0;
+        for (Goal g : goals(c)) {
+            if (!g.hit()) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     /* ---------- 待同步队列 ---------- */
 
     static final class Item {
@@ -125,6 +185,8 @@ final class Store {
         String date = "";
         double amount;
         long ts;
+        /** 已经成功写进 Gist 过一次（推失败的都是 false）。 */
+        boolean pushed;
         boolean applied;
     }
 
@@ -149,6 +211,7 @@ final class Store {
                 it.date = o.optString("date", "");
                 it.amount = o.optDouble("amount", 0);
                 it.ts = o.optLong("ts", 0);
+                it.pushed = o.optBoolean("pushed", false);
                 it.applied = o.optBoolean("applied", false);
                 if (!it.id.isEmpty()) {
                     out.add(it);
@@ -171,6 +234,7 @@ final class Store {
                 o.put("date", it.date);
                 o.put("amount", it.amount);
                 o.put("ts", it.ts);
+                o.put("pushed", it.pushed);
                 o.put("applied", it.applied);
                 arr.put(o);
             } catch (Throwable ignored) {
@@ -213,8 +277,43 @@ final class Store {
         return out;
     }
 
-    /** 把本地已经不在远端队列里的条目标成 applied（= PC 已经记账）。 */
-    static void markApplied(Context c, List<Item> remote) {
+    /**
+     * 标记这几条"确实写进 Gist 了"。
+     *
+     * 为什么非要这个标记：判断「PC 已经记账」用的是"本地有、远端没有"。
+     * 刚打完还没推上去的那一瞬间，它也是"远端没有" —— 不打这个标记，
+     * 一次刚好撞上的对齐就会把还没记账的记录当成已记账，直接丢掉。
+     */
+    static void markPushed(Context c, List<Item> sent) {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (Item it : sent) {
+            if (it.id != null) {
+                ids.add(it.id);
+            }
+        }
+        List<Item> q = queue(c);
+        boolean changed = false;
+        for (Item it : q) {
+            if (!it.pushed && ids.contains(it.id)) {
+                it.pushed = true;
+                changed = true;
+            }
+        }
+        if (changed) {
+            saveQueue(c, q);
+        }
+    }
+
+    /**
+     * 把本地已经不在远端队列里的条目标成 applied（= PC 已经记账）。
+     *
+     * ★ 只认 pushed 过的：没推成功过的记录远端当然没有，
+     *   把它当成"已记账"等于静默丢数据。
+     *
+     * @return 有变化才返回 true —— 调用方靠它判断"要不要重新以远端为准"，
+     *         不然"刷新 → 对齐 → 又触发刷新"会转起来。
+     */
+    static boolean markApplied(Context c, List<Item> remote) {
         java.util.Set<String> alive = new java.util.HashSet<>();
         for (Item it : remote) {
             alive.add(it.id);
@@ -222,7 +321,7 @@ final class Store {
         List<Item> q = queue(c);
         boolean changed = false;
         for (Item it : q) {
-            if (!it.applied && it.id != null && !alive.contains(it.id)) {
+            if (it.pushed && !it.applied && it.id != null && !alive.contains(it.id)) {
                 it.applied = true;
                 changed = true;
             }
@@ -230,5 +329,50 @@ final class Store {
         if (changed) {
             saveQueue(c, q);
         }
+        return changed;
+    }
+
+    /** 还在排队等 PC 记账的目标 id（用来决定"本地已打卡"标记还能不能立着）。 */
+    static java.util.Set<String> unappliedGoalIds(Context c) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        for (Item it : pending(c)) {
+            if (it.goalId != null && !it.goalId.isEmpty()) {
+                out.add(it.goalId);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 远端数据覆盖本地，但守住"已经打上了、PC 还没记账"的那几条。
+     *
+     * ★ 依据是**队列**，不是"上一轮界面显示过绿勾"。
+     *   队列里还有这条 → 手机确实打过、账还没记，远端说"没打"是它落后了，不能抹；
+     *   队列空了 → 账已经对齐（或被清掉），一切以远端为准。
+     *   否则"本地已打卡"会一直挂着，哪怕账根本没记上 —— 自己骗自己。
+     */
+    static List<Goal> mergeFresh(Context c, List<Goal> fresh) {
+        java.util.Set<String> waiting = unappliedGoalIds(c);
+        if (waiting.isEmpty()) {
+            return fresh;
+        }
+        for (Goal old : goals(c)) {
+            if (!old.hit() || !waiting.contains(old.id)) {
+                continue;
+            }
+            for (Goal f : fresh) {
+                if (f.id.equals(old.id)) {
+                    f.localHit = true;
+                    f.todayHit = true;
+                }
+            }
+        }
+        return fresh;
+    }
+
+    /* ---------- 杂项 ---------- */
+
+    static String today() {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
     }
 }

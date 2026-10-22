@@ -1,4 +1,4 @@
-package com.afs.checkin;
+package com.afs.guard;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -8,18 +8,17 @@ import java.net.URL;
 import java.nio.charset.Charset;
 
 /**
- * 和 PC 端共用的那个 secret Gist。
+ * 和 PC 端共用的那个 secret Gist（写侧）。
  *
- * 读：raw 地址免鉴权（secret gist 的 raw 是公开可读的但猜不到），
- * 写：必须带 token，只改 checkin-queue.json 这一个文件，不动 study-gate.json
- *     —— gate 是 PC 的，两边都写会互相覆盖。
+ * 读走 {@link StudyGate}：它本来就要拉 study-gate.json 和队列，同一条路子，
+ * 没必要为打卡页再写一份 GET（重复的 HttpURLConnection 代码是最容易两边跑偏的地方）。
+ *
+ * 写只碰 checkin-queue.json 这一个文件 —— study-gate.json 是 PC 的，
+ * 两边都写会互相覆盖，打卡数据永远写不进去。
  */
 final class Gist {
 
-    static final String GIST_ID = "9c5c1f32f5159e085b3686d7a00a8f77";
-    static final String OWNER = "sdgfdii";
-    static final String FILE_GATE = "study-gate.json";
-    static final String FILE_QUEUE = "checkin-queue.json";
+    static final String FILE_QUEUE = StudyGate.QUEUE_FILE;
 
     private static final Charset UTF8 = Charset.forName("UTF-8");
     private static final int CONNECT_MS = 8000;
@@ -28,46 +27,28 @@ final class Gist {
     private Gist() {
     }
 
-    static String rawUrl(String file) {
-        // 加时间戳绕开 CDN 缓存：gist raw 会缓存几十秒，打卡后立刻刷新会看到旧数据
-        return "https://gist.githubusercontent.com/" + OWNER + "/" + GIST_ID
-                + "/raw/" + file + "?t=" + System.currentTimeMillis();
+    /** 读队列原文（免鉴权，secret gist 的 raw 猜不到但公开可读）。 */
+    static String getQueue() throws Exception {
+        return StudyGate.fetchRaw(StudyGate.queueUrl());
     }
 
-    /** GET 一个文本资源；失败抛异常（调用方决定怎么提示）。 */
-    static String get(String url) throws Exception {
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-        c.setConnectTimeout(CONNECT_MS);
-        c.setReadTimeout(READ_MS);
-        c.setRequestMethod("GET");
-        c.setRequestProperty("User-Agent", "AFS-Checkin");
-        c.setRequestProperty("Cache-Control", "no-cache");
-        try {
-            int code = c.getResponseCode();
-            if (code != 200) {
-                throw new Exception("HTTP " + code);
-            }
-            return read(c.getInputStream());
-        } finally {
-            c.disconnect();
-        }
-    }
-
-    /** PATCH 单个文件；返回 null 表示成功，否则是错误描述。 */
-    static String patchFile(String token, String file, String content) {
+    /** PATCH 队列文件；返回 null 表示成功，否则是错误描述。 */
+    static String patchQueue(String token, String content) {
         if (token == null || token.trim().isEmpty()) {
             return "没有 token";
         }
         HttpURLConnection c = null;
         try {
-            String body = "{\"files\":{\"" + file + "\":{\"content\":" + quote(content) + "}}}";
-            c = (HttpURLConnection) new URL("https://api.github.com/gists/" + GIST_ID).openConnection();
+            String body = "{\"files\":{\"" + FILE_QUEUE + "\":{\"content\":"
+                    + quote(content) + "}}}";
+            c = (HttpURLConnection) new URL("https://api.github.com/gists/"
+                    + StudyGate.GIST_ID).openConnection();
             c.setConnectTimeout(CONNECT_MS);
             c.setReadTimeout(READ_MS);
             c.setRequestMethod("PATCH");
             c.setDoOutput(true);
             c.setRequestProperty("Authorization", "token " + token.trim());
-            c.setRequestProperty("User-Agent", "AFS-Checkin");
+            c.setRequestProperty("User-Agent", "AFS-Guard");
             c.setRequestProperty("Accept", "application/vnd.github+json");
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             byte[] bytes = body.getBytes(UTF8);

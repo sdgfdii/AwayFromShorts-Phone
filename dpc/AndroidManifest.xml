@@ -41,6 +41,12 @@
         </activity>
 
         <activity
+            android:name=".CheckinActivity"
+            android:exported="false"
+            android:label="@string/checkin_title"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".AppListActivity"
             android:exported="false"
             android:label="@string/list_title" />

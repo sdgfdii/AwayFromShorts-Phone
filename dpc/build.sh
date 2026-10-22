@@ -56,12 +56,38 @@ OUT="build"
 rm -rf "$OUT"
 mkdir -p "$OUT/flat" "$OUT/gen" "$OUT/classes" "$OUT/dex"
 
+# ---------- 0. 生成 BuildConfig ----------
+# 打卡要写 Gist，得有个 token。但 token 不能进公开仓库 ——
+# APK 里 grep 得到 'gho_' 前缀，推上去等于把凭据公开。
+# 所以默认 **不注入**（产物可以直接发仓库），本机想出"装上就能打卡"的包用：
+#   AFS_PREFILL=1 bash build.sh
+# token 从本机 token.local 读（一行，已在 .gitignore 里）。
+TOKEN=""
+if [ "${AFS_PREFILL:-0}" = "1" ] && [ -f token.local ]; then
+  TOKEN="$(head -1 token.local | tr -d '\r\n')"
+fi
+mkdir -p "$OUT/gen/com/afs/guard"
+cat > "$OUT/gen/com/afs/guard/BuildConfig.java" <<EOF
+package com.afs.guard;
+
+/** 构建期生成，勿手改（build.sh 和 test/run.sh 各生成一份）。 */
+public final class BuildConfig {
+    /** 预置的 GitHub token（只授 gist 权限）。空串 = 要去打卡页长按标题粘贴。 */
+    public static final String PREFILL_TOKEN = "$TOKEN";
+}
+EOF
+if [ -n "$TOKEN" ]; then
+  echo "[0/7] token 已注入（${#TOKEN} 字符）· 这份 APK 别外传"
+else
+  echo "[0/7] 未注入 token（公开构建）· 首次用打卡要长按标题粘一次"
+fi
+
 # ---------- 1. 编译资源 ----------
-echo "[1/6] aapt2 compile"
+echo "[1/7] aapt2 compile"
 "$AAPT2" compile --dir res -o "$OUT/flat"
 
 # ---------- 2. 链接资源 ----------
-echo "[2/6] aapt2 link"
+echo "[2/7] aapt2 link"
 "$AAPT2" link \
   -o "$OUT/base.apk" \
   -I "$ANDROID_JAR" \
@@ -69,24 +95,26 @@ echo "[2/6] aapt2 link"
   --java "$OUT/gen" \
   --min-sdk-version 24 \
   --target-sdk-version 34 \
-  --version-code 1916 \
-  --version-name 1.10.6 \
+  --version-code 2000 \
+  --version-name 1.11.0 \
   "$OUT"/flat/*.flat
 
 # ---------- 3. 编译 Java ----------
-echo "[3/6] javac"
+echo "[3/7] javac"
 find java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
 javac -encoding UTF-8 -nowarn -source 8 -target 8 \
   -bootclasspath "$ANDROID_JAR" -classpath "$ANDROID_JAR" \
   -d "$OUT/classes" @"$OUT/sources.txt" 2>&1 | grep -v '^warning:' || true
+[ -f "$OUT/classes/com/afs/guard/CheckinActivity.class" ] \
+  || { echo "javac 失败（没有 CheckinActivity.class）" >&2; exit 1; }
 
 # ---------- 4. dex ----------
-echo "[4/6] d8"
+echo "[4/7] d8"
 "$JAR" cf "$OUT/classes.jar" -C "$OUT/classes" .
 "$D8" --lib "$ANDROID_JAR" --min-api 24 --output "$OUT/dex" "$OUT/classes.jar"
 
 # ---------- 5. 打包 + 对齐 ----------
-echo "[5/6] zip + zipalign"
+echo "[5/7] zip + zipalign"
 cp "$OUT/base.apk" "$OUT/unsigned.apk"
 if command -v zip >/dev/null 2>&1; then
   ( cd "$OUT" && zip -q -j unsigned.apk dex/classes.dex )
@@ -108,7 +136,7 @@ fi
 "$ZIPALIGN" -f -p 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
 
 # ---------- 6. 签名 ----------
-echo "[6/6] apksigner"
+echo "[6/7] apksigner"
 KS="keystore/afs.keystore"
 mkdir -p keystore
 if [ ! -f "$KS" ]; then

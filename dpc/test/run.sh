@@ -28,7 +28,20 @@ esac
 OUT="build/test"
 rm -rf "$OUT"
 mkdir -p "$OUT"
-find java test/java -name '*.java' > "$OUT/sources.txt"
+
+# BuildConfig 是构建期生成的（真 token 只在本机 build.sh 里注入）。
+# 离线回归用空 token 生成一份 —— 没有它 CheckinStore 编译不过。
+mkdir -p "$OUT/gen/com/afs/guard"
+cat > "$OUT/gen/com/afs/guard/BuildConfig.java" <<'EOF'
+package com.afs.guard;
+
+/** 离线回归用：空 token（测试不联网，也不该碰真凭据）。 */
+public final class BuildConfig {
+    public static final String PREFILL_TOKEN = "";
+}
+EOF
+
+find java test/java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
 "$JAVAC" -encoding UTF-8 -nowarn -source 8 -target 8 \
   -bootclasspath "$ANDROID_JAR" -classpath "$ANDROID_JAR" \
   -d "$OUT" @"$OUT/sources.txt" 2>&1 | grep -vE '^(warning|注意|Note)' || true

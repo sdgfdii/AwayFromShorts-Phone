@@ -272,7 +272,7 @@ public final class StudyGate {
      * 数据不可信、开关关、已全部打卡 → false（放行）。
      */
     public static boolean shouldHold(Snapshot snap, Calendar now) {
-        return shouldHold(snap, now, queuePending);
+        return shouldHold(snap, now, effectivePending());
     }
 
     /**
@@ -318,6 +318,44 @@ public final class StudyGate {
      *   22:00 打 0.5 篇就能把剩下两个目标一起豁免 —— 闸门就废了。
      */
     private static volatile int queuePending = -1;
+
+    /**
+     * 打卡页在本机刚算出来的同一个值。
+     *
+     * 有了它就不用等 Gist 往返 + 10 分钟拉取节流：打卡页和闸门现在在同一个进程里
+     * （合并成一个 App 之后才成立），打完最后一个目标那一刻就能立刻解闸。
+     * 队列推成功后远端也是同一个数，两边收敛；推失败时本地这份还留着，等重试。
+     */
+    private static volatile int localPending = -1;
+
+    /** 打卡页打完一笔后直接告诉闸门还剩几个；-1 表示"退回按远端判"。 */
+    public static void noteLocalPending(int pending) {
+        localPending = pending;
+        // 这一行是"先解闸"的唯一现场证据：出问题时先看它到底传了什么
+        Log.i(TAG, "study-gate localPending=" + pending
+                + " (remote=" + queuePending + " effective=" + effectivePending() + ")");
+    }
+
+    /**
+     * 远端和本地两份取"更小的那个"（-1 当没有）。
+     *
+     * 取小 = 更早就解闸。宁可早放行也不锁死：这是整个项目一贯的 fail-open。
+     * 反过来取大就成了"本地说打完了、远端还没收到 → 继续冻"，
+     * 用户会以为打卡没生效，然后反复打 —— 体验上直接崩。
+     */
+    static int mergePending(int remote, int local) {
+        if (remote < 0) {
+            return local;
+        }
+        if (local < 0) {
+            return remote;
+        }
+        return Math.min(remote, local);
+    }
+
+    static int effectivePending() {
+        return mergePending(queuePending, localPending);
+    }
     private static volatile boolean fetching;
     private static volatile long lastTryMs;
     private static volatile long fetchStartedAt;
@@ -523,7 +561,7 @@ public final class StudyGate {
 
     /** 纯判定（离线可测）：快照 → 卡片状态。 */
     public static int stateOf(Snapshot s, Calendar now) {
-        return stateOf(s, now, queuePending);
+        return stateOf(s, now, effectivePending());
     }
 
     public static int stateOf(Snapshot s, Calendar now, int queuedPending) {
@@ -558,7 +596,7 @@ public final class StudyGate {
 
     /** 纯文案（离线可测）。 */
     public static String textOf(Snapshot s, Calendar now) {
-        return textOf(s, now, queuePending);
+        return textOf(s, now, effectivePending());
     }
 
     public static String textOf(Snapshot s, Calendar now, int queuedPending) {

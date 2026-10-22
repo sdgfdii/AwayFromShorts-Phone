@@ -21,8 +21,13 @@ import java.util.Calendar;
  * 主界面：只看状态，不进列表。
  *
  * 应用一多，把每个应用都铺在首页就得一直往下滑 —— 那本来是个"黑名单"，
- * 平时不需要看。所以这里只留状态和两个动作，
+ * 平时不需要看。所以这里只留状态和几个动作，
  * 黑名单和每条时段都在 {@link AppListActivity} 里，一行一个。
+ *
+ * 打卡页 {@link CheckinActivity} 并进来了（原来是两个 App）：
+ * 学习目标和"到点冻结"本来就是同一件事的两面，分开放反而要多装一个图标。
+ * 并进来还有个实打实的好处 —— 打完卡能在同一个进程里立刻解闸，
+ * 不用等 Gist 往返和 10 分钟的拉取节流。
  */
 public class MainActivity extends Activity {
 
@@ -51,6 +56,7 @@ public class MainActivity extends Activity {
     private TextView lockNote;
     private TextView result;
     private TextView foot;
+    private Button checkinBtn;
     private Button appsBtn;
     private Button applyBtn;
 
@@ -99,6 +105,20 @@ public class MainActivity extends Activity {
         lockNote = card(root, 12);
         lockNote.setTextColor(RED);
 
+        // 打卡是这个 App 里唯一每天都会用的动作，放最上面，且是唯一的实心按钮
+        checkinBtn = button(root, "打卡", BRAND, 0xFFFFFFFF);
+        checkinBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                openCheckin();
+            }
+        });
+        // 学习卡本来只显示"还有没有目标没打卡"，点它去打卡是最自然的下一步
+        studyCard.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                openCheckin();
+            }
+        });
+
         appsBtn = button(root, "黑名单", SURFACE, TEXT);
         appsBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -106,7 +126,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        applyBtn = button(root, "立即应用", BRAND, 0xFFFFFFFF);
+        applyBtn = button(root, "立即应用", SURFACE, TEXT);
         applyBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 Config.arm(MainActivity.this);   // 确认过了，宽限立即结束
@@ -127,7 +147,30 @@ public class MainActivity extends Activity {
 
         setContentView(scroll);
         Guard.ensureService(this);   // 每次打开 App 顺手保证常驻守护在跑
+        CheckinStore.seedToken(this); // 带 token 的构建第一次打开就落盘
         render();
+        warmGoals();                 // 攒一份目标，打卡按钮上才能显示"还有几个"
+    }
+
+    /**
+     * 首页自己也拉一次目标（只在本地还没有今天的数据时）。
+     *
+     * 不这么做的话，刚装完/刚跨天，按钮上永远是光秃秃的"打卡"，
+     * 得先进打卡页一次才有数字 —— 而"还欠几个"恰恰是最该一眼看见的。
+     * 拉失败什么也不做：按钮退化成"打卡"，打卡页里再报错。
+     */
+    private void warmGoals() {
+        if (CheckinStore.pendingToday(this) >= 0) {
+            return;   // 今天的目标已经在本地了，按钮上的数字就是现成的
+        }
+        CheckinSync.fetch(this, new CheckinSync.Sink() {
+            public void onData(java.util.List<CheckinStore.Goal> goals, String date,
+                               String at, Exception err) {
+                if (goals != null) {
+                    styleCheckin();
+                }
+            }
+        });
     }
 
     @Override
@@ -187,6 +230,7 @@ public class MainActivity extends Activity {
         appsBtn.setText("黑名单 · " + total + " 个应用");
         styleSecondary(appsBtn, false);
         styleSecondary(applyBtn, false);
+        styleCheckin();
 
         result.setTextColor(dark ? TEXT2_DARK : TEXT2);
         if (result.getText().length() == 0) {
@@ -196,6 +240,33 @@ public class MainActivity extends Activity {
 
     private boolean darkState = false;
     private boolean themeApplied = false;
+
+    /**
+     * 打卡按钮：把"还剩几个目标"直接写在按钮上。
+     * 数字来自上一次同步到本地的目标（不额外打网络），比单独一行说明有用得多 ——
+     * 没打卡的时候一打开 App 就能看见还欠几个。
+     */
+    private void styleCheckin() {
+        if (checkinBtn == null) {
+            return;
+        }
+        int pend = CheckinStore.pendingToday(this);
+        if (pend > 0) {
+            checkinBtn.setText("打卡 · 还有 " + pend + " 个目标");
+            checkinBtn.setAlpha(1f);
+        } else if (pend == 0) {
+            checkinBtn.setText("打卡 · 今天已经打完");
+            checkinBtn.setAlpha(0.6f);
+        } else {
+            checkinBtn.setText("打卡");
+            checkinBtn.setAlpha(1f);
+        }
+    }
+
+    private void openCheckin() {
+        // 把当前主题一起带过去，免得从浅色首页点进去先闪一下深色
+        CheckinActivity.open(this, darkState);
+    }
 
     /**
      * 学习联动卡片：生效中 / 保护已失效 用警示红，关闭 / 无数据用次要色，其余正常色。

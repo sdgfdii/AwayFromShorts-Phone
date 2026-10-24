@@ -2405,9 +2405,9 @@ public class CheckinActivity extends Activity {
         LinearLayout nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
         nav.setGravity(Gravity.CENTER_VERTICAL);
-        TextView brand = look.sub("AWAYFROMSHORTS  /  STUDY");
-        brand.setTextSize(11);
-        brand.setLetterSpacing(0.12f);
+        TextView brand = look.sub("学习目标");
+        brand.setTextSize(22);
+        brand.setTextColor(look.text());
         brand.setTypeface(Typeface.DEFAULT_BOLD);
         nav.addView(brand, new LinearLayout.LayoutParams(0, dp(42), 1f));
         brand.setGravity(Gravity.CENTER_VERTICAL);
@@ -2425,13 +2425,9 @@ public class CheckinActivity extends Activity {
         nav.addView(close, new LinearLayout.LayoutParams(dp(64), dp(38)));
         box.addView(nav);
 
-        TextView title = look.title("学习目标");
-        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-1, -2);
-        titleLp.topMargin = dp(18);
-        box.addView(title, titleLp);
         TextView subtitle = look.sub("管理进度、默认完成量和打卡设置");
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
-        subLp.topMargin = dp(4);
+        subLp.topMargin = dp(12);
         box.addView(subtitle, subLp);
 
         int pendingGoals = StudyStore.pendingToday(this);
@@ -2515,6 +2511,30 @@ public class CheckinActivity extends Activity {
                     manageOne(g.id);
                 }
             });
+        }
+
+        List<StudyStore.G> deleted = StudyStore.deletedGoals(this);
+        if (!deleted.isEmpty()) {
+            TextView deletedHint = look.sub("最近删除 · 可撤回目标和原有打卡记录");
+            LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(-1, -2);
+            hintLp.topMargin = dp(10);
+            hintLp.bottomMargin = dp(8);
+            box.addView(deletedHint, hintLp);
+            for (final StudyStore.G removed : deleted) {
+                TextView undo = manageButton("撤回删除「" + removed.name + "」", look.surface(), look.accent());
+                LinearLayout.LayoutParams undoLp = new LinearLayout.LayoutParams(-1, dp(44));
+                undoLp.bottomMargin = dp(7);
+                box.addView(undo, undoLp);
+                undo.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        if (StudyStore.restore(CheckinActivity.this, removed.id)) {
+                            refreshAsync();
+                            reopenManage();
+                            toast("已恢复目标和打卡记录");
+                        }
+                    }
+                });
+            }
         }
 
         TextView add = manageButton("＋  新目标", Ui.BLUE, 0xFFFFFFFF);
@@ -2601,8 +2621,8 @@ public class CheckinActivity extends Activity {
             // 与打卡页同样沉浸式；ColorOS 会忽略 Dialog 的状态栏颜色。
             d.getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
                     android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            d.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                    | android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+            d.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
+            d.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
             d.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         }
         d.setOnDismissListener(new DialogInterface.OnDismissListener() {
@@ -2652,7 +2672,7 @@ public class CheckinActivity extends Activity {
     }
 
     private int manageBg() {
-        return dark ? 0xFF232A34 : 0xFFE2E5EA;
+        return look.bg();
     }
 
     /** 数据变了：把管理对话框关掉重开一份，列表才会反映最新状态。 */
@@ -2678,7 +2698,7 @@ public class CheckinActivity extends Activity {
         final String fName = name;
         final String fUnit = unit;
         new AlertDialog.Builder(this)
-                .setItems(new CharSequence[]{"编辑", "改每次默认完成量", "删除"},
+                .setItems(new CharSequence[]{"编辑", "改每次默认完成量", "删除目标…"},
                         new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
                         if (w == 0) {
@@ -2686,20 +2706,32 @@ public class CheckinActivity extends Activity {
                         } else if (w == 1) {
                             askDefaultAmount(id, fName, fUnit);
                         } else {
-                            new AlertDialog.Builder(CheckinActivity.this)
+                            final AlertDialog confirm = new AlertDialog.Builder(CheckinActivity.this)
                                     .setTitle("删除目标？")
-                                    .setMessage("将删除「" + fName + "」及其打卡记录。此操作无法撤销。")
+                                    .setMessage("将「" + fName + "」及其打卡记录移到最近删除。可在目标列表中撤回。")
                                     .setNegativeButton("取消", null)
                                     .setPositiveButton("确认删除", new DialogInterface.OnClickListener() {
                                         public void onClick(DialogInterface dialog, int which) {
-                                            clearAmountOverride(id);
                                             StudyStore.remove(CheckinActivity.this, id);
                                             refreshAsync();
                                             reopenManage();
-                                            toast("已删除");
+                                            toast("已移到最近删除，可在下方撤回");
                                         }
                                     })
-                                    .show();
+                                    .create();
+                            confirm.setOnShowListener(new DialogInterface.OnShowListener() {
+                                public void onShow(DialogInterface ignored) {
+                                    final android.widget.Button button = confirm.getButton(AlertDialog.BUTTON_POSITIVE);
+                                    button.setTextColor(look.red());
+                                    button.setEnabled(false);
+                                    ui.postDelayed(new Runnable() {
+                                        public void run() {
+                                            if (confirm.isShowing()) button.setEnabled(true);
+                                        }
+                                    }, 1500);
+                                }
+                            });
+                            confirm.show();
                         }
                     }
                 })

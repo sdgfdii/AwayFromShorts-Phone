@@ -270,35 +270,106 @@ public final class StudyStore {
         return o;
     }
 
-    /** 删目标 = 归档 + 删掉它的记录（记录留着也没人看，还占地方）。 */
+    /** 删除目标时把记录移入回收区，列表与统计立即不再看到它们。 */
     public static void remove(Context c, String id) {
         synchronized (LOCK) {
             JSONObject db = load(c);
             JSONArray goals = db.optJSONArray("goals");
+            boolean found = false;
             for (int i = 0; i < goals.length(); i++) {
                 JSONObject o = goals.optJSONObject(i);
                 if (o != null && id.equals(o.optString("id", ""))) {
                     try {
                         o.put("archived", true);
+                        found = true;
                     } catch (Throwable ignored) {
                     }
                 }
             }
+            if (!found) return;
             JSONArray recs = db.optJSONArray("recs");
             JSONArray keep = new JSONArray();
+            JSONArray removed = new JSONArray();
             for (int i = 0; i < recs.length(); i++) {
                 JSONObject r = recs.optJSONObject(i);
-                if (r != null && !id.equals(r.optString("goalId", ""))) {
-                    keep.put(r);
-                }
+                if (r == null) continue;
+                if (id.equals(r.optString("goalId", ""))) removed.put(r);
+                else keep.put(r);
             }
             try {
                 db.put("recs", keep);
+                JSONArray trash = db.optJSONArray("trash");
+                if (trash == null) trash = new JSONArray();
+                JSONObject entry = new JSONObject();
+                entry.put("id", id);
+                entry.put("recs", removed);
+                trash.put(entry);
+                db.put("trash", trash);
             } catch (Throwable ignored) {
             }
             save(c, db);
         }
         invalidate(c);
+    }
+
+    /** 可撤回的目标，最近删除的排在前面。 */
+    public static List<G> deletedGoals(Context c) {
+        List<G> out = new ArrayList<>();
+        JSONObject db = load(c);
+        JSONArray trash = db.optJSONArray("trash");
+        JSONArray goals = db.optJSONArray("goals");
+        for (int i = trash == null ? -1 : trash.length() - 1; i >= 0; i--) {
+            JSONObject entry = trash.optJSONObject(i);
+            String id = entry == null ? "" : entry.optString("id", "");
+            for (int j = 0; goals != null && j < goals.length(); j++) {
+                JSONObject o = goals.optJSONObject(j);
+                if (o == null || !id.equals(o.optString("id", ""))) continue;
+                G g = new G();
+                g.id = id;
+                g.name = o.optString("name", "");
+                if (!g.name.isEmpty()) out.add(g);
+                break;
+            }
+        }
+        return out;
+    }
+
+    /** 撤回删除：原目标与每一笔打卡一起恢复。 */
+    public static boolean restore(Context c, String id) {
+        boolean restored = false;
+        synchronized (LOCK) {
+            JSONObject db = load(c);
+            JSONArray trash = db.optJSONArray("trash");
+            JSONArray goals = db.optJSONArray("goals");
+            JSONArray keep = new JSONArray();
+            JSONArray recs = db.optJSONArray("recs");
+            if (trash == null || goals == null || recs == null) return false;
+            for (int i = 0; i < trash.length(); i++) {
+                JSONObject entry = trash.optJSONObject(i);
+                if (entry == null || !id.equals(entry.optString("id", ""))) {
+                    if (entry != null) keep.put(entry);
+                    continue;
+                }
+                JSONArray saved = entry.optJSONArray("recs");
+                for (int j = 0; saved != null && j < saved.length(); j++) {
+                    JSONObject rec = saved.optJSONObject(j);
+                    if (rec != null) recs.put(rec);
+                }
+                restored = true;
+            }
+            if (!restored) return false;
+            for (int i = 0; i < goals.length(); i++) {
+                JSONObject goal = goals.optJSONObject(i);
+                if (goal != null && id.equals(goal.optString("id", ""))) {
+                    try { goal.put("archived", false); } catch (Throwable ignored) { }
+                    break;
+                }
+            }
+            try { db.put("trash", keep); } catch (Throwable ignored) { }
+            save(c, db);
+        }
+        invalidate(c);
+        return true;
     }
 
 

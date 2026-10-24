@@ -353,7 +353,7 @@ public class MainActivity extends Activity {
         shell.setAlpha(0f);
         shell.animate().translationY(0f).alpha(1f)
                 .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f))
-                .setDuration(380)
+                .setDuration(230)
                 .start();
     }
 
@@ -370,7 +370,7 @@ public class MainActivity extends Activity {
         }
         s.animate().alpha(0f).scaleX(1.10f).scaleY(1.10f)
                 .setInterpolator(new android.view.animation.DecelerateInterpolator(1.4f))
-                .setDuration(320)
+                .setDuration(220)
                 .withEndAction(new Runnable() {
                     public void run() {
                         ViewGroup p = (ViewGroup) s.getParent();

@@ -2312,23 +2312,12 @@ public class CheckinActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(18), dp(20), dp(18), dp(28));
 
-        LinearLayout nav = new LinearLayout(this);
-        nav.setOrientation(LinearLayout.HORIZONTAL);
-        nav.setGravity(Gravity.CENTER_VERTICAL);
         TextView title = look.sub("禁忌卡");
         title.setTextSize(22);
         title.setTextColor(look.text());
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setGravity(Gravity.CENTER_VERTICAL);
-        nav.addView(title, new LinearLayout.LayoutParams(0, dp(42), 1f));
-        TextView close = manageButton("完成", look.surface(), look.accent());
-        close.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                if (tabooDialog != null) tabooDialog.dismiss();
-            }
-        });
-        nav.addView(close, new LinearLayout.LayoutParams(dp(64), dp(38)));
-        box.addView(nav);
+        box.addView(title, new LinearLayout.LayoutParams(-1, dp(42)));
         TextView subtitle = look.sub("每天核对每张卡，记录做了还是没做");
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
         subLp.topMargin = dp(12);

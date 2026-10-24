@@ -2,6 +2,10 @@ package com.afs.guard;
 
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * 离线回归 —— 不连手机、不需要 Android 运行时。
@@ -505,6 +509,19 @@ public final class GuardTest {
         eq(toKey.endAt(1), 18 * 60, "withGate 不动第二段终点");
         eq(toKey.days, 0x3, "withGate 不动放行星期");
         ok(!toKey.gate && toKey.withGate(true).gate, "withGate 双向可切换");
+        Map<String, Rule> all = new LinkedHashMap<>();
+        all.put("com.tencent.mm", key);
+        all.put("com.android.camera", two);
+        Set<String> picked = new LinkedHashSet<>();
+        picked.add("com.android.camera");
+        Map<String, Rule> changed = RuleStore.withKeyApps(all, picked);
+        ok(RuleStore.keyAppsOf(changed).equals(picked), "关键名单可从微信改为相机");
+        ok(changed.get("com.tencent.mm").gate, "取消微信关键身份后参与闸门");
+        ok(!changed.get("com.android.camera").gate, "相机被选为关键应用后豁免闸门");
+        ok(changed.get("com.android.camera").same(two.withGate(false)),
+                "切换关键身份保留相机原冻结时间");
+        ok(!all.get("com.tencent.mm").gate && all.get("com.android.camera").gate,
+                "设置名单不修改输入规则");
     }
 
     /* ---------- 工具 ---------- */

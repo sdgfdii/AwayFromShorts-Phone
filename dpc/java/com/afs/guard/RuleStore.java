@@ -85,27 +85,12 @@ public final class RuleStore {
             if (market == null) market = rules.get("com.sankuai.meituan");
             if (market != null && rules.containsKey("com.xunmeng.pinduoduo")) {
                 Rule old = rules.get("com.xunmeng.pinduoduo");
-                if (!old.same(market)) {
-                    rules.put("com.xunmeng.pinduoduo", market);
+                Rule aligned = market.withGate(old.gate);
+                if (!old.same(aligned)) {
+                    rules.put("com.xunmeng.pinduoduo", aligned);
                     changed = true;
                 }
                 prefs.edit().putBoolean("align_pdd_v1321", true).apply();
-            }
-        }
-        // 只有关键应用豁免；旧版相机/工具豁免和同步回来的 gate=false 都需纠正。
-        for (Map.Entry<String, Rule> entry : rules.entrySet()) {
-            if (!"com.tencent.mm".equals(entry.getKey()) && !entry.getValue().gate) {
-                entry.setValue(entry.getValue().withGate(true));
-                changed = true;
-            }
-        }
-        Rule wechat = rules.get("com.tencent.mm");
-        if (wechat != null) {
-            Rule midnight = new Rule(Rule.ALL_DAYS,
-                    new int[][] {{0, 6 * 60}}, false, true);
-            if (!wechat.same(midnight)) {
-                rules.put("com.tencent.mm", midnight);
-                changed = true;
             }
         }
         if (changed) save(c, rules);
@@ -114,22 +99,34 @@ public final class RuleStore {
 
     /* ---------- 关键应用名单 ---------- */
 
-    /** 微信是唯一关键应用。 */
+    /** 关键应用由用户从黑名单里选；gate=false 表示学习闸门豁免。 */
     public static Set<String> keyApps(Context c) {
+        return keyAppsOf(all(c));
+    }
+
+    static Set<String> keyAppsOf(Map<String, Rule> rules) {
         Set<String> s = new LinkedHashSet<>();
-        Rule wechat = all(c).get("com.tencent.mm");
-        if (wechat != null && !wechat.gate) s.add("com.tencent.mm");
+        for (Map.Entry<String, Rule> entry : rules.entrySet()) {
+            if (!entry.getValue().gate) s.add(entry.getKey());
+        }
         return s;
     }
 
-    /** 只改微信，保留其他应用自己的学习闸门设置。 */
+    /** 更新整份名单，只切换闸门豁免，不碰各应用的冻结星期和时间。 */
     public static void setKeyApps(Context c, Set<String> keys) {
         Map<String, Rule> m = all(c);
-        Rule wechat = m.get("com.tencent.mm");
-        if (wechat != null && wechat.gate == keys.contains("com.tencent.mm")) {
-            m.put("com.tencent.mm", wechat.withGate(!keys.contains("com.tencent.mm")));
-            save(c, m);
+        Map<String, Rule> updated = withKeyApps(m, keys);
+        if (!updated.equals(m)) save(c, updated);
+    }
+
+    static Map<String, Rule> withKeyApps(Map<String, Rule> rules, Set<String> keys) {
+        Map<String, Rule> updated = new LinkedHashMap<>();
+        for (Map.Entry<String, Rule> entry : rules.entrySet()) {
+            boolean gate = !keys.contains(entry.getKey());
+            Rule rule = entry.getValue();
+            updated.put(entry.getKey(), rule.gate == gate ? rule : rule.withGate(gate));
         }
+        return updated;
     }
 
     /** 取某个应用的规则；没有就退回默认（不会写盘）。 */
@@ -155,13 +152,14 @@ public final class RuleStore {
     public static void put(Context c, String pkg, Rule r) {
         Map<String, Rule> m = all(c);
         boolean fresh = !m.containsKey(pkg);
-        if (!"com.tencent.mm".equals(pkg) && !r.gate) r = r.withGate(true);
+        // 时段编辑不能暗中改变关键名单；新加入的应用默认参与闸门。
+        r = r.withGate(fresh || m.get(pkg).gate);
         m.put(pkg, r);
         save(c, m);
         if (fresh) {
             markAdded(c, pkg);
         }
-        setLast(c, r);
+        setLast(c, r.withGate(true));
     }
 
     /* ---------- 新加应用的时间戳 ---------- */

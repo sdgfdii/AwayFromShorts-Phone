@@ -21,8 +21,8 @@ import android.view.animation.LinearInterpolator;
  *
  * 尺寸和配色全部走 {@link Ui}，深浅两套主题都能直接用。
  *
- * 时长按"最短可用"来定：进度 1200ms 拉满就交棒，淡出 320ms 和首页入场重叠。
- * 再长就变成"等人"了 —— 这个 App 打开本来就很快，动画只是把这段空窗填上。
+ * 进度 640ms 拉满后交棒，淡出 220ms 和首页入场重叠；
+ * 从动画开始到首页完全露出不超过 1 秒。
  */
 final class SplashView extends View {
 
@@ -30,8 +30,8 @@ final class SplashView extends View {
         void onDone();
     }
 
-    private static final int SPIN_MS = 1100;   // 旋转一整圈
-    private static final int LOAD_MS = 1200;    // 进度走满
+    private static final int SPIN_MS = 600;    // 旋转一整圈
+    private static final int LOAD_MS = 640;    // 进度走满
 
     private final Ui ui;
     private final android.text.TextPaint p = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -88,7 +88,7 @@ final class SplashView extends View {
         setAlpha(0f);
         animate().scaleX(1f).scaleY(1f).alpha(1f)
                 .setInterpolator(new DecelerateInterpolator(1.6f))
-                .setDuration(260).start();
+                .setDuration(150).start();
 
         spin.start();
         load.start();

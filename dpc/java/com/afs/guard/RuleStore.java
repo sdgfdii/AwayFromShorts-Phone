@@ -75,37 +75,59 @@ public final class RuleStore {
         return all(c).size();
     }
 
-    /* ---------- 关键应用名单 ---------- */
-
-    /**
-     * 关键应用 = gate=false 的那批：学习目标没完成时**不**延长冻结，
-     * 只按它自己的放行时段走。
-     *
-     * 名单直接由规则里的 gate 反推，不另存一份 —— 两份状态必然会不同步
-     * （在编辑器里关掉开关、名单却没变，这种 bug 最难查）。
-     */
-    public static Set<String> keyApps(Context c) {
-        Set<String> s = new LinkedHashSet<>();
-        for (Map.Entry<String, Rule> e : all(c).entrySet()) {
-            if (!e.getValue().gate) {
-                s.add(e.getKey());
+    /** Apply the two requested corrections to the installed rules once. */
+    public static boolean alignRequestedRules(Context c) {
+        SharedPreferences prefs = sp(c);
+        Map<String, Rule> rules = all(c);
+        boolean changed = false;
+        if (!prefs.getBoolean("align_pdd_v1321", false)) {
+            Rule market = rules.get("com.taobao.idlefish");
+            if (market == null) market = rules.get("com.sankuai.meituan");
+            if (market != null && rules.containsKey("com.xunmeng.pinduoduo")) {
+                Rule old = rules.get("com.xunmeng.pinduoduo");
+                if (!old.same(market)) {
+                    rules.put("com.xunmeng.pinduoduo", market);
+                    changed = true;
+                }
+                prefs.edit().putBoolean("align_pdd_v1321", true).apply();
             }
         }
-        return s;
-    }
-
-    /** 整批设置名单：勾上的 gate=false（关键应用），没勾的 gate=true（受闸门管）。 */
-    public static void setKeyApps(Context c, Set<String> keys) {
-        Map<String, Rule> m = all(c);
-        boolean changed = false;
-        for (Map.Entry<String, Rule> e : m.entrySet()) {
-            boolean g = !keys.contains(e.getKey());
-            if (e.getValue().gate != g) {
-                e.setValue(e.getValue().withGate(g));
+        // 只有关键应用豁免；旧版相机/工具豁免和同步回来的 gate=false 都需纠正。
+        for (Map.Entry<String, Rule> entry : rules.entrySet()) {
+            if (!"com.tencent.mm".equals(entry.getKey()) && !entry.getValue().gate) {
+                entry.setValue(entry.getValue().withGate(true));
                 changed = true;
             }
         }
-        if (changed) {
+        Rule wechat = rules.get("com.tencent.mm");
+        if (wechat != null) {
+            Rule midnight = new Rule(Rule.ALL_DAYS,
+                    new int[][] {{0, 6 * 60}}, false, true);
+            if (!wechat.same(midnight)) {
+                rules.put("com.tencent.mm", midnight);
+                changed = true;
+            }
+        }
+        if (changed) save(c, rules);
+        return changed;
+    }
+
+    /* ---------- 关键应用名单 ---------- */
+
+    /** 微信是唯一关键应用。 */
+    public static Set<String> keyApps(Context c) {
+        Set<String> s = new LinkedHashSet<>();
+        Rule wechat = all(c).get("com.tencent.mm");
+        if (wechat != null && !wechat.gate) s.add("com.tencent.mm");
+        return s;
+    }
+
+    /** 只改微信，保留其他应用自己的学习闸门设置。 */
+    public static void setKeyApps(Context c, Set<String> keys) {
+        Map<String, Rule> m = all(c);
+        Rule wechat = m.get("com.tencent.mm");
+        if (wechat != null && wechat.gate == keys.contains("com.tencent.mm")) {
+            m.put("com.tencent.mm", wechat.withGate(!keys.contains("com.tencent.mm")));
             save(c, m);
         }
     }
@@ -133,6 +155,7 @@ public final class RuleStore {
     public static void put(Context c, String pkg, Rule r) {
         Map<String, Rule> m = all(c);
         boolean fresh = !m.containsKey(pkg);
+        if (!"com.tencent.mm".equals(pkg) && !r.gate) r = r.withGate(true);
         m.put(pkg, r);
         save(c, m);
         if (fresh) {
@@ -177,7 +200,7 @@ public final class RuleStore {
         int days = r.optInt("d", Rule.ALL_DAYS);
         // 老数据没有 "g" 字段 → 按规则本身的放行时长自动判断（见 Rule.autoGate）
         org.json.JSONArray w = r.optJSONArray("w");
-        if (w != null && w.length() > 0) {
+        if (w != null) {
             int[][] wins = new int[w.length()][2];
             int n = 0;
             for (int i = 0; i < w.length(); i++) {
@@ -192,10 +215,10 @@ public final class RuleStore {
                 int[][] trimmed = new int[n][2];
                 System.arraycopy(wins, 0, trimmed, 0, n);
                 boolean g = r.has("g") ? r.optBoolean("g", true) : Rule.autoGate(trimmed);
-                return new Rule(days, trimmed, g);
+                return new Rule(days, trimmed, g, r.optBoolean("freeze", false));
             }
             // 显式清空 = 整天冻结（这种显然要跟着闸门走）
-            return new Rule(days, new int[0][2], r.optBoolean("g", true));
+            return new Rule(days, new int[0][2], r.optBoolean("g", true), r.optBoolean("freeze", false));
         }
         int s = r.optInt("s", FALLBACK_START);
         int e = r.optInt("e", FALLBACK_END);
@@ -219,14 +242,14 @@ public final class RuleStore {
         save(c, m);
     }
 
-    private static void save(Context c, Map<String, Rule> m) {
-        JSONObject old = raw(c);
+    private static void save(Context c, Map<String, Rule> m) {        JSONObject old = raw(c);
         JSONObject o = new JSONObject();
         try {
             for (Map.Entry<String, Rule> e : m.entrySet()) {
                 JSONObject r = new JSONObject();
                 r.put("d", e.getValue().days);
                 r.put("g", e.getValue().gate);
+                r.put("freeze", e.getValue().freeze);
                 org.json.JSONArray w = new org.json.JSONArray();
                 for (int i = 0; i < e.getValue().windowCount(); i++) {
                     org.json.JSONArray seg = new org.json.JSONArray();
@@ -245,6 +268,27 @@ public final class RuleStore {
         } catch (Throwable ignored) {
         }
         sp(c).edit().putString(K_RULES, o.toString()).apply();
+        // 规则落盘 = 配置变了 → 下一拍推 hub 分节（Gist 中心仓库）
+        Hub.markConfigDirty(c);
+    }
+
+    /* ---------- hub 分节导出/恢复（Gist 中心仓库） ---------- */
+
+    /** 规则原文（afs_guard/rules 的 JSON 字符串），给 Hub 推配置分节用。 */
+    public static String exportRules(Context c) {
+        String s = sp(c).getString(K_RULES, "{}");
+        return s.length() == 0 ? "{}" : s;
+    }
+
+    /** 从 hub 分节恢复规则原文。结构不合法直接拒绝，本地一个字节不动。 */
+    public static void importRules(Context c, String json) {
+        try {
+            JSONObject o = new JSONObject(json);
+            sp(c).edit().putString(K_RULES, o.toString()).apply();
+            alignRequestedRules(c);
+        } catch (Throwable t) {
+            // 非法 JSON：静默拒绝
+        }
     }
 
     private static void setLast(Context c, Rule r) {
@@ -252,6 +296,7 @@ public final class RuleStore {
             JSONObject o = new JSONObject();
             o.put("d", r.days);
             o.put("g", r.gate);
+            o.put("freeze", r.freeze);
             org.json.JSONArray w = new org.json.JSONArray();
             for (int i = 0; i < r.windowCount(); i++) {
                 org.json.JSONArray seg = new org.json.JSONArray();

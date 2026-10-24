@@ -24,7 +24,7 @@ import java.util.Map;
  * 图标变灰、点不开、后台被杀，而且没有「忽略限制」「延长 15 分钟」这种口子。
  *
  * 每个应用有自己的 {@link Rule}（放行星期 + 放行时段），判定一律按包名走。
- * 另有 {@link StudyGate}：到解锁时段但今天学习目标没打完 → 继续冻结。
+ * 另有 {@link StudyGate}：今天学习目标没打完 → 直接延长冻结（不看时段，打完即解）。
  */
 public final class Guard {
 
@@ -123,7 +123,8 @@ public final class Guard {
     public static boolean blockedNow(Context ctx, String pkg) {
         Calendar c = Calendar.getInstance();
         Rule r = RuleStore.get(ctx, pkg);
-        return blocked(r, c) || (r.gate && StudyGate.holding(ctx, c));
+        return blocked(r, c) || (!RuleStore.keyApps(ctx).contains(pkg)
+                && StudyGate.holding(ctx, c));
     }
 
     /** 这个应用现在是否在自己的放行窗口里（不看学习闸门）。 */
@@ -180,6 +181,7 @@ public final class Guard {
         Calendar now = Calendar.getInstance();
         // 必须把学习闸门算进去，否则状态卡显示"5 个冻结"、下面结果却是"12 个冻结"
         boolean gate = StudyGate.holding(ctx, now);
+        java.util.Set<String> keys = RuleStore.keyApps(ctx);
         PackageManager pm = ctx.getPackageManager();
         int n = 0;
         for (Map.Entry<String, Rule> e : RuleStore.all(ctx).entrySet()) {
@@ -188,7 +190,7 @@ public final class Guard {
                 continue;
             }
             Rule r = e.getValue();
-            if (blocked(r, now) || (gate && r.gate)) {
+            if (blocked(r, now) || (gate && !keys.contains(e.getKey()))) {
                 n++;
             }
         }
@@ -201,11 +203,12 @@ public final class Guard {
      * 每个应用各有各的窗口，闹钟只能排最早的一个边界；响了之后
      * apply() 会把所有应用重新判一遍，并重新排下一次。
      *
-     * 学习闸门不参与排点：它的数据 ~10 分钟才刷一次，精确排到它的结束点
-     * 没有意义 —— 常驻服务 30 秒一次 tick 就是它的兜底节拍。
+     * 学习联动还需要在 20:00 检查，并在次日零点清除前一天的延长冻结。
      */
     public static long nextFlipMillis(Context ctx) {
-        return nextFlipOf(RuleStore.all(ctx).values(), Calendar.getInstance());
+        Calendar now = Calendar.getInstance();
+        return Math.min(nextFlipOf(RuleStore.all(ctx).values(), now),
+                StudyGate.nextCheckBoundaryMillis(now));
     }
 
     /* ==================== 落地 ==================== */
@@ -233,13 +236,20 @@ public final class Guard {
         Calendar now = Calendar.getInstance();
         // 学习闸门：整轮判一次。true = 今天目标没打完且此刻在延长区间里
         boolean gateHold = StudyGate.holding(ctx, now);
+        java.util.Set<String> keys = RuleStore.keyApps(ctx);
         boolean anyBlocked = false;
-        for (Rule r : rules.values()) {
-            if (blocked(r, now) || (gateHold && r.gate)) {
+        for (Map.Entry<String, Rule> entry : rules.entrySet()) {
+            if (blocked(entry.getValue(), now) || (gateHold && !keys.contains(entry.getKey()))) {
                 anyBlocked = true;
                 break;
             }
         }
+
+        // 学习闸门开启且今日未完成时，系统级灰度覆盖桌面和所有应用。
+        // 打卡完成即恢复彩色。需要 WRITE_SECURE_SETTINGS 权限。
+        int st = StudyGate.cardState(ctx, now);
+        GrayMode.apply(ctx, !MainActivity.isHomeVisible()
+                && (st == StudyGate.ST_ACTIVE || st == StudyGate.ST_PENDING));
 
         PackageManager pm = ctx.getPackageManager();
         StringBuilder sb = new StringBuilder();
@@ -263,9 +273,8 @@ public final class Guard {
                 sb.append("- ").append(pkg).append("：未安装\n");
                 continue;
             }
-            // ★ 只有 gate=true 的应用才被学习闸门牵连。日常工具（微信/相机/文件管理，
-            //   每天放行十几小时）不该因为"目标没打完"被锁 —— 那是另一个问题。
-            boolean gateBlock = gateHold && r.gate;
+            // 只有关键应用不受学习闸门牵连。
+            boolean gateBlock = gateHold && !keys.contains(pkg);
             boolean block = blocked(r, now) || gateBlock;
             try {
                 d.setUninstallBlocked(a, pkg, true);
@@ -285,7 +294,8 @@ public final class Guard {
             }
             // 应用名给人看，包名方便核对是哪个版本，后面带它自己的放行时段
             sb.append("- ").append(labelOf(pm, pkg)).append("（").append(pkg).append("）：")
-                    .append(state).append(" · ").append(allowText(r)).append('\n');
+                    .append(state).append(" · ").append(r.freezeSummary())
+                    .append(keys.contains(pkg) ? " · 关键应用" : " · 参与学习闸门").append('\n');
         }
         RuleStore.setApplied(ctx, rules.keySet());
 
@@ -310,7 +320,11 @@ public final class Guard {
 
         String head = "结果：" + rules.size() + " 个应用，" + frozen + " 个冻结"
                 + (gateHold ? "（学习闸门生效中）" : "") + "\n";
-        return head + sb.toString();
+        String result = head + sb.toString();
+        ctx.getSharedPreferences("afs_status", Context.MODE_PRIVATE).edit()
+                .putString("last_result", result)
+                .putLong("last_at", System.currentTimeMillis()).apply();
+        return result;
     }
 
     private static void applyRestrictions(Context ctx, DevicePolicyManager d, ComponentName a) {
@@ -372,15 +386,7 @@ public final class Guard {
      *   其余 23 小时全冻结。这是最容易误读的地方。
      */
     static String allowText(Rule r) {
-        if (r.windowCount() == 0) {
-            return "无放行时段 · 整天冻结";
-        }
-        if (r.days == 0) {
-            return "没选放行星期 · 整天冻结";
-        }
-        // 标出"关键应用"：用户自己列的（微信/工作工具），不该因为目标没打完被锁。
-        // 列表里不标的话，用户看不出自己那几个为什么没跟着灰。
-        return "放行 " + r.summary() + (r.gate ? "" : " · 关键应用");
+        return r.freezeSummary() + (r.gate ? "" : " · 不受学习闸门影响");
     }
 
     private static boolean installed(PackageManager pm, String pkg) {
@@ -511,8 +517,9 @@ public final class Guard {
         // 不显示这一行的话，用户没法确认"我列的那几个到底生效了没有"。
         int keys = RuleStore.keyApps(ctx).size();
         sb.append("关键应用　").append(keys).append(" 个（学习目标未完成也不延长冻结）").append('\n');
-        // 学习联动不在这里 —— 首页有它自己的卡片（StudyGate.cardText），
-        // 埋在这个同色同字号的文本块里没人看得见，而且重复。
+        // 学习联动不在这里 —— 它现在并进首页的「打卡」按钮了（styleCheckin：
+        // 后缀带「冻结中 / ⚠ 联动过期 / 等记账」），埋在这个同色同字号的
+        // 文本块里没人看得见。
         sb.append("下次切换　").append(total == 0 ? "—（没添加应用）" : stamp(nextFlipMillis(ctx))).append('\n');
         sb.append('\n');
         sb.append("加固项　").append(restrictionSummary()).append('\n');

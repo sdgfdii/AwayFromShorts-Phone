@@ -6,3 +6,6 @@ checkin/token.local
 dpc/build/
 checkin/build/
 *.keystore
+blocker/build/
+.workbuddy/
+afs-guard-*.apk

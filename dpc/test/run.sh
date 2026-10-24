@@ -30,7 +30,7 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 
 # BuildConfig 是构建期生成的（真 token 只在本机 build.sh 里注入）。
-# 离线回归用空 token 生成一份 —— 没有它 CheckinStore 编译不过。
+# 离线回归用空 token 生成一份 —— 没有它 Gist 编译不过（token 现在归 Gist 管）。
 mkdir -p "$OUT/gen/com/afs/guard"
 cat > "$OUT/gen/com/afs/guard/BuildConfig.java" <<'EOF'
 package com.afs.guard;
@@ -46,5 +46,17 @@ find java test/java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
   -bootclasspath "$ANDROID_JAR" -classpath "$ANDROID_JAR" \
   -d "$OUT" @"$OUT/sources.txt" 2>&1 | grep -vE '^(warning|注意|Note)' || true
 
+# android.jar 里的 org.json 是编译桩（运行到就是 RuntimeException: Stub!）。
+# 运行时挂 gradle 缓存里的真实现 jar（只含 org.json 包，不影响其它桩类）；
+# 找不到时跳过 —— 依赖 JSON 的纯函数测试会失败，原因自明。
+JSON_JAR="$(ls "$HOME"/.gradle/caches/modules-2/files-2.1/org.json/json/*/e*/json-*.jar 2>/dev/null | head -1 || true)"
+if [ -n "$JSON_JAR" ] && command -v cygpath >/dev/null 2>&1; then
+  JSON_JAR="$(cygpath -w "$JSON_JAR")"   # java.exe 吃不下 /c/... 形式的路径
+fi
+RUN_CP="$ANDROID_JAR${SEP}$OUT"
+if [ -n "$JSON_JAR" ]; then
+  RUN_CP="$JSON_JAR${SEP}$RUN_CP"
+fi
+
 "$JAVA" -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 \
-  -cp "$ANDROID_JAR${SEP}$OUT" com.afs.guard.GuardTest
+  -cp "$RUN_CP" com.afs.guard.GuardTest

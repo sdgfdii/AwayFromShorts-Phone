@@ -47,6 +47,7 @@ public class GuardService extends Service {
                     Log.i(Guard.TAG, "tick alive #" + tickCount);
                 }
                 tickCount++;
+                Hub.kick(GuardService.this);
                 Guard.apply(GuardService.this);   // 内部只有状态变化时才调 setPackagesSuspended
                 updateNotice();
             } catch (Throwable t) {

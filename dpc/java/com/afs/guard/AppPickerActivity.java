@@ -43,19 +43,27 @@ public class AppPickerActivity extends Activity {
     private TextView hint;
     /** 已选但没安装的包（默认三件套里常常缺两个），保存时要原样留住 */
     private int hiddenKept;
+    private Ui look;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (look != null && look.dark != Ui.isDark(this)) recreate();
+    }
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        look = new Ui(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(Color.parseColor("#f1f2f3"));
+        root.setBackgroundColor(look.bg());
 
         hint = new TextView(this);
         hint.setPadding(dp(20), dp(16), dp(20), dp(8));
         hint.setTextSize(13);
-        hint.setTextColor(Color.parseColor("#61666d"));
+        hint.setTextColor(look.text2());
         root.addView(hint);
 
         ListView list = new ListView(this);
@@ -212,7 +220,7 @@ public class AppPickerActivity extends Activity {
                 row = new LinearLayout(AppPickerActivity.this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setPadding(dp(16), dp(10), dp(16), dp(10));
-                row.setBackgroundColor(Color.WHITE);
+                row.setBackgroundColor(look.surface());
 
                 ImageView iv = new ImageView(AppPickerActivity.this);
                 iv.setId(101);
@@ -221,7 +229,7 @@ public class AppPickerActivity extends Activity {
                 TextView tv = new TextView(AppPickerActivity.this);
                 tv.setId(102);
                 tv.setTextSize(15);
-                tv.setTextColor(Color.parseColor("#18191c"));
+                tv.setTextColor(look.text());
                 tv.setPadding(dp(14), 0, dp(8), 0);
                 tv.setGravity(Gravity.CENTER_VERTICAL);
                 // 名称必须完整显示：允许折行，不省略

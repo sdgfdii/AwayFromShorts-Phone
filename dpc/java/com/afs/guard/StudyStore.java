@@ -160,6 +160,8 @@ public final class StudyStore {
                 }
             }
         }
+        // 台账权威在手机（Gist 中心仓库）：库一变就标脏，Hub 下一拍整份推上去
+        Hub.markStudyDirty(c);
     }
 
     /* ==================== 目标 ==================== */
@@ -298,6 +300,7 @@ public final class StudyStore {
         }
         invalidate(c);
     }
+
 
     /* ==================== 打卡记录 ==================== */
 
@@ -477,17 +480,17 @@ public final class StudyStore {
     /* ==================== 给打卡页用的一屏数据 ==================== */
 
     /**
-     * 转成打卡页那套 {@link CheckinStore.Goal}。
+     * 转成打卡页那套 {@link Goal}。
      *
      * 为什么不直接让打卡页读 {@link G}：卡片、排序、建议量、已打卡标记已经按那个结构
      * 写好了，多一层转换比把 UI 全部重写便宜，也不会两边算法漂移。
      */
-    public static List<CheckinStore.Goal> uiGoals(Context c) {
+    public static List<Goal> uiGoals(Context c) {
         List<Rec> all = recs(c);
         String d = today();
-        List<CheckinStore.Goal> out = new ArrayList<>();
+        List<Goal> out = new ArrayList<>();
         for (G g : goals(c)) {
-            CheckinStore.Goal u = new CheckinStore.Goal();
+            Goal u = new Goal();
             u.id = g.id;
             u.name = g.name;
             u.unit = g.unit;
@@ -499,8 +502,8 @@ public final class StudyStore {
             out.add(u);
         }
         // 没打的排前面，其次按建议量从少到多 —— 先打最容易补上的那个
-        java.util.Collections.sort(out, new java.util.Comparator<CheckinStore.Goal>() {
-            public int compare(CheckinStore.Goal a, CheckinStore.Goal b) {
+        java.util.Collections.sort(out, new java.util.Comparator<Goal>() {
+            public int compare(Goal a, Goal b) {
                 if (a.hit() != b.hit()) {
                     return a.hit() ? 1 : -1;
                 }
@@ -643,6 +646,84 @@ public final class StudyStore {
         c.getSharedPreferences(SP, Context.MODE_PRIVATE).edit()
                 .remove("imported").apply();
         Log.i(TAG, "study store wiped for reimport (v1 -> v2)");
+    }
+
+    /* ==================== 备份 / 恢复 ==================== */
+
+    /**
+     * 整库导出：study.json 的原文。目标、记录、联动时段全在里面，
+     * 换手机时把它导出去，在新手机上导入就完成迁移。
+     */
+    public static String exportJson(Context c) {
+        return load(c).toString();
+    }
+
+    /** Apply hub changes while retaining edits made during the network request. */
+    static JSONObject mergeHub(Context c, JSONObject remote, JSONObject base, boolean dirty) throws Exception {
+        synchronized (LOCK) {
+            JSONObject local = load(c);
+            JSONObject merged = LedgerMerge.merge(local, remote, base, dirty);
+            if (!LedgerMerge.sameData(local, merged)) {
+                File f = file(c);
+                if (f.exists()) copy(f, new File(c.getFilesDir(), FILE + ".before-sync.bak"));
+                save(c, merged);
+                invalidate(c);
+            }
+            return merged;
+        }
+    }
+
+    /**
+     * 整库恢复：用备份内容整体替换现有数据。
+     * 结构不对（解析失败 / 缺 goals 或 recs 数组）一律拒绝，现有数据一个字节不动；
+     * 通过则先把当前库备份成 study.json.bak 再写入 —— 恢复错了还能退回来。
+     */
+    public static boolean importJson(Context c, String json) {
+        JSONObject o;
+        try {
+            o = new JSONObject(json);
+        } catch (Throwable t) {
+            Log.w(TAG, "study.json 恢复：不是合法 JSON");
+            return false;
+        }
+        if (o.optJSONArray("goals") == null || o.optJSONArray("recs") == null) {
+            Log.w(TAG, "study.json 恢复：结构不对，拒绝");
+            return false;
+        }
+        synchronized (LOCK) {
+            try {
+                File f = file(c);
+                if (f.exists() && f.length() > 0) {
+                    copy(f, new File(c.getFilesDir(), FILE + ".bak"));
+                }
+                save(c, o);
+                invalidate(c);
+                Log.i(TAG, "study.json restored: goals=" + o.optJSONArray("goals").length()
+                        + " recs=" + o.optJSONArray("recs").length());
+                return true;
+            } catch (Throwable t) {
+                Log.w(TAG, "study.json 恢复失败: " + t);
+                return false;
+            }
+        }
+    }
+
+    private static void copy(File src, File dst) throws Exception {
+        FileInputStream in = new FileInputStream(src);
+        try {
+            FileOutputStream out = new FileOutputStream(dst);
+            try {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                }
+            } finally {
+                out.close();
+            }
+        } finally {
+            in.close();
+        }
     }
 
     /* ==================== 杂项 ==================== */

@@ -21,6 +21,7 @@ public final class Rule {
     public static final int GATE_MAX_MINUTES = 6 * 60;
 
     public final int days;
+    public final boolean freeze;
     /**
      * 是否参与学习闸门（目标没打完时跟着继续冻结）。
      *
@@ -36,9 +37,14 @@ public final class Rule {
     }
 
     public Rule(int days, int[][] windows, boolean gate) {
+        this(days, windows, gate, false);
+    }
+
+    public Rule(int days, int[][] windows, boolean gate, boolean freeze) {
         this.days = days & ALL_DAYS;
         this.windows = normalize(windows);
         this.gate = gate;
+        this.freeze = freeze;
     }
 
     /** 单段便捷构造。 */
@@ -127,7 +133,7 @@ public final class Rule {
     }
 
     public Rule withDays(int d) {
-        return new Rule(d, windows, gate);
+        return new Rule(d, windows, gate, freeze);
     }
 
     /** 改第 i 段的起止。 */
@@ -135,7 +141,7 @@ public final class Rule {
         int[][] w = windows();
         w[i][0] = norm(s);
         w[i][1] = norm(e);
-        return new Rule(days, w, gate);
+        return new Rule(days, w, gate, freeze);
     }
 
     public Rule addWindow(int s, int e) {
@@ -146,7 +152,7 @@ public final class Rule {
         }
         w[windows.length][0] = norm(s);
         w[windows.length][1] = norm(e);
-        return new Rule(days, w, gate);
+        return new Rule(days, w, gate, freeze);
     }
 
     public Rule removeWindow(int i) {
@@ -160,12 +166,12 @@ public final class Rule {
             w[n][1] = windows[k][1];
             n++;
         }
-        return new Rule(days, w, gate);
+        return new Rule(days, w, gate, freeze);
     }
 
     /** 换一个"是否受学习闸门约束"的取值。 */
     public Rule withGate(boolean g) {
-        return new Rule(days, windows, g);
+        return new Rule(days, windows, g, freeze);
     }
 
     /**
@@ -180,7 +186,7 @@ public final class Rule {
      */
     public String groupKey() {
         StringBuilder sb = new StringBuilder();
-        sb.append(days).append('|').append(gate ? '1' : '0');
+        sb.append(days).append('|').append(gate ? '1' : '0').append(freeze ? 'F' : 'A');
         for (int i = 0; i < windows.length; i++) {
             sb.append('|').append(windows[i][0]).append('-').append(windows[i][1]);
         }
@@ -188,7 +194,7 @@ public final class Rule {
     }
 
     public boolean same(Rule o) {
-        if (o == null || o.days != days || o.windowCount() != windowCount() || o.gate != gate) {
+        if (o == null || o.days != days || o.windowCount() != windowCount() || o.gate != gate || o.freeze != freeze) {
             return false;
         }
         for (int i = 0; i < windows.length; i++) {
@@ -201,6 +207,61 @@ public final class Rule {
 
     public boolean crossMidnightAt(int i) {
         return windows[i][0] > windows[i][1];
+    }
+
+    /** Exact daily complement for legacy rules; weekly rules retain their original storage. */
+    public Rule freezeEditorRule() {
+        if (freeze) return this;
+        if (days != ALL_DAYS && days != 0) return null;
+        boolean[] blocked = new boolean[1440];
+        Calendar c = Calendar.getInstance();
+        c.set(2026, Calendar.OCTOBER, 19, 0, 0, 0);
+        for (int m = 0; m < 1440; m++) {
+            c.set(Calendar.HOUR_OF_DAY, m / 60);
+            c.set(Calendar.MINUTE, m % 60);
+            blocked[m] = !inWindow(c);
+        }
+        java.util.List<int[]> segments = new java.util.ArrayList<int[]>();
+        for (int m = 0; m < 1440;) {
+            if (!blocked[m]) { m++; continue; }
+            int s = m;
+            while (m < 1440 && blocked[m]) m++;
+            segments.add(new int[] {s, m % 1440});
+        }
+        return new Rule(ALL_DAYS, segments.toArray(new int[0][]), gate, true);
+    }
+
+    public String freezeSummary() {
+        if (freeze && days == ALL_DAYS) {
+            for (int[] w : windows) if (w[0] == w[1]) return "全天冻结";
+        }
+        if (freeze) return days == 0 || windows.length == 0 ? "无定时冻结" : "冻结 " + summary();
+        Rule converted = freezeEditorRule();
+        if (converted != null) return converted.freezeSummary();
+        StringBuilder out = new StringBuilder("冻结 ");
+        Calendar c = Calendar.getInstance();
+        c.set(2026, Calendar.OCTOBER, 19, 0, 0, 0);
+        for (int day = 0; day < 7; day++) {
+            if (day > 0) out.append("；");
+            out.append("周").append(DAY_NAMES[day]).append(' ');
+            boolean any = false;
+            for (int m = 0; m < 1440;) {
+                c.set(Calendar.HOUR_OF_DAY, m / 60); c.set(Calendar.MINUTE, m % 60);
+                if (inWindow(c)) { m++; continue; }
+                int s = m++;
+                while (m < 1440) {
+                    c.set(Calendar.HOUR_OF_DAY, m / 60); c.set(Calendar.MINUTE, m % 60);
+                    if (inWindow(c)) break;
+                    m++;
+                }
+                if (any) out.append('、');
+                out.append(hm(s / 60, s % 60)).append('-').append(m == 1440 ? "24:00" : hm(m / 60, m % 60));
+                any = true;
+            }
+            if (!any) out.append("无");
+            c.add(Calendar.DAY_OF_MONTH, 1);
+        }
+        return out.toString();
     }
 
     /* ---------- 纯函数 ---------- */
@@ -220,6 +281,10 @@ public final class Rule {
 
     /** 此刻是否在任一放行窗口里。 */
     public boolean inWindow(Calendar c) {
+        return freeze ? !matchesWindow(c) : matchesWindow(c);
+    }
+
+    private boolean matchesWindow(Calendar c) {
         int mod = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
         int today = monIndex(c);
         int yesterday = (today + 6) % 7;
@@ -279,7 +344,7 @@ public final class Rule {
               .append('-')
               .append(hm(windows[i][1] / 60, windows[i][1] % 60));
         }
-        return sb.length() == 0 ? "无时段（整天冻结）" : sb.toString();
+        return sb.length() == 0 ? (freeze ? "无冻结时段" : "无时段（整天冻结）") : sb.toString();
     }
 
     public String summary() {

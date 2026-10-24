@@ -4,13 +4,18 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -29,7 +34,7 @@ import java.util.Locale;
  *
  * 生效条件（全部满足才延长冻结）：
  *   enabled(PC 下发) && 数据有效 && date 是今天 && checkedAt 未超龄
- *   && 当前时间在 [start, end) && !allDone（还有目标没打卡）
+ *   && 本地时间已到当天 20:00 && !allDone（还有目标没打卡）
  *
  * fail-open 与 PC 端同一套约定：没拉到过 / JSON 损坏 / 日期不是今天 /
  * 超过 {@link #STALE_MS} 没更新 —— 一律放行。宁可不生效，也不锁死。
@@ -42,12 +47,8 @@ public final class StudyGate {
     private static final String TAG = Guard.TAG;
 
     /** 同步 Gist（PC 端「账号/同步」建的同一个，secret：raw URL 知道就能读）。 */
-    public static final String GIST_ID = "9c5c1f32f5159e085b3686d7a00a8f77";
+    public static final String GIST_ID = "455b0ef2f1e04db50dcd0b67aa9e51ec";
     public static final String GIST_FILE = "study-gate.json";
-    /**
-     * 手机打卡队列。手机写、PC 记账后清空 —— 两边谁也不覆盖谁的文件。
-     */
-    public static final String QUEUE_FILE = "checkin-queue.json";
 
     /** 数据超龄线：PC 每 15 分钟推一次，45 分钟没更新视为失效（与 PC fail-open 一致）。 */
     public static final long STALE_MS = 45L * 60L * 1000L;
@@ -68,7 +69,8 @@ public final class StudyGate {
         public final boolean valid;
         /** PC 端学习联动开关（false 时永远放行）。 */
         public final boolean enabled;
-        /** 延长冻结的区间（分钟，支持跨午夜：start > end）。 */
+        /** PC 端配置的学习时段（分钟，支持跨午夜）。**只用于展示**，不参与判定 ——
+         *  闸门是"没打完就直接延长冻结"，不是"在这个区间里额外冻一段"。 */
         public final int startMin;
         public final int endMin;
         /** 今天的学习目标是否已全部打卡。 */
@@ -251,42 +253,14 @@ public final class StudyGate {
     }
 
     /**
-     * 区间判定，跨午夜语义与 {@link Rule#inWindow} 一致：
-     * s == e 全天；s < e 普通段；s > e 跨午夜（now >= s 或 now < e）。
-     */
-    public static boolean inSpan(int nowMin, int s, int e) {
-        if (s < 0 || e < 0) {
-            return false;   // 区间不合法 → 不 hold
-        }
-        if (s == e) {
-            return true;
-        }
-        if (s < e) {
-            return nowMin >= s && nowMin < e;
-        }
-        return nowMin >= s || nowMin < e;
-    }
-
-    /**
      * 纯判定：此刻是否应该延长冻结。
      * 数据不可信、开关关、已全部打卡 → false（放行）。
+     *
+     * 每天本地时间 20:00 才检查当天打卡；未完成时延长受联动应用的冻结，
+     * 完成后立即恢复原时间表。startMin/endMin 只作 PC 配置展示。
      */
     public static boolean shouldHold(Snapshot snap, Calendar now) {
-        return shouldHold(snap, now, effectivePending());
-    }
-
-    /**
-     * @param queuedPending 合并手机打卡后还剩几个没打（-1 = 队列里没有今天的记录）
-     *
-     * ★ 这一层是「先解闸」的落点：手机把最后几个目标打完，队列里就带着
-     *   pendingAfter=0，守卫这边立刻不再 hold，不用干等 PC 那 15 分钟的同步。
-     *   等 PC 记完账把队列清空，判定自然回到 allDone 那条线上 —— 是收敛的。
-     */
-    public static boolean shouldHold(Snapshot snap, Calendar now, int queuedPending) {
-        if (queuedPending == 0) {
-            return false;
-        }
-        if (snap == null) {
+        if (snap == null || !snap.valid) {
             return false;
         }
         String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now.getTime());
@@ -296,8 +270,23 @@ public final class StudyGate {
         if (!snap.enabled || snap.allDone) {
             return false;
         }
-        int nowMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
-        return inSpan(nowMin, snap.startMin, snap.endMin);
+        return now.get(Calendar.HOUR_OF_DAY) >= 20;
+    }
+
+    /** 下一个学习联动边界：当天 20:00，或次日 00:00 重置。 */
+    static long nextCheckBoundaryMillis(Calendar now) {
+        Calendar next = (Calendar) now.clone();
+        next.set(Calendar.SECOND, 0);
+        next.set(Calendar.MILLISECOND, 0);
+        if (now.get(Calendar.HOUR_OF_DAY) < 20) {
+            next.set(Calendar.HOUR_OF_DAY, 20);
+            next.set(Calendar.MINUTE, 0);
+        } else {
+            next.add(Calendar.DAY_OF_MONTH, 1);
+            next.set(Calendar.HOUR_OF_DAY, 0);
+            next.set(Calendar.MINUTE, 0);
+        }
+        return next.getTimeInMillis();
     }
 
     /* ==================== Android 侧：拉取 + 缓存 ==================== */
@@ -310,55 +299,6 @@ public final class StudyGate {
     private static final String K_REIMPORT_AT = "reimport_at";
 
     private static volatile Snapshot cached;
-    /**
-     * 把手机队列里的打卡也算进去之后，今天还剩几个目标没打卡。
-     *
-     *   -1 = 队列里没有今天的记录（手机没打过卡，按 PC 的数据判）
-     *    0 = 全部打完了（手机补齐了最后几个）→ 放行
-     *   >0 = 还剩这么多个     → 继续判
-     *
-     * ★ 不能"队列非空就放行"：那等于打一个目标就全解锁，
-     *   22:00 打 0.5 篇就能把剩下两个目标一起豁免 —— 闸门就废了。
-     */
-    private static volatile int queuePending = -1;
-
-    /**
-     * 打卡页在本机刚算出来的同一个值。
-     *
-     * 有了它就不用等 Gist 往返 + 10 分钟拉取节流：打卡页和闸门现在在同一个进程里
-     * （合并成一个 App 之后才成立），打完最后一个目标那一刻就能立刻解闸。
-     * 队列推成功后远端也是同一个数，两边收敛；推失败时本地这份还留着，等重试。
-     */
-    private static volatile int localPending = -1;
-
-    /** 打卡页打完一笔后直接告诉闸门还剩几个；-1 表示"退回按远端判"。 */
-    public static void noteLocalPending(int pending) {
-        localPending = pending;
-        // 这一行是"先解闸"的唯一现场证据：出问题时先看它到底传了什么
-        Log.i(TAG, "study-gate localPending=" + pending
-                + " (remote=" + queuePending + " effective=" + effectivePending() + ")");
-    }
-
-    /**
-     * 远端和本地两份取"更小的那个"（-1 当没有）。
-     *
-     * 取小 = 更早就解闸。宁可早放行也不锁死：这是整个项目一贯的 fail-open。
-     * 反过来取大就成了"本地说打完了、远端还没收到 → 继续冻"，
-     * 用户会以为打卡没生效，然后反复打 —— 体验上直接崩。
-     */
-    static int mergePending(int remote, int local) {
-        if (remote < 0) {
-            return local;
-        }
-        if (local < 0) {
-            return remote;
-        }
-        return Math.min(remote, local);
-    }
-
-    static int effectivePending() {
-        return mergePending(queuePending, localPending);
-    }
     private static volatile boolean fetching;
     private static volatile long lastTryMs;
     private static volatile long fetchStartedAt;
@@ -373,53 +313,8 @@ public final class StudyGate {
     }
 
     static String rawUrl() {
-        return "https://gist.githubusercontent.com/sdgfdii/" + GIST_ID
+        return "https://gist.githubusercontent.com/gptdds/" + GIST_ID
                 + "/raw/" + GIST_FILE;
-    }
-
-    static String queueUrl() {
-        // 带上时间戳绕开 CDN：gist raw 会缓存几十秒，刚打完卡读到的还是旧的空队列
-        return "https://gist.githubusercontent.com/sdgfdii/" + GIST_ID
-                + "/raw/" + QUEUE_FILE + "?t=" + System.currentTimeMillis();
-    }
-
-    /**
-     * 从队列文件里读「合上手机这些打卡之后，还剩几个目标没打」。
-     *
-     * 返回 -1 表示队列里没有今天的东西（或字段缺失 / 读不懂），调用方按 PC 的数据判。
-     * 0 表示手机把目标补齐了 —— 这才是「立刻解闸」的唯一凭据。
-     *
-     * 纯函数、不引 org.json（android.jar 里它是 stub，离线回归跑不了），
-     * 所以用"压掉空白 + 找字段"的笨办法。格式由打卡 App 和 PC 两边固定，够用。
-     */
-    static int parsePendingAfter(String json, String today) {
-        if (json == null || today == null || json.length() == 0) {
-            return -1;
-        }
-        String flat = json.replaceAll("\\s+", "");
-        if (flat.indexOf("\"date\":\"" + today + "\"") < 0) {
-            return -1;
-        }
-        int i = flat.indexOf("\"pendingAfter\":");
-        if (i < 0) {
-            return -1;
-        }
-        i += "\"pendingAfter\":".length();
-        int j = i;
-        while (j < flat.length()) {
-            char ch = flat.charAt(j);
-            if ((ch >= '0' && ch <= '9') || ch == '-') {
-                j++;
-            } else {
-                break;
-            }
-        }
-        try {
-            int v = Integer.parseInt(flat.substring(i, j));
-            return v < 0 ? -1 : v;
-        } catch (Throwable t) {
-            return -1;
-        }
     }
 
     /** 进程起来后从盘里恢复上一次的快照（重启后不空窗）。 */
@@ -522,11 +417,6 @@ public final class StudyGate {
         return localMode;
     }
 
-    /** 给外面用的只读版本：本机是不是学习台（决定首页按钮文案等）。 */
-    public static boolean isLocalMode(Context c) {
-        return localMode(c);
-    }
-
     /** 本机数据变了（打卡 / 改目标 / 改时段）：下一拍立刻重算。 */
     public static void invalidate(Context c) {
         localModeAt = 0L;
@@ -552,10 +442,6 @@ public final class StudyGate {
             Snapshot next = parse(StudyStore.snapshotJson(c), today, now);
             Snapshot old = cached;
             cached = next;
-            // 本机是源数据，队列那套"先解闸"的中间态就没意义了 —— 清掉，
-            // 否则旧的 queuePending=0 会让卡片一直显示"等电脑记账"。
-            queuePending = -1;
-            localPending = -1;
             boolean changed = old == null
                     || old.allDone != next.allDone
                     || old.enabled != next.enabled
@@ -610,19 +496,8 @@ public final class StudyGate {
                                    || old.endMin != next.endMin);
                         Log.i(TAG, "study-gate fetched: hold=" + shouldHold(next, Calendar.getInstance())
                                 + " allDone=" + next.allDone + " enabled=" + next.enabled);
-                        // 顺带拉一次打卡队列。读失败就保持上一次的值——
-                        // 网络抖一下就把"已打卡"抹成"未打卡"，比不更新难受得多。
-                        try {
-                            int q = parsePendingAfter(fetchRaw(queueUrl()), today);
-                            if (q != queuePending) {
-                                queuePending = q;
-                                changed = true;
-                            }
-                            Log.i(TAG, "study-gate queue: pendingAfter=" + q);
-                        } catch (Throwable tq) {
-                            Log.w(TAG, "study-gate queue failed: " + tq);
-                        }
                     } else {
+                        // ★ 成功但 body 空 —— 也必须留痕, 否则线上静默没法诊断                    } else {
                         // ★ 成功但 body 空 —— 也必须留痕, 否则线上静默没法诊断
                         Log.w(TAG, "study-gate fetch empty body");
                     }
@@ -681,7 +556,280 @@ public final class StudyGate {
     public static boolean holding(Context c, Calendar now) {
         init(c);
         refreshIfNeeded(c);
-        return shouldHold(cached, now);
+        if (shouldHold(cached, now)) {
+            return true;
+        }
+        // 禁忌卡（黑卡）：惩罚期未过照样冻 —— 与学习台数据解耦，
+        // PC 没开机 / 联动关着 / 目标打完了，认了禁忌照样延长冻结
+        return tabooHolding(now.getTimeInMillis(), tabooUntil(c));
+    }
+
+    /* ==================== 禁忌卡（黑卡） ====================
+     * 吃辣 / 吃甜这类「禁忌行为」自己认领：在禁忌卡弹窗里点一张卡，
+     * 冻结程序立刻延长一段惩罚时长（可叠加）。数据全在本机 SP，
+     * 判定挂在 holding() 里 —— 守卫每次刷新都会重新算，绕不掉。
+     */
+
+    public static final String TABOO_SP = "afs_taboo";
+    private static final String K_TABOO_UNTIL = "hold_until";
+    private static final String K_TABOO_LOG = "log";
+    /** 禁忌卡"今天没做"的标记：{名称: 时间戳}，按天判。 */
+    private static final String K_TABOO_DECLINED = "declined";
+    /** 「没做」历史流水，用于近 30 天分别统计每张禁忌卡。 */
+    private static final String K_TABOO_DECLINED_LOG = "declined_log";
+    /** 认领流水上限（最旧的丢掉）。 */
+    private static final int TABOO_LOG_MAX = 200;
+
+    /** 一条认领流水：什么禁忌、什么时候认的。 */
+    public static class TabooClaim {
+        public final String name;
+        public final long ts;
+
+        TabooClaim(String n, long t) {
+            name = n;
+            ts = t;
+        }
+    }
+
+    /** 纯判定（离线回归可测）：惩罚期未过 → 继续冻结。 */
+    public static boolean tabooHolding(long nowMs, long untilMs) {
+        return untilMs > nowMs;
+    }
+
+    /** 当前惩罚期的截止时间（0 = 没有惩罚在身）。 */
+    public static long tabooUntil(Context c) {
+        return c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE)
+                .getLong(K_TABOO_UNTIL, 0L);
+    }
+
+    /**
+     * 认领一张禁忌卡：冻结延长 penaltyMs。
+     * 已有惩罚期没到期则在原到期时间上叠加（连吃两顿辣就是两倍），
+     * 已过期则从现在起算。
+     */
+    public static void extendTaboo(Context c, long penaltyMs, long nowMs) {
+        if (penaltyMs <= 0) {
+            return;
+        }
+        SharedPreferences sp = c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE);
+        long base = Math.max(nowMs, sp.getLong(K_TABOO_UNTIL, 0L));
+        sp.edit().putLong(K_TABOO_UNTIL, base + penaltyMs).apply();
+    }
+
+    /** 记一笔认领流水（打卡历史页的红色条目）。失败静默 —— 流水丢了不能影响惩罚判定。 */
+    public static void recordTabooClaim(Context c, String name, long ts) {
+        try {
+            SharedPreferences sp = c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE);
+            JSONArray a = new JSONArray(sp.getString(K_TABOO_LOG, "[]"));
+            JSONObject o = new JSONObject();
+            o.put("name", name);
+            o.put("ts", ts);
+            a.put(o);
+            sp.edit().putString(K_TABOO_LOG, capTabooLog(a, TABOO_LOG_MAX).toString()).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 当前认领流水（最新在前），最多 limit 条。 */
+    public static List<TabooClaim> tabooLog(Context c, int limit) {
+        SharedPreferences sp = c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE);
+        return tabooLogParse(sp.getString(K_TABOO_LOG, "[]"), limit);
+    }
+
+    /** 纯解析（离线回归可测）：log JSON → 最新在前的流水。坏数据当不存在。 */
+    public static List<TabooClaim> tabooLogParse(String json, int limit) {
+        List<TabooClaim> out = new ArrayList<TabooClaim>();
+        try {
+            JSONArray a = new JSONArray(json);
+            for (int i = a.length() - 1; i >= 0 && out.size() < limit; i--) {
+                JSONObject o = a.optJSONObject(i);
+                if (o != null) {
+                    String n = o.optString("name", "").trim();
+                    if (!n.isEmpty()) {
+                        out.add(new TabooClaim(n, o.optLong("ts")));
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** 纯裁剪（离线回归可测）：只留最近 max 条（丢数组头 = 最旧的）。 */
+    static JSONArray capTabooLog(JSONArray a, int max) {
+        while (a.length() > max) {
+            JSONArray na = new JSONArray();
+            for (int i = 1; i < a.length(); i++) {
+                na.put(a.opt(i));
+            }
+            a = na;
+        }
+        return a;
+    }
+
+    /* ---------- 每天一张：认领 / 没做 的口径 ----------
+     * 打卡页把禁忌卡并进卡组，排在白卡（目标）前面 —— 它「每天都有」，
+     * 所以判据必须是"今天认过没有"，而不是"曾经认过"。
+     */
+
+    /**
+     * 纯判定（离线回归可测）：某禁忌项在 [fromMs, toMs) 内是否认领过。
+     * 认领流水是打卡历史的数据源，直接拿它当"今天做过"的判据，不另存状态。
+     */
+    public static boolean tabooClaimedOn(String logJson, String name, long fromMs, long toMs) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        for (TabooClaim c : tabooLogParse(logJson, TABOO_LOG_MAX)) {
+            if (name.equals(c.name) && c.ts >= fromMs && c.ts < toMs) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean tabooClaimedOn(Context c, String name, long fromMs, long toMs) {
+        return tabooClaimedOn(c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE)
+                .getString(K_TABOO_LOG, "[]"), name, fromMs, toMs);
+    }
+
+    /**
+     * 「今天没做」：禁忌卡下滑的落点。只影响卡片当天的队列位置（不再拦着往下推），
+     * 不影响惩罚判定 —— 没做本来就不用延长冻结。
+     */
+    public static void declineTaboo(Context c, String name, long ts) {
+        if (name == null || name.isEmpty()) {
+            return;
+        }
+        SharedPreferences sp = c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE);
+        try {
+            JSONObject o = new JSONObject(sp.getString(K_TABOO_DECLINED, "{}"));
+            // 只留最近 7 天：表里没必要堆整年的"没做"
+            JSONObject keep = new JSONObject();
+            long edge = ts - 7L * 24 * 3600_000L;
+            java.util.Iterator<String> it = o.keys();
+            while (it.hasNext()) {
+                String k = it.next();
+                long v = o.optLong(k, 0L);
+                if (v >= edge) {
+                    keep.put(k, v);
+                }
+            }
+            keep.put(name, ts);
+            JSONArray history = new JSONArray(sp.getString(K_TABOO_DECLINED_LOG, "[]"));
+            JSONObject event = new JSONObject();
+            event.put("name", name);
+            event.put("ts", ts);
+            history.put(event);
+            sp.edit().putString(K_TABOO_DECLINED, keep.toString())
+                    .putString(K_TABOO_DECLINED_LOG,
+                            capTabooLog(history, TABOO_LOG_MAX).toString()).apply();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 历史页读取「没做」的禁忌卡；兼容升级前仅存最近一次结果的旧数据。 */
+    public static List<TabooClaim> tabooDeclineLog(Context c) {
+        SharedPreferences sp = c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE);
+        List<TabooClaim> out = tabooLogParse(sp.getString(K_TABOO_DECLINED_LOG, "[]"),
+                TABOO_LOG_MAX);
+        try {
+            JSONObject recent = new JSONObject(sp.getString(K_TABOO_DECLINED, "{}"));
+            java.util.Iterator<String> names = recent.keys();
+            while (names.hasNext()) {
+                String name = names.next();
+                long ts = recent.optLong(name, 0L);
+                if (ts > 0L) out.add(new TabooClaim(name, ts));
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** 纯判定（离线回归可测）：某禁忌项在 [from, to) 内是否滑过「没做」。 */
+    public static boolean tabooDeclinedOn(String json, String name, long fromMs, long toMs) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        try {
+            long ts = new JSONObject(json).optLong(name, 0L);
+            return ts > 0 && ts >= fromMs && ts < toMs;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    public static boolean tabooDeclinedOn(Context c, String name, long fromMs, long toMs) {
+        return tabooDeclinedOn(c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE)
+                .getString(K_TABOO_DECLINED, "{}"), name, fromMs, toMs);
+    }
+
+    /**
+     * 禁忌项列表（SP 里存 JSONArray 字符串，保序）。
+     * 打卡页的卡组和首页的"打卡"按钮都读这一份，避免两处口径跑偏。
+     */
+    public static List<String> tabooItems(Context c) {
+        return tabooItems(c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE)
+                .getString("items", "[]"));
+    }
+
+    /** 纯解析（离线可测）：items 的 JSONArray 文本 → 名称列表。 */
+    public static List<String> tabooItems(String itemsJson) {
+        List<String> out = new ArrayList<String>();
+        try {
+            JSONArray a = new JSONArray(itemsJson);
+            for (int i = 0; i < a.length(); i++) {
+                String s = a.optString(i).trim();
+                if (!s.isEmpty()) out.add(s);
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /**
+     * 今天还没答的禁忌卡张数（认了 / 明确没做都算答过）。
+     * 禁忌卡已经并进打卡队列，所以首页那句"还有 N 个"必须把它们算上 ——
+     * 不然按钮写着"今天已经打完"，点进去却还有黑卡等着。
+     */
+    public static int tabooPendingToday(Context c) {
+        long now = System.currentTimeMillis();
+        SharedPreferences sp = c.getSharedPreferences(TABOO_SP, Context.MODE_PRIVATE);
+        return tabooPendingOn(sp.getString("items", "[]"),
+                sp.getString(K_TABOO_LOG, "[]"),
+                sp.getString(K_TABOO_DECLINED, "{}"),
+                dayStartMs(now), dayEndMs(now));
+    }
+
+    /** 纯判定（离线可测）：[from, to) 内还有几张禁忌卡没答。 */
+    public static int tabooPendingOn(String itemsJson, String logJson, String declinedJson,
+                                     long fromMs, long toMs) {
+        int n = 0;
+        for (String s : tabooItems(itemsJson)) {
+            if (!tabooClaimedOn(logJson, s, fromMs, toMs)
+                    && !tabooDeclinedOn(declinedJson, s, fromMs, toMs)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** 本地零点（禁忌卡的"每天"从这儿翻页）。 */
+    static long dayStartMs(long now) {
+        Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(now);
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+        return c.getTimeInMillis();
+    }
+
+    static long dayEndMs(long now) {
+        Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(dayStartMs(now));
+        c.add(Calendar.DAY_OF_MONTH, 1);
+        return c.getTimeInMillis();
     }
 
     /**
@@ -696,20 +844,10 @@ public final class StudyGate {
     public static final int ST_OFF     = 2;   // PC 端开关关着
     public static final int ST_DONE    = 3;   // 今天目标全部打卡
     public static final int ST_ACTIVE  = 4;   // 闸门正在生效（正在延长冻结）
-    public static final int ST_PENDING = 5;   // 还有目标没打卡，但还没到区间
-    public static final int ST_QUEUED  = 6;   // 手机上已打卡，等 PC 记账
+    public static final int ST_PENDING = 5;   // 还有目标没打卡
 
     /** 纯判定（离线可测）：快照 → 卡片状态。 */
     public static int stateOf(Snapshot s, Calendar now) {
-        return stateOf(s, now, effectivePending());
-    }
-
-    public static int stateOf(Snapshot s, Calendar now, int queuedPending) {
-        // 手机把最后一个目标也打完了：先显示"已打卡"，别让人以为没生效。
-        // 注意只有 ==0 才算 —— 还有剩的目标就仍是"没打完"，该冻还是冻。
-        if (queuedPending == 0) {
-            return ST_QUEUED;
-        }
         if (s == null || !s.valid) {
             return ST_NONE;
         }
@@ -726,6 +864,7 @@ public final class StudyGate {
         return shouldHold(s, now) ? ST_ACTIVE : ST_PENDING;
     }
 
+    /** PC 端配置的学习时段，只在"已关闭"那一态里露出来（说明它配的是什么）。 */
     private static String spanOf(Snapshot s) {
         if (s == null || s.startMin < 0 || s.endMin < 0) {
             return "?";
@@ -736,12 +875,7 @@ public final class StudyGate {
 
     /** 纯文案（离线可测）。 */
     public static String textOf(Snapshot s, Calendar now) {
-        return textOf(s, now, effectivePending());
-    }
-
-    public static String textOf(Snapshot s, Calendar now, int queuedPending) {
-        int st = stateOf(s, now, queuedPending);
-        String span = spanOf(s);
+        int st = stateOf(s, now);
         switch (st) {
             case ST_STALE: {
                 String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -758,13 +892,11 @@ public final class StudyGate {
             case ST_OFF:
                 return "学习联动 · 已关闭\nPC 端没开「目标没打完就继续屏蔽」";
             case ST_DONE:
-                return "学习联动\n今天目标已全部打卡（" + span + "）";
+                return "学习联动\n今天目标已全部打卡 · 按时间表放行";
             case ST_ACTIVE:
-                return "学习联动 · 生效中\n今天还有目标没打卡，" + span + " 继续冻结";
-            case ST_QUEUED:
-                return "学习联动 · 已打卡\n手机上已打卡，等电脑记账后同步到学习台";
+                return "学习联动 · 生效中\n今天还有目标没打卡 · 相关应用直接延长冻结";
             case ST_PENDING:
-                return "学习联动\n今天还有目标没打卡 · " + span + " 到点继续冻结";
+                return "学习联动\n今天还有目标没打卡 · 20:00 检查是否延长冻结";
             default:
                 return "学习联动\n暂无数据 · 不参与冻结";
         }
@@ -781,23 +913,19 @@ public final class StudyGate {
         if (st == ST_NONE) {
             return "学习联动　暂无数据（不影响冻结）";
         }
-        String span = spanOf(s);
         if (st == ST_STALE) {
             return "学习联动　⚠ 数据过期，保护已失效";
         }
         if (st == ST_OFF) {
-            return "学习联动　PC 端已关闭（" + span + "）";
+            return "学习联动　PC 端已关闭（原配置 " + spanOf(s) + "）";
         }
         if (st == ST_ACTIVE) {
-            return "学习联动　今天还有目标没打卡（" + span + " 延长冻结·生效中）";
-        }
-        if (st == ST_QUEUED) {
-            return "学习联动　手机上已打卡（等电脑记账）";
+            return "学习联动　今天还有目标没打卡（相关应用直接延长冻结）";
         }
         if (st == ST_PENDING) {
-            return "学习联动　今天还有目标没打卡（" + span + " 延长冻结）";
+            return "学习联动　20:00 检查今日打卡，未完成再延长冻结";
         }
-        return "学习联动　目标已打完（" + span + "）";
+        return "学习联动　目标已打完（按时间表放行）";
     }
 
     /** 首页卡片状态（供 UI 选颜色）。 */
@@ -807,12 +935,53 @@ public final class StudyGate {
     }
 
     /**
-     * 首页独立卡片的文案（两行，大字显示）。
-     * 单独一张卡是必须的 —— 埋在状态文本块里同色同字号，等于没写。
+     * 首页「打卡」按钮的文案（纯函数，离线可测）。
+     *
+     * 学习联动原来有一张独立卡片，但它的 onClick 就是打开打卡页 —— 主页上
+     * 两块指向同一个页面。现在整张卡并进这颗按钮：前面是"还欠几张"，
+     * 后缀是"现在到底冻不冻"。
+     *
+     * @param state {@link #ST_*}；ST_STALE 优先（数据不更新 = 闸门其实没在拦人，
+     *              这比"还剩几个"更要紧）
+     * @param hold  {@link #holding} 的结果，含禁忌惩罚期
+     */
+    public static String checkinLabel(int pend, int tabooPending, int state, boolean hold) {
+        String text;
+        if (pend > 0 && tabooPending > 0) {
+            text = "打卡 · 还有 " + pend + " 个目标 · 禁忌 " + tabooPending;
+        } else if (pend > 0) {
+            text = "打卡 · 还有 " + pend + " 个目标";
+        } else if (pend == 0 && tabooPending > 0) {
+            text = "打卡 · 只剩禁忌 " + tabooPending + " 张";
+        } else if (pend == 0) {
+            text = "打卡 · 今天已经打完";
+        } else {
+            text = "打卡";
+        }
+        if (state == ST_STALE) {
+            text += " · ⚠ 联动过期";
+        } else if (hold) {
+            text += " · 冻结中";
+        }
+        return text;
+    }
+
+    /**
+     * 学习联动的完整文案（两行）。
+     * 首页那张卡片已经撤了，这里留着给通知和测试用 —— 它比按钮文案详细。
      */
     public static String cardText(Context c, Calendar now) {
         init(c);
-        return textOf(cached, now);
+        String text = textOf(cached, now);
+        // 禁忌卡惩罚期在身：不管学习联动什么状态，卡上都要写清楚冻到几点
+        long until = tabooUntil(c);
+        if (tabooHolding(now.getTimeInMillis(), until)) {
+            Calendar u = Calendar.getInstance();
+            u.setTimeInMillis(until);
+            text += "\n禁忌卡 · 冻结延长至 "
+                    + Rule.hm(u.get(Calendar.HOUR_OF_DAY), u.get(Calendar.MINUTE));
+        }
+        return text;
     }
 
     /** 卡片是否该用"警示色"（正在拦人，或者保护已经失效）。 */
@@ -830,13 +999,10 @@ public final class StudyGate {
         Snapshot s = cached;
         int st = stateOf(s, now);
         if (st == ST_ACTIVE) {
-            return "⚠ 今天目标没完成 · 正在延长冻结";
+            return "⚠ 今天目标没完成 · 相关应用冻结中";
         }
         if (st == ST_PENDING) {
-            return "今天目标没完成 · " + spanOf(s) + " 起继续冻结";
-        }
-        if (st == ST_QUEUED) {
-            return "今天已打卡 · 等电脑记账";
+            return "20:00 检查今日打卡";
         }
         if (st == ST_STALE) {
             return "⚠ 学习进度已过期，保护失效";

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 打卡页的内置亚克力底：一片从左上透出的冷光，糊了之后只剩明暗层次。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:type="radial"
+        android:centerX="0.32"
+        android:centerY="0.22"
+        android:gradientRadius="85%p"
+        android:startColor="#FF2B4C9B"
+        android:centerColor="#FF16203F"
+        android:endColor="#FF0B0C10" />
+</shape>

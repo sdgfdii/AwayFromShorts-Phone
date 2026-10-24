@@ -9,7 +9,6 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -19,6 +18,11 @@ import java.util.Calendar;
 
 /**
  * 主界面：只看状态，不进列表。
+ *
+ * 版式照手机里「Voyage 工具箱」那套重排的：
+ * 顶栏品牌 + 主题切换 → 问候大标题 + 日期 → 状态卡 → 打卡主卡（整块蓝）
+ * → 「快捷」彩色图标格 → 结果卡 → 底部说明。
+ * 视觉基线在 {@link Ui} 里，四个页面共用同一组色值和圆角。
  *
  * 应用一多，把每个应用都铺在首页就得一直往下滑 —— 那本来是个"黑名单"，
  * 平时不需要看。所以这里只留状态和几个动作，
@@ -31,39 +35,30 @@ import java.util.Calendar;
  */
 public class MainActivity extends Activity {
 
-    private static final int BG = 0xFFF1F2F3;
-    private static final int SURFACE = 0xFFFFFFFF;
-    private static final int TEXT = 0xFF18191C;
-    private static final int TEXT2 = 0xFF61666D;
-    private static final int BRAND = 0xFF00AEEC;
-    private static final int RED = 0xFFF85A54;
+    private static volatile boolean homeVisible;
 
-    // 全部屏蔽时整页切深色：是"变黑"，不是把控件调成半透明灰
-    private static final int BG_DARK      = 0xFF0D0D0F;
-    private static final int SURFACE_DARK  = 0xFF1A1A1D;
-    private static final int TEXT_DARK     = 0xFFEDEDEF;
-    private static final int TEXT2_DARK    = 0xFF9B9BA2;
-    private static final int OFF_DARK      = 0xFF2A2A2E;
-    private static final int OFF_LIGHT     = 0xFFE3E5E7;
-    private static final int RED_DARK      = 0xFFFF7B72;
-    private static final int GREEN_DARK    = 0xFF3DDC84;
+    public static boolean isHomeVisible() {
+        return homeVisible;
+    }
+
+    private Ui ui;
 
     private ScrollView scroll;
-    private TextView title;
-    private TextView sub;
-    private TextView status;
-    private TextView studyCard;
+    private TextView subLine;
+    private TextView greet;
+    private TextView dateLine;
+    private TextView statusText;
+    private TextView statusChip;
+    private long nextSwitchMinute = -1L;
+    private String nextSwitchText = "—";
     private TextView lockNote;
-    private TextView result;
+    private TextView checkinTitle;
+    private TextView checkinSub;
+    private TextView appsHint;
     private TextView foot;
-    private Button checkinBtn;
-    private Button appsBtn;
-    private Button applyBtn;
-    private Button detectBtn;
+    private LinearLayout checkinCard;
     private FrostView frost;
-
-    private final java.util.List<View> surfaces = new java.util.ArrayList<>();
-    private final java.util.List<TextView> labels = new java.util.ArrayList<>();
+    private SplashView splash;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable tick = new Runnable() {
@@ -77,149 +72,381 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        ui = new Ui(this);
 
         scroll = new ScrollView(this);
-        scroll.setBackgroundColor(BG);
+        scroll.setBackgroundColor(ui.bg());
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(22), dp(16), dp(28));
+        root.setPadding(ui.dp(18), ui.dp(16), ui.dp(18), ui.dp(28));
         scroll.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        title = new TextView(this);
-        title.setText("AwayFromShorts");
-        title.setTextSize(23);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setTextColor(TEXT);
-        root.addView(title);
+        /* ---------- 顶栏：品牌 + 主题开关 ---------- */
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
 
-        sub = new TextView(this);
-        sub.setText("设备所有者模式 · 每个应用各自的放行时段，以外一律冻结");
-        sub.setTextSize(13);
-        sub.setTextColor(TEXT2);
-        sub.setPadding(0, dp(4), 0, dp(14));
-        root.addView(sub);
+        subLine = new TextView(this);
+        subLine.setText("AWAYFROMSHORTS");
+        subLine.setTextSize(11);
+        subLine.setLetterSpacing(0.18f);
+        subLine.setTextColor(ui.text3());
+        subLine.setTypeface(Typeface.DEFAULT_BOLD);
+        bar.addView(subLine, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        status = card(root, 13);
-        // 学习联动单独一张卡：埋在上面那块同色同字号的状态文本里，等于没写
-        studyCard = card(root, 13);
-        lockNote = card(root, 12);
-        lockNote.setTextColor(RED);
+        String themeMode = Ui.themeName(this);
+        TextView themeBtn = ui.iconButton("auto".equals(themeMode) ? "◐"
+                : (ui.dark ? "☀" : "☾"), ui.text2(), ui.surface());
+        themeBtn.setContentDescription("主题设置");
+        themeBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                final String[] modes = {"auto", "dark", "light"};
+                String current = Ui.themeName(MainActivity.this);
+                int selected = "auto".equals(current) ? 0
+                        : ("light".equals(current) ? 2 : 1);
+                new android.app.AlertDialog.Builder(MainActivity.this)
+                        .setTitle("主题")
+                        .setSingleChoiceItems(new String[] {"跟随系统", "深色", "浅色"},
+                                selected, new android.content.DialogInterface.OnClickListener() {
+                                    public void onClick(android.content.DialogInterface dialog, int which) {
+                                        Ui.setTheme(MainActivity.this, modes[which]);
+                                        dialog.dismiss();
+                                        recreate();
+                                    }
+                                })
+                        .setNegativeButton("取消", null)
+                        .show();
+            }
+        });
+        bar.addView(themeBtn);
+        root.addView(bar);
 
-        // 打卡是这个 App 里唯一每天都会用的动作，放最上面，且是唯一的实心按钮
-        checkinBtn = button(root, "打卡", BRAND, 0xFFFFFFFF);
-        checkinBtn.setOnClickListener(new View.OnClickListener() {
+        /* ---------- 问候 + 日期 ---------- */
+        greet = ui.title(greeting());
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        glp.topMargin = ui.dp(18);
+        root.addView(greet, glp);
+
+        dateLine = ui.sub("");
+        dateLine.setTextSize(13);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = ui.dp(6);
+        root.addView(dateLine, dlp);
+
+        /* ---------- 状态卡 ---------- */
+        LinearLayout statusCard = ui.card();
+        LinearLayout.LayoutParams scLp = ui.gap(10);
+        scLp.topMargin = ui.dp(20);
+        root.addView(statusCard, scLp);
+
+        LinearLayout statusHead = new LinearLayout(this);
+        statusHead.setOrientation(LinearLayout.HORIZONTAL);
+        statusHead.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView dot = new TextView(this);
+        dot.setText("◉");
+        dot.setTextSize(10);
+        dot.setTextColor(ui.accent());
+        dot.setGravity(Gravity.CENTER);
+        dot.setBackground(ui.round(ui.dark ? 0xFF1B2740 : 0xFFE7EEFC, 8f));
+        statusHead.addView(dot, new LinearLayout.LayoutParams(ui.dp(26), ui.dp(26)));
+
+        TextView st = new TextView(this);
+        st.setText("运行状态");
+        st.setTextSize(15);
+        st.setTypeface(Typeface.DEFAULT_BOLD);
+        st.setTextColor(ui.text());
+        LinearLayout.LayoutParams stLp = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        stLp.leftMargin = ui.dp(9);
+        statusHead.addView(st, stLp);
+
+        statusChip = ui.chip("—", ui.text(), ui.surface2());
+        statusHead.addView(statusChip);
+        statusCard.addView(statusHead);
+
+        statusText = new TextView(this);
+        statusText.setTextSize(13);
+        statusText.setTextColor(ui.text2());
+        statusText.setLineSpacing(ui.dp(5), 1f);
+        statusText.setMaxLines(3);
+        LinearLayout.LayoutParams stlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        stlp.topMargin = ui.dp(10);
+        statusCard.addView(statusText, stlp);
+
+        lockNote = new TextView(this);
+        lockNote.setTextSize(12);
+        lockNote.setTextColor(ui.red());
+        lockNote.setLineSpacing(ui.dp(4), 1f);
+        LinearLayout.LayoutParams lnlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lnlp.topMargin = ui.dp(10);
+        statusCard.addView(lockNote, lnlp);
+
+        statusCard.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, StatusActivity.class));
+            }
+        });
+
+        /* ---------- 打卡主卡：整块蓝，全页唯一的重色 ---------- */
+        checkinCard = new LinearLayout(this);
+        checkinCard.setOrientation(LinearLayout.HORIZONTAL);
+        checkinCard.setGravity(Gravity.CENTER_VERTICAL);
+        checkinCard.setBackground(ui.round(Ui.BLUE, 18f));
+        int cp = ui.dp(18);
+        checkinCard.setPadding(cp, cp, cp, cp);
+        root.addView(checkinCard, ui.gap(0));
+
+        LinearLayout checkinCol = new LinearLayout(this);
+        checkinCol.setOrientation(LinearLayout.VERTICAL);
+        checkinTitle = new TextView(this);
+        checkinTitle.setText("打卡");
+        checkinTitle.setTextSize(21);
+        checkinTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        checkinTitle.setTextColor(0xFFFFFFFF);
+        checkinCol.addView(checkinTitle);
+
+        checkinSub = new TextView(this);
+        checkinSub.setTextSize(12);
+        checkinSub.setTextColor(0xCCFFFFFF);
+        checkinSub.setMaxLines(2);
+        LinearLayout.LayoutParams cslp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cslp.topMargin = ui.dp(5);
+        checkinCol.addView(checkinSub, cslp);
+        checkinCard.addView(checkinCol, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView arrow = new TextView(this);
+        arrow.setText("→");
+        arrow.setTextSize(20);
+        arrow.setTextColor(0xFFFFFFFF);
+        arrow.setGravity(Gravity.CENTER);
+        arrow.setBackground(ui.round(0x33FFFFFF, 99f));
+        checkinCard.addView(arrow, new LinearLayout.LayoutParams(ui.dp(38), ui.dp(38)));
+
+        checkinCard.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 openCheckin();
             }
         });
-        // 学习卡本来只显示"还有没有目标没打卡"，点它去打卡是最自然的下一步
-        studyCard.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                openCheckin();
+        // 同步凭据是隐藏配置：长按打卡进打卡页后直接弹凭据框（打卡页本体没有别的 UI 了）
+        checkinCard.setOnLongClickListener(new View.OnLongClickListener() {
+            public boolean onLongClick(View v) {
+                Intent it = new Intent(MainActivity.this, CheckinActivity.class);
+                it.putExtra(CheckinActivity.EXTRA_OPEN, "token");
+                startActivity(it);
+                return true;
             }
         });
 
-        appsBtn = button(root, "黑名单", SURFACE, TEXT);
-        appsBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                startActivity(new Intent(MainActivity.this, AppListActivity.class));
-            }
-        });
+        /* ---------- 快捷：三格彩色图标 ---------- */
+        LinearLayout sec = ui.section("▦", Ui.BLUE, "功能", null, null);
+        LinearLayout.LayoutParams seclp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        seclp.topMargin = ui.dp(22);
+        seclp.bottomMargin = ui.dp(10);
+        root.addView(sec, seclp);
 
-        applyBtn = button(root, "立即应用", SURFACE, TEXT);
-        applyBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                Config.arm(MainActivity.this);   // 确认过了，宽限立即结束
-                runApply();
-            }
-        });
+        LinearLayout tiles = new LinearLayout(this);
+        tiles.setOrientation(LinearLayout.HORIZONTAL);
 
-        // 人工检测：闸门的数据最坏要等 10 分钟节流才刷新一遍，
-        // "我打完了怎么还冻着"这种时刻不该让人等机器的调度。
-        detectBtn = button(root, "立即检测", SURFACE, TEXT);
-        detectBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                detectBtn.setText("检测中…");
-                detectBtn.setEnabled(false);
-                new Thread(new Runnable() {
-                    public void run() {
-                        try {
-                            StudyGate.refreshNow(MainActivity.this);
-                        } catch (Throwable t) {
-                            android.util.Log.w(Guard.TAG, "refreshNow failed: " + t);
-                        } finally {
-                            // 按钮必须恢复：网络挂了 / 判定炸了都不能把入口焊死
-                            runOnUiThread(new Runnable() {
-                                public void run() {
-                                    detectBtn.setEnabled(true);
-                                    runApply();
-                                    toast("已重新检测学习台");
-                                }
-                            });
-                        }
+        LinearLayout tManage = ui.tile("◎", Ui.TILE_TEAL, "目标管理", "增删 · 改默认量",
+                new View.OnClickListener() {
+                    public void onClick(View v) {
+                        Intent it = new Intent(MainActivity.this, CheckinActivity.class);
+                        it.putExtra(CheckinActivity.EXTRA_OPEN, "manage");
+                        startActivity(it);
                     }
-                }).start();
-            }
-        });
+                });
+        LinearLayout tHist = ui.tile("▤", Ui.TILE_PURPLE, "打卡历史", "连续天数 · 统计",
+                new View.OnClickListener() {
+                    public void onClick(View v) {
+                        startActivity(new Intent(MainActivity.this, HistoryActivity.class));
+                    }
+                });
+        LinearLayout tApps = ui.tile("≡", Ui.TILE_RUST, "黑名单", "",
+                new View.OnClickListener() {
+                    public void onClick(View v) {
+                        startActivity(new Intent(MainActivity.this, AppListActivity.class));
+                    }
+                });
 
-        result = card(root, 12);
-        result.setTextColor(TEXT2);
+        LinearLayout.LayoutParams t1 = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        t1.rightMargin = ui.dp(8);
+        LinearLayout.LayoutParams t2 = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        t2.rightMargin = ui.dp(8);
+        LinearLayout.LayoutParams t3 = new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        tiles.addView(tManage, t1);
+        tiles.addView(tHist, t2);
+        tiles.addView(tApps, t3);
+        root.addView(tiles);
+
+        // 黑名单那格底下的小字要能跟着数量变，单独留引用（tile 的第 3 个子 view）
+        View appsHintView = tApps.getChildAt(2);
+        appsHint = (TextView) appsHintView;
 
         foot = new TextView(this);
         foot.setText("移除守卫只有一条路：\n"
                 + "adb shell dpm remove-active-admin com.afs.guard/.AfsAdmin");
-        foot.setTextSize(12);
-        foot.setTextColor(TEXT2);
-        foot.setPadding(0, dp(18), 0, 0);
+        foot.setTextSize(11);
+        foot.setTextColor(ui.text3());
+        foot.setLineSpacing(ui.dp(3), 1f);
+        foot.setPadding(0, ui.dp(20), 0, 0);
         root.addView(foot);
 
         // 薄霜层盖在内容上面：全屏蔽时有"被冻住"的体感，平时不画
-        android.widget.FrameLayout shell = new android.widget.FrameLayout(this);
+        final android.widget.FrameLayout shell = new android.widget.FrameLayout(this);
         shell.addView(scroll);
         frost = new FrostView(this);
         frost.setVisibility(View.GONE);
         shell.addView(frost);
-        setContentView(shell);
+
+        // 外面再套一层：加载动画盖在最上面，首页在下面等着，两者互不干扰
+        android.widget.FrameLayout host = new android.widget.FrameLayout(this);
+        host.setBackgroundColor(ui.bg());
+        host.addView(shell);
+        setContentView(host);
+        immersive();
         Guard.ensureService(this);   // 每次打开 App 顺手保证常驻守护在跑
-        CheckinStore.seedToken(this); // 带 token 的构建第一次打开就落盘
+        Gist.seedToken(this); // 带 token 的构建第一次打开就落盘
+        if (RuleStore.alignRequestedRules(this)) {
+            new Thread(new Runnable() {
+                public void run() { Guard.apply(MainActivity.this); }
+            }, "afs-rule-correction").start();
+        }
+        Hub.kick(this);              // Gist 中心仓库同步（节流，脏标记优先）
         render();
-        warmGoals();                 // 攒一份目标，打卡按钮上才能显示"还有几个"
+
+        // 只有冷启动才播加载动画：转屏、从后台切回来都不该再挡一次
+        android.util.Log.i(Guard.TAG, "main: savedInstanceState="
+                + (savedInstanceState == null ? "null(冷启动)" : "非空"));
+        if (savedInstanceState == null) {
+            shell.setAlpha(0f);
+            splash = new SplashView(this);
+            host.addView(splash, new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+            splash.play(new SplashView.Done() {
+                public void onDone() {
+                    handOver(shell);
+                }
+            });
+        } else {
+            contentIn(shell);
+        }
+    }
+
+    /** 首页入场：从下方一点升起来 + 淡入（原来是整页从顶上滑进来，太"抽屉"了）。 */
+    private void contentIn(View shell) {
+        shell.setTranslationY(ui.dp(26));
+        shell.setAlpha(0f);
+        shell.animate().translationY(0f).alpha(1f)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f))
+                .setDuration(380)
+                .start();
     }
 
     /**
-     * 首页自己也拉一次目标（只在本地还没有今天的数据时）。
-     *
-     * 不这么做的话，刚装完/刚跨天，按钮上永远是光秃秃的"打卡"，
-     * 得先进打卡页一次才有数字 —— 而"还欠几个"恰恰是最该一眼看见的。
-     * 拉失败什么也不做：按钮退化成"打卡"，打卡页里再报错。
+     * 加载动画收尾：一进一出同时交接 —— 它淡出并轻微放大，首页同时升起来。
+     * 两段叠在一起才不会看到"先黑一下再出现"的空档。
      */
-    private void warmGoals() {
-        if (CheckinStore.pendingToday(this) >= 0) {
-            return;   // 今天的目标已经在本地了，按钮上的数字就是现成的
+    private void handOver(final View shell) {
+        final SplashView s = splash;
+        splash = null;
+        contentIn(shell);
+        if (s == null) {
+            return;
         }
-        CheckinSync.fetch(this, new CheckinSync.Sink() {
-            public void onData(java.util.List<CheckinStore.Goal> goals, String date,
-                               String at, Exception err) {
-                if (goals != null) {
-                    styleCheckin();
-                }
-            }
-        });
+        s.animate().alpha(0f).scaleX(1.10f).scaleY(1.10f)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.4f))
+                .setDuration(320)
+                .withEndAction(new Runnable() {
+                    public void run() {
+                        ViewGroup p = (ViewGroup) s.getParent();
+                        if (p != null) {
+                            p.removeView(s);
+                        }
+                    }
+                })
+                .start();
+    }
+
+    /** 按当前时辰打招呼 —— Voyage 首页也是这么起的。 */
+    private String greeting() {
+        int h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+        if (h < 6) {
+            return "夜深了";
+        }
+        if (h < 11) {
+            return "早上好";
+        }
+        if (h < 14) {
+            return "中午好";
+        }
+        if (h < 18) {
+            return "下午好";
+        }
+        return "晚上好";
+    }
+
+    /**
+     * 藏掉状态栏（时间/电量那一条）：沉浸式，从顶边下滑才临时现形，几秒后自动再藏。
+     * IMMERSE_STICKY = 现形不重排布局；LAYOUT_* 让内容顶到状态栏原来的位置。
+     */
+    private void immersive() {
+        // 让 App 自己画系统栏底色（不然 ColorOS 在状态栏原位置画一条黑）
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        getWindow().setStatusBarColor(0x00000000);   // 透明：位置让给 window 背景自己铺
+        getWindow().setBackgroundDrawable(
+                new android.graphics.drawable.ColorDrawable(ui.bg()));
+        // 经典窗口级全屏：窗口本体涨进状态栏原来占的位置，不留黑带
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // 顶部黑带真凶是刘海/挖孔：默认布局不进 cutout 区，放行 SHORT_EDGES 才贴到顶
+        android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+        lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams
+                .LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        getWindow().setAttributes(lp);
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        homeVisible = true;
+        GrayMode.apply(this, false);
+        if (ui.dark != Ui.isDark(this)) {
+            recreate();
+            return;
+        }
+        immersive();      // 从别的页面/别的 App 回来时状态栏可能又冒出来，重新藏
+        nextSwitchMinute = -1L;
         render();
         handler.removeCallbacks(tick);
         handler.post(tick);
+        Hub.kick(this);   // onResume 也踢：常驻进程不会反复 onCreate，只有这里能保证周期同步
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        homeVisible = false;
+        int state = StudyGate.cardState(this, Calendar.getInstance());
+        GrayMode.apply(this, state == StudyGate.ST_ACTIVE || state == StudyGate.ST_PENDING);
         handler.removeCallbacks(tick);
     }
 
@@ -230,8 +457,6 @@ public class MainActivity extends Activity {
         boolean dark = Guard.allBlocked(this);
         boolean grace = Config.inGrace(this);
         int total = RuleStore.count(this);
-
-        applyDark(dark);
 
         // 状态整体翻转的那一刻顺手重落地一次，否则结果卡会停在旧文本上
         if (firstRender) {
@@ -247,18 +472,45 @@ public class MainActivity extends Activity {
             }
         }
 
-        status.setText(Guard.describe(this));
-        status.setTextColor(owner ? (dark ? TEXT_DARK : TEXT) : (dark ? RED_DARK : RED));
-        applyStudyCard(dark);
+        Calendar now = Calendar.getInstance();
+        // 每秒都跑 render，但日期一天只变一次：不判一下就等于每秒触发一次布局
+        String day = new java.text.SimpleDateFormat("M月d日 EEEE",
+                java.util.Locale.CHINA).format(now.getTime());
+        if (!day.equals(lastDay)) {
+            lastDay = day;
+            dateLine.setText(day);
+        }
+
+        if (owner) {
+            statusChip.setText("运行中");
+            statusChip.setTextColor(ui.dark ? 0xFF66D9A0 : 0xFF0E8A50);
+            statusChip.setBackground(ui.round(ui.dark ? 0xFF16302A : 0xFFE3F7EC, 99f));
+        } else {
+            statusChip.setText("未启用");
+            statusChip.setTextColor(ui.dark ? 0xFFFF9A94 : 0xFFC0392B);
+            statusChip.setBackground(ui.round(ui.dark ? 0xFF37212A : 0xFFFCE9E8, 99f));
+        }
+
+        long minute = now.getTimeInMillis() / 60000L;
+        if (minute != nextSwitchMinute) {
+            nextSwitchMinute = minute;
+            long flip = total == 0 ? 0L : Guard.nextFlipMillis(this);
+            nextSwitchText = flip == 0L ? "—" :
+                    new java.text.SimpleDateFormat("M/d HH:mm", java.util.Locale.CHINA)
+                            .format(new java.util.Date(flip));
+        }
+        statusText.setText("应用 " + total + " 个 · 冻结 " + Guard.blockedCount(this) + " 个\n"
+                + "关键应用 " + RuleStore.keyApps(this).size() + " 个 · "
+                + (owner ? "加固已开启" : "未取得设备所有者权限") + "\n"
+                + "下次切换 " + nextSwitchText);
+        statusText.setTextColor(owner ? ui.text2() : ui.red());
 
         if (dark && !grace) {
             lockNote.setVisibility(View.VISIBLE);
             lockNote.setText("全部应用都在屏蔽中：现在改不了，到点自动解锁。没有解除按钮。");
-            lockNote.setTextColor(dark ? RED_DARK : RED);
         } else if (grace) {
             lockNote.setVisibility(View.VISIBLE);
-            lockNote.setText("首次使用：现在可以随便配，点「立即应用」后按锁定规则走。");
-            lockNote.setTextColor(dark ? RED_DARK : RED);
+            lockNote.setText("首次使用：现在可以随便配，到黑名单页点「立即应用」后按锁定规则走。");
         } else {
             lockNote.setVisibility(View.GONE);
         }
@@ -266,111 +518,81 @@ public class MainActivity extends Activity {
         if (frost != null) {
             frost.setVisibility(dark && !grace ? View.VISIBLE : View.GONE);
         }
-        appsBtn.setText("黑名单 · " + total + " 个应用");
-        styleSecondary(appsBtn, false);
-        styleSecondary(applyBtn, false);
-        styleSecondary(detectBtn, false);
+        appsHint.setText(total + " 个应用");
         styleCheckin();
 
-        result.setTextColor(dark ? TEXT2_DARK : TEXT2);
-        if (result.getText().length() == 0) {
-            result.setText("尚未执行。");
-        }
+        // 「今天还没学完」不用通知催 —— 整页变灰（健康使用手机那套），
+        // 打完自动恢复彩色。比通知安静，但一眼就能看见。
+        applyGray(false);
+
     }
 
-    private boolean darkState = false;
-    private boolean themeApplied = false;
-
     /**
-     * 打卡按钮：把"还剩几个目标"直接写在按钮上。
+     * 打卡卡：把"还剩几个目标"直接写在卡的副标题上。
      * 数字来自上一次同步到本地的目标（不额外打网络），比单独一行说明有用得多 ——
      * 没打卡的时候一打开 App 就能看见还欠几个。
+     *
+     * 学习联动也并到这里了（原来它是一张独立的卡，点进去是同一个页面）：
+     * 副标题会带「冻结中」/「⚠ 联动过期」/「等记账」，因为"现在到底冻不冻"
+     * 是打完卡之后唯一还想知道的事。
      */
+    private String lastCheckinLabel = "";
+    private Boolean lastCheckinComplete;
+
     private void styleCheckin() {
-        if (checkinBtn == null) {
+        if (checkinCard == null) {
             return;
         }
-        // 手机自己就是学习台时，数字直接从本机算；老链路才看 CheckinStore 的缓存
-        int pend = StudyGate.isLocalMode(this)
-                ? StudyStore.pendingToday(this) : CheckinStore.pendingToday(this);
-        if (pend > 0) {
-            checkinBtn.setText("打卡 · 还有 " + pend + " 个目标");
-            checkinBtn.setAlpha(1f);
-        } else if (pend == 0) {
-            checkinBtn.setText("打卡 · 今天已经打完");
-            checkinBtn.setAlpha(0.6f);
-        } else {
-            checkinBtn.setText("打卡");
-            checkinBtn.setAlpha(1f);
+        // 手机自己就是学习台：数字直接从本机 study.json 算，没有远端这回事
+        int pend = StudyStore.pendingToday(this);
+        // 禁忌卡已经在打卡队列里了（每天第一张），它没答完就不能说"今天已经打完"
+        int tp = StudyGate.tabooPendingToday(this);
+
+        // 文案拼装在 StudyGate.checkinLabel 里（纯函数，离线有断言）
+        Calendar now = Calendar.getInstance();
+        int st = StudyGate.cardState(this, now);
+        boolean hold = StudyGate.activeNow(this, now);
+        String label = StudyGate.checkinLabel(pend, tp, st, hold);
+        if (label.startsWith("打卡 · ")) {
+            label = label.substring(5);
+        } else if ("打卡".equals(label)) {
+            label = "上滑卡片记一笔，今天还什么都没记";
+        }
+        if (!label.equals(lastCheckinLabel)) {
+            lastCheckinLabel = label;
+            checkinSub.setText(label);
+        }
+        boolean complete = StudyStore.hasGoals(this) && pend == 0 && tp == 0;
+        if (lastCheckinComplete == null || complete != lastCheckinComplete.booleanValue()) {
+            lastCheckinComplete = complete;
+            checkinCard.setBackground(ui.round(complete ? 0xFF16824B : 0xFFC83542, 18f));
         }
     }
 
     private void openCheckin() {
-        // 把当前主题一起带过去，免得从浅色首页点进去先闪一下深色
-        CheckinActivity.open(this, darkState);
+        CheckinActivity.open(this, ui.dark);
     }
+
+    private android.graphics.Paint grayPaint;
 
     /**
-     * 学习联动卡片：生效中 / 保护已失效 用警示红，关闭 / 无数据用次要色，其余正常色。
-     * 每秒跟 render 一起刷（holding 内部有 10 分钟节流，不会打网络）。
+     * 灰度开关：整个窗口套一层饱和度 0 的硬件层。
+     * 不弹通知、不响铃 —— 「今天还没学完」这件事让颜色自己说：
+     * 页面是灰的 = 还有目标没打卡；页面恢复彩色 = 打完了。
      */
-    private void applyStudyCard(boolean dark) {
-        if (studyCard == null) {
-            return;
-        }
-        Calendar now = Calendar.getInstance();
-        int st = StudyGate.cardState(this, now);
-        studyCard.setText(StudyGate.cardText(this, now));
-        int color;
-        if (st == StudyGate.ST_ACTIVE || st == StudyGate.ST_STALE) {
-            color = dark ? RED_DARK : RED;          // 正在拦 / 保护失效，都得让人看见
-        } else if (st == StudyGate.ST_OFF || st == StudyGate.ST_NONE) {
-            color = dark ? TEXT2_DARK : TEXT2;
-        } else {
-            color = dark ? TEXT_DARK : TEXT;
-        }
-        studyCard.setTextColor(color);
-    }
-
-    /** 整页配色：全部屏蔽时是深色，否则浅色。 */
-    private void applyDark(boolean d) {
-        if (themeApplied && d == darkState) {
-            return;
-        }
-        themeApplied = true;
-        darkState = d;
-        scroll.setBackgroundColor(d ? BG_DARK : BG);
-        try {
-            getWindow().setStatusBarColor(d ? BG_DARK : BG);
-            View v = getWindow().getDecorView();
-            int flags = v.getSystemUiVisibility();
-            if (d) {
-                flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-            } else {
-                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+    private void applyGray(boolean gray) {
+        View decor = getWindow().getDecorView();
+        if (gray) {
+            if (grayPaint == null) {
+                grayPaint = new android.graphics.Paint();
+                android.graphics.ColorMatrix cm = new android.graphics.ColorMatrix();
+                cm.setSaturation(0f);
+                grayPaint.setColorFilter(new android.graphics.ColorMatrixColorFilter(cm));
             }
-            v.setSystemUiVisibility(flags);
-        } catch (Throwable ignored) {
+            decor.setLayerType(View.LAYER_TYPE_HARDWARE, grayPaint);
+        } else {
+            decor.setLayerType(View.LAYER_TYPE_NONE, null);
         }
-        for (View v : surfaces) {
-            v.setBackgroundColor(d ? SURFACE_DARK : SURFACE);
-        }
-        for (TextView v : labels) {
-            v.setTextColor(d ? TEXT2_DARK : TEXT2);
-        }
-        title.setTextColor(d ? TEXT_DARK : TEXT);
-        sub.setTextColor(d ? TEXT2_DARK : TEXT2);
-        foot.setTextColor(d ? TEXT2_DARK : TEXT2);
-    }
-
-    private void styleSecondary(Button b, boolean locked) {
-        boolean dark = darkState;
-        int offBg = dark ? OFF_DARK : OFF_LIGHT;
-        int offFg = dark ? 0xFF6E6E76 : 0xFF9A9AA0;
-        b.setEnabled(!locked);
-        b.setTextColor(locked ? offFg : (dark ? TEXT_DARK : TEXT));
-        b.setBackgroundColor(locked ? offBg : (dark ? SURFACE_DARK : SURFACE));
-        b.setAlpha(locked ? 0.55f : 1f);
     }
 
     /* ==================== 行为 ==================== */
@@ -383,7 +605,6 @@ public class MainActivity extends Activity {
                 final String msg = Guard.apply(self);
                 new Handler(Looper.getMainLooper()).post(new Runnable() {
                     public void run() {
-                        result.setText(msg);
                         applying = false;
                         render();
                     }
@@ -395,44 +616,11 @@ public class MainActivity extends Activity {
     private boolean applying;
     private boolean lastAllBlocked;
     private boolean firstRender = true;
+    private String lastDay = "";
 
     /* ---------- 小工具 ---------- */
 
     private void toast(String t) {
         Toast.makeText(this, t, Toast.LENGTH_SHORT).show();
-    }
-
-    private int dp(int v) {
-        return (int) (v * getResources().getDisplayMetrics().density + 0.5f);
-    }
-
-    private TextView card(LinearLayout parent, int size) {
-        TextView tv = new TextView(this);
-        tv.setTextColor(TEXT);
-        tv.setTextSize(size);
-        tv.setLineSpacing(dp(5), 1f);
-        tv.setBackgroundColor(SURFACE);
-        tv.setPadding(dp(14), dp(12), dp(14), dp(12));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.bottomMargin = dp(8);
-        parent.addView(tv, lp);
-        surfaces.add(tv);
-        return tv;
-    }
-
-    private Button button(LinearLayout parent, String label, int bg, int fg) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setTextSize(14);
-        b.setTextColor(fg);
-        b.setBackgroundColor(bg);
-        b.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
-        lp.bottomMargin = dp(8);
-        parent.addView(b, lp);
-        return b;
     }
 }

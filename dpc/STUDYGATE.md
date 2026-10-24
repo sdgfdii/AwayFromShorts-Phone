@@ -124,65 +124,30 @@ v1.10.4 起按 `Rule.groupKey()` 折叠：
 - 组内带「改这一组的时段」，不用回顶部重走「批量设时段」
 - 展开状态在重建后保留；改完/套用完自动展开结果那张卡
 
-## 手机上打卡：先解闸，台账后补
+## 手机上打卡：本机就是学习台
 
-学习台只能在 WorkBuddy 宿主里写（`inject.js` 顶层打开会把页面 blank 掉，
-数据层的身份在宿主那边），手机 App 拿不到。所以打卡走 Gist 中转：
+打卡不再走 Gist 中转。手机自带目标（`StudyStore`），打完一笔就落本机
+`study.json`，闸门在同一进程里当场重判：
 
 ```
-打卡页 ──上推──▶ Gist 的 checkin-queue.json
-                          │ PC 每 15 分钟
-                          ▼
-              apply_checkins.py ──▶ 学习台「打卡记录」表
-                          │ 写成功
-                          ▼
-              清空队列 + 重推 study-gate.json
+打卡页 ──上推──▶ StudyStore.check() ──▶ 写 study.json
+                        │
+                        ├─▶ StudyGate.invalidate ──▶ Guard.apply（当场解冻）
+                        └─▶ Hub.markStudyDirty ──▶ 推 checkin-ledger.json（后台）
 ```
 
-打卡页现在就在守卫 App 里（`CheckinActivity`，不再单独装一个 APK），
-界面与手势见 [CHECKIN.md](CHECKIN.md)。
+判定只看一份快照：`enabled` + `allDone` + 数据新鲜度。
 
-守卫这边读队列的 `pendingAfter`（合并手机打卡后还剩几个目标）：
+### 老队列的补丁都已删掉
 
-| `pendingAfter` | 含义 | 守卫行为 |
-| --- | --- | --- |
-| `-1` | 队列里没有今天的记录 | 按 PC 的数据判 |
-| `0` | 手机把目标补齐了 | **立刻不再延长冻结**（ST_QUEUED） |
-| `>0` | 还剩这么多个 | 照常冻（不能打一个就全免） |
+`checkin-queue.json` 时代要等 Gist 往返才知道"补齐了"，于是有 `pendingAfter`、
+`mergePending(remote, local)`、`noteLocalPending()` 三件套。v1.31.0 起：
 
-★ 判定必须是 `== 0`。写成"队列非空就放行"的话，22:00 打 0.5 篇就能把
-剩下两个目标一起豁免 —— 闸门等于没有。
+- 数据就在本机文件里，`StudyStore.save()` 直接触发 `invalidate`，没有延迟可补
+- 队列链路（`CheckinStore` / `CheckinSync` / `patchQueue`）整体删除
+- `ST_QUEUED`（等 PC 记账）状态一并消失，首页按钮后缀不再有"等电脑记账"
 
-PC 记完账会清空队列，判定自然回到 `allDone` 那条线，是收敛的。
-队列拉取失败时保持上一次的值，不会因为网络抖一下就把"已打卡"抹回"未打卡"。
-
-### 并进同一个 App 之后：不当场解闸就白搭
-
-上面那条链要等 Gist 往返（还有 CDN 缓存，raw 地址的时间戳会被忽略），
-真按这节奏，打完最后一个目标到闸门放行可能差好几分钟 ——
-人被冻在门外，就会去怀疑打卡到底生不生效。
-
-所以合并之后多了一条**进程内**的路：打卡页打完一笔，直接
-`StudyGate.noteLocalPending(还剩几个)`，闸门立刻重判，
-不用等网络、也不用等那 10 分钟的拉取节流。
-
-两份"还剩几个"（远端队列的、本机刚算的）这样合：
-
-```java
-static int mergePending(int remote, int local) {
-    if (remote < 0) return local;
-    if (local < 0) return remote;
-    return Math.min(remote, local);   // 取小 = 早解闸
-}
-```
-
-取小而不是取大：反过来的话，本地说打完了、远端还没收到，就会"继续冻"，
-用户以为没生效，接着反复打 —— 体验直接崩，还会打出一堆脏记录。
-这和整个项目一贯的 fail-open 是同一个取向。
-
-本地这份什么时候撤？队列清空（PC 记完账）后打卡页会 `noteLocalPending(-1)`，
-判定交还给 `allDone`。**不能让"本地已打卡"永远挂着** ——
-账根本没记上却显示打了，是自己骗自己。
+上传是另一件事，不影响闸门：见 [CHECKIN.md](CHECKIN.md)「手动上传」。
 
 ## 手机端没有开关
 
@@ -218,7 +183,7 @@ adb logcat -s AFS | grep "tick alive"
 所以能在 JDK 上离线跑：
 
 ```bash
-bash test/run.sh     # 179 项，含闸门 40+ 项、分组键 9 项、手机打卡队列 18 项、远端/本地合并 10 项
+bash test/run.sh     # 186 项，含闸门 40+ 项、分组键 9 项、禁忌待办 9 项、按钮文案 6 项
 ```
 
 覆盖：区间判定（含跨午夜）、好/坏 JSON、日期错、超龄、`error` 字段、

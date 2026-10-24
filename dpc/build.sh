@@ -95,18 +95,24 @@ echo "[2/7] aapt2 link"
   --java "$OUT/gen" \
   --min-sdk-version 24 \
   --target-sdk-version 34 \
-  --version-code 2000 \
-  --version-name 1.11.0 \
+  --version-code 2091 \
+  --version-name 1.36.4 \
   "$OUT"/flat/*.flat
 
 # ---------- 3. 编译 Java ----------
 echo "[3/7] javac"
 find java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
-javac -encoding UTF-8 -nowarn -source 8 -target 8 \
+# ★ javac 失败必须让构建死掉：以前管道接 grep || true, 编译错了构建照样走到
+#   打包, 装上的是"没有新代码"的旧 dex（PcStats 漏 import 就这么漏装过一次）。
+if ! javac -encoding UTF-8 -nowarn -source 8 -target 8 \
   -bootclasspath "$ANDROID_JAR" -classpath "$ANDROID_JAR" \
-  -d "$OUT/classes" @"$OUT/sources.txt" 2>&1 | grep -v '^warning:' || true
-[ -f "$OUT/classes/com/afs/guard/CheckinActivity.class" ] \
-  || { echo "javac 失败（没有 CheckinActivity.class）" >&2; exit 1; }
+  -d "$OUT/classes" @"$OUT/sources.txt" 2> "$OUT/javac.log"; then
+  grep -v '^warning:' "$OUT/javac.log" >&2 || true
+  rm -rf "$OUT/classes"
+  echo "javac 失败" >&2
+  exit 1
+fi
+grep -v '^warning:' "$OUT/javac.log" || true
 
 # ---------- 4. dex ----------
 echo "[4/7] d8"

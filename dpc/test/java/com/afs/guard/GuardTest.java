@@ -26,8 +26,7 @@ public final class GuardTest {
         textTests();
         groupKeyTests();
         studyGate();
-        phoneCheckin();
-        localPendingMerge();
+        tabooCard();
 
         System.out.println();
         System.out.println("== " + pass + " PASS / " + fail + " FAIL ==");
@@ -254,110 +253,13 @@ public final class GuardTest {
                 "空时段下星期不同仍是不同键");
     }
 
-    /* ---------- 8.5 手机打卡队列 ---------- */
-
-    /**
-     * 手机上滑打完卡 -> Gist 队列里有今天的条目 -> 守卫立刻不再 hold。
-     * 这条如果判错，用户要么白等 PC 那 15 分钟，要么打完卡还被继续冻着。
-     */
-    private static void phoneCheckin() {
-        System.out.println("---- 手机打卡队列 ----");
-
-        // 队列里带 pendingAfter：合并手机打卡后还剩几个目标
-        String q = "{\"date\":\"2026-10-22\",\"active\":3,\"pendingAfter\":0,"
-                + "\"items\":[{\"id\":\"ck_1\",\"date\":\"2026-10-22\",\"amount\":20}]}";
-        eq(StudyGate.parsePendingAfter(q, "2026-10-22"), 0, "打完最后一个 → 0");
-        eq(StudyGate.parsePendingAfter(q, "2026-10-21"), -1, "日期对不上 → -1（不参与）");
-
-        String q2 = "{\"date\":\"2026-10-22\",\"active\":3,\"pendingAfter\":2,\"items\":[]}";
-        eq(StudyGate.parsePendingAfter(q2, "2026-10-22"), 2, "还剩 2 个 → 2");
-
-        eq(StudyGate.parsePendingAfter("{\"items\":[]}", "2026-10-22"), -1, "空队列 → -1");
-        eq(StudyGate.parsePendingAfter("", "2026-10-22"), -1, "空字符串 → -1");
-        eq(StudyGate.parsePendingAfter(null, "2026-10-22"), -1, "null → -1");
-        eq(StudyGate.parsePendingAfter("{\"date\":\"2026-10-22\"}", "2026-10-22"), -1,
-                "没有 pendingAfter 字段 → -1");
-
-        // Python 的 json.dumps 默认带空格，PC 写回来的可能长这样
-        eq(StudyGate.parsePendingAfter(
-                "{\"date\": \"2026-10-22\", \"pendingAfter\": 1, \"items\": []}", "2026-10-22"), 1,
-                "带空格的 JSON 也能读");
-        // 日期不能被别的字段前缀骗到
-        eq(StudyGate.parsePendingAfter(
-                "{\"date\":\"2026-10-221\",\"pendingAfter\":0}", "2026-10-22"), -1,
-                "带引号匹配，2026-10-221 不算今天");
-
-        StudyGate.Snapshot s = StudyGate.parse(
-                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
-                        + "\"allDone\":false,\"pending\":2,\"checkedAt\":\"2026-10-22 22:30\"}",
-                "2026-10-22", stampMs("2026-10-22 22:30"));
-        Calendar at2230 = at(2026, 10, 22, 22, 30);
-
-        ok(StudyGate.shouldHold(s, at2230, -1), "手机没打卡 → 继续冻");
-        ok(StudyGate.shouldHold(s, at2230, 2), "手机只打了 1 个、还剩 2 个 → 还是冻（不能打一个就全豁免）");
-        ok(!StudyGate.shouldHold(s, at2230, 0), "手机把目标补齐了 → 立刻放行（先解闸）");
-        eq(StudyGate.stateOf(s, at2230, -1), StudyGate.ST_ACTIVE, "没打卡 → 生效中");
-        eq(StudyGate.stateOf(s, at2230, 2), StudyGate.ST_ACTIVE, "还剩 2 个 → 仍是生效中");
-        eq(StudyGate.stateOf(s, at2230, 0), StudyGate.ST_QUEUED, "补齐 → 已打卡待记账");
-
-        // 数据过期时队列仍优先：手机确实打了卡，不该显示"保护已失效 + 继续冻结"
-        StudyGate.Snapshot old = StudyGate.parse(
-                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
-                        + "\"allDone\":false,\"pending\":2,\"checkedAt\":\"2026-10-22 20:00\"}",
-                "2026-10-22", stampMs("2026-10-22 20:00"));
-        eq(StudyGate.stateOf(old, at2230, -1), StudyGate.ST_STALE, "过期 → 保护已失效");
-        eq(StudyGate.stateOf(old, at2230, 0), StudyGate.ST_QUEUED, "过期但手机补齐 → 已打卡");
-        ok(StudyGate.textOf(old, at2230, 0).contains("已打卡"),
-                "过期 + 手机补齐 → 文案要写已打卡");
-    }
-
-    /* ---------- 9. 学习闸门 ---------- */
-
-    /**
-     * 合并成一个 App 之后多出来的一件事：闸门有两份"还剩几个"。
-     * 远端（Gist，可能还是十分钟前的）和本地（打卡页刚算的）。
-     * 取小 = 早解闸，这条口径错了会直接表现为"打完了还在冻"。
-     */
-    private static void localPendingMerge() {
-        System.out.println("---- 远端/本地 pending 合并 ----");
-
-        eq(StudyGate.mergePending(-1, -1), -1, "两边都没数 → -1（按 PC 的 allDone 判）");
-        eq(StudyGate.mergePending(-1, 0), 0, "只有本地说打完了 → 0（立刻解闸）");
-        eq(StudyGate.mergePending(0, -1), 0, "只有远端说打完了 → 0");
-        eq(StudyGate.mergePending(2, 0), 0, "远端落后、本地已补齐 → 取 0");
-        eq(StudyGate.mergePending(0, 2), 0, "本地落后、远端已补齐 → 取 0");
-        eq(StudyGate.mergePending(2, 3), 2, "都还有剩 → 取小的");
-        eq(StudyGate.mergePending(3, 2), 2, "都还有剩 → 取小的（换序）");
-        eq(StudyGate.mergePending(-1, 2), 2, "远端没数、本地还有 2 个 → 2");
-
-        StudyGate.Snapshot s = StudyGate.parse(
-                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
-                        + "\"allDone\":false,\"pending\":2,\"checkedAt\":\"2026-10-22 22:30\"}",
-                "2026-10-22", stampMs("2026-10-22 22:30"));
-        Calendar at2230 = at(2026, 10, 22, 22, 30);
-        ok(!StudyGate.shouldHold(s, at2230, StudyGate.mergePending(2, 0)),
-                "远端还写着剩 2 个，但本地刚补齐 → 不冻（别让人以为打卡没生效）");
-        ok(StudyGate.shouldHold(s, at2230, StudyGate.mergePending(-1, 2)),
-                "本地只剩 2 个目标 → 照冻结");
-    }
-
     /* ---------- 10. 学习闸门 ---------- */
 
     private static void studyGate() {
         System.out.println("---- 学习闸门：解析 / 判定 / fail-open ----");
 
-        // 8.1 inSpan 区间判定（含跨午夜，语义与 Rule.inWindow 一致）
-        System.out.println("  · 区间判定 inSpan");
-        ok(StudyGate.inSpan(22 * 60, 22 * 60, 23 * 60), "22:00 落在 [22:00,23:00)");
-        ok(StudyGate.inSpan(22 * 60 + 59, 22 * 60, 23 * 60), "22:59 落在区间");
-        ok(!StudyGate.inSpan(23 * 60, 22 * 60, 23 * 60), "23:00 不在区间（左闭右开）");
-        ok(!StudyGate.inSpan(21 * 60 + 59, 22 * 60, 23 * 60), "21:59 不在区间");
-        ok(StudyGate.inSpan(22 * 60, 22 * 60, 22 * 60), "起止相同 = 全天");
-        ok(StudyGate.inSpan(23 * 60 + 30, 23 * 60, 1 * 60), "23:30 落在跨午夜区间 [23:00,01:00)");
-        ok(StudyGate.inSpan(0 * 60 + 30, 23 * 60, 1 * 60), "00:30 仍在跨午夜区间");
-        ok(!StudyGate.inSpan(1 * 60, 23 * 60, 1 * 60), "01:00 不在跨午夜区间（右开）");
-        ok(!StudyGate.inSpan(12 * 60, 23 * 60, 1 * 60), "中午不在跨午夜区间");
-        ok(!StudyGate.inSpan(22 * 60, -1, 23 * 60), "起点不合法 = 不 hold");
+        // 8.1 闸门不再挑时间：只要今天没打完，任何时刻都 hold
+        System.out.println("  · 不看时段（直接延长冻结）");
 
         // 8.2 解析：好 JSON
         System.out.println("  · 解析 parse");
@@ -404,11 +306,43 @@ public final class GuardTest {
         System.out.println("  · 生效判定 shouldHold");
         Calendar at2230 = at(2026, 10, 22, 22, 30);
         ok(StudyGate.shouldHold(ok1, at2230),
-                "开启+可信+未打卡+22:30 在区间 → hold");
-        ok(!StudyGate.shouldHold(ok1, at(2026, 10, 22, 21, 59)),
-                "21:59 不在区间 → 放行");
-        ok(!StudyGate.shouldHold(ok1, at(2026, 10, 22, 23, 0)),
-                "23:00 区间结束 → 放行（右开）");
+                "开启+可信+未打卡 → hold");
+        // 时段边界前后的两刻，各用新鲜数据判（否则先被 fail-open 拦下，测的就不是这件事）
+        StudyGate.Snapshot early = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
+                        + "\"allDone\":false,\"checkedAt\":\"2026-10-22 21:20\"}",
+                "2026-10-22", stampMs("2026-10-22 21:30"));
+        ok(StudyGate.shouldHold(early, at(2026, 10, 22, 21, 59)),
+                "★ 21:59 还没到「学习时段」也 hold（不再按固定时间延长）");
+        StudyGate.Snapshot late = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
+                        + "\"allDone\":false,\"checkedAt\":\"2026-10-22 22:40\"}",
+                "2026-10-22", stampMs("2026-10-22 22:40"));
+        ok(StudyGate.shouldHold(late, at(2026, 10, 22, 23, 0)),
+                "★ 23:00 时段结束后仍在 hold（直到打完为止）");
+        // 20:00 前只按应用原有冻结时间运行。
+        StudyGate.Snapshot morning = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
+                        + "\"allDone\":false,\"checkedAt\":\"2026-10-22 09:00\"}",
+                "2026-10-22", stampMs("2026-10-22 09:10"));
+        ok(!StudyGate.shouldHold(morning, at(2026, 10, 22, 9, 30)),
+                "★ 早上 9:30 未打卡，不延长冻结");
+        StudyGate.Snapshot beforeCheck = StudyGate.parse(
+                "{\"date\":\"2026-10-22\",\"enabled\":true,\"allDone\":false,"
+                        + "\"checkedAt\":\"2026-10-22 19:55\"}",
+                "2026-10-22", stampMs("2026-10-22 19:55"));
+        ok(!StudyGate.shouldHold(beforeCheck, at(2026, 10, 22, 19, 59)),
+                "19:59 未打卡，仍不延长冻结");
+        ok(StudyGate.shouldHold(beforeCheck, at(2026, 10, 22, 20, 0)),
+                "20:00 未打卡，开始延长冻结");
+        eq(StudyGate.stateOf(beforeCheck, at(2026, 10, 22, 19, 59)), StudyGate.ST_PENDING,
+                "20:00 前显示待检查");
+        ok(StudyGate.textOf(beforeCheck, at(2026, 10, 22, 19, 59)).contains("20:00"),
+                "待检查文案说明 20:00 边界");
+        eq(StudyGate.nextCheckBoundaryMillis(at(2026, 10, 22, 19, 59)),
+                at(2026, 10, 22, 20, 0).getTimeInMillis(), "下次检查精确排到 20:00");
+        eq(StudyGate.nextCheckBoundaryMillis(at(2026, 10, 22, 20, 0)),
+                at(2026, 10, 23, 0, 0).getTimeInMillis(), "20:00 后次日零点重置");
 
         StudyGate.Snapshot done = StudyGate.parse(
                 "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\","
@@ -443,20 +377,21 @@ public final class GuardTest {
                 "2026-10-22", stampMs("2026-10-22 20:10"));
         ok(legacy.checkedAtMs > 0, "checkedAt 只有日期也能解析（按 00:00 算）");
 
-        // 8.6 跨午夜闸门区间
-        // 跨午夜时"凌晨那半段"属于下一拍：date/checkedAt 都是次日推送的数据
-        System.out.println("  · 跨午夜区间");
+        // 8.6 跨午夜配置：现在只当展示信息，判定不看时段
+        System.out.println("  · 跨午夜配置不再影响判定");
         StudyGate.Snapshot cross = StudyGate.parse(
                 "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"23:00\","
               + "\"end\":\"01:00\",\"allDone\":false,\"checkedAt\":\"2026-10-22 23:20\"}",
                 "2026-10-22", stampMs("2026-10-22 23:30"));
-        ok(StudyGate.shouldHold(cross, at(2026, 10, 22, 23, 30)), "23:30 hold");
-        ok(!StudyGate.shouldHold(cross, at(2026, 10, 22, 12, 0)), "中午放行");
+        ok(StudyGate.shouldHold(cross, at(2026, 10, 22, 23, 30)), "23:30 没打完 → hold");
+        ok(StudyGate.shouldHold(cross, at(2026, 10, 22, 23, 45)),
+                "23:45 仍 hold（不再有 01:00 右开这种边界）");
         StudyGate.Snapshot crossAm = StudyGate.parse(
                 "{\"date\":\"2026-10-23\",\"enabled\":true,\"start\":\"23:00\","
               + "\"end\":\"01:00\",\"allDone\":false,\"checkedAt\":\"2026-10-23 00:20\"}",
                 "2026-10-23", stampMs("2026-10-23 00:30"));
-        ok(StudyGate.shouldHold(crossAm, at(2026, 10, 23, 0, 30)), "00:30 hold（凌晨段）");
+        ok(!StudyGate.shouldHold(crossAm, at(2026, 10, 23, 0, 30)),
+                "次日 00:30 不继承昨日延长冻结");
 
         // 8.7 与 Guard.blocked 的叠加语义（文档化行为：纯函数不含闸门）
         System.out.println("  · 与时间表的叠加");
@@ -467,13 +402,13 @@ public final class GuardTest {
 
         // 8.8 展示文案必须写明"放行"（否则被读成"这段时间冻结"）
         System.out.println("  · 放行文案");
-        eq(Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)), "放行 每天 22:00-23:00",
-                "普通规则带「放行」前缀");
-        ok(Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)).startsWith("放行"),
-                "★ 文案必须以「放行」开头，不能只写时间");
-        eq(Guard.allowText(new Rule(0x7F, new int[0][2])), "无放行时段 · 整天冻结",
+        eq(Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)), "冻结 每天 00:00-22:00、23:00-00:00（含跨午夜）",
+                "旧规则显示对应冻结时段");
+        ok(Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)).startsWith("冻结"),
+                "文案明确显示冻结时间");
+        eq(Guard.allowText(new Rule(0x7F, new int[0][2])), "全天冻结 · 不受学习闸门影响",
                 "空时段说清楚是整天冻结");
-        eq(Guard.allowText(new Rule(0, 22 * 60, 23 * 60)), "没选放行星期 · 整天冻结",
+        eq(Guard.allowText(new Rule(0, 22 * 60, 23 * 60)), "全天冻结",
                 "没选星期说清楚是整天冻结");
 
         // 8.9 卡片状态：过期必须显式报"保护已失效"，不能乐观地显示"到点继续冻结"
@@ -485,23 +420,23 @@ public final class GuardTest {
         ok(StudyGate.textOf(ok1, at(2026, 10, 22, 22, 30)).contains("生效中"),
                 "生效中文案");
 
-        // 区间外、未打卡、数据新鲜 → 待命
+        // 没到 22:00 也一样：没打完就已经在延长冻结，不再有"待命"这一态
         StudyGate.Snapshot fresh2000 = StudyGate.parse(
                 "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\","
               + "\"end\":\"23:00\",\"allDone\":false,\"checkedAt\":\"2026-10-22 20:00\"}",
                 "2026-10-22", stampMs("2026-10-22 20:00"));
-        eq(StudyGate.stateOf(fresh2000, at(2026, 10, 22, 20, 30)), StudyGate.ST_PENDING,
-                "20:30 未到区间 → 待命");
-        ok(StudyGate.textOf(fresh2000, at(2026, 10, 22, 20, 30)).contains("到点继续冻结"),
-                "待命文案");
+        eq(StudyGate.stateOf(fresh2000, at(2026, 10, 22, 20, 30)), StudyGate.ST_ACTIVE,
+                "20:30 未打卡 → 生效中（不挑时间）");
+        ok(StudyGate.textOf(fresh2000, at(2026, 10, 22, 20, 30)).contains("直接延长冻结"),
+                "文案写「直接延长冻结」");
 
-        // 超龄 90 分钟 → 保护已失效（关键：不能显示成"到点继续冻结"）
+        // 超龄 90 分钟 → 保护已失效（关键：不能显示成"还在延长冻结"）
         int stStale = StudyGate.stateOf(fresh2000, at(2026, 10, 22, 21, 30));
         eq(stStale, StudyGate.ST_STALE, "90 分钟没更新 → ST_STALE");
         String staleTxt = StudyGate.textOf(fresh2000, at(2026, 10, 22, 21, 30));
         ok(staleTxt.contains("保护已失效"), "★ 过期文案必须写「保护已失效」：" + staleTxt);
         ok(staleTxt.contains("90 分钟"), "过期文案要说明多久没更新：" + staleTxt);
-        ok(!staleTxt.contains("到点继续冻结"), "★ 过期时绝不能显示乐观文案");
+        ok(!staleTxt.contains("延长冻结"), "★ 过期时绝不能显示乐观文案");
 
         // 跨天 → 保护已失效，且要说清"进度还停在哪天"
         StudyGate.Snapshot yesterday = StudyGate.parse(
@@ -542,9 +477,9 @@ public final class GuardTest {
         ok(!new Rule(0x7F, 22 * 60, 23 * 60).withGate(false).gate, "withGate(false) 生效");
         ok(new Rule(0x7F, 22 * 60, 23 * 60).withGate(false).withGate(true).gate,
                 "withGate(true) 能改回来");
-        ok(Guard.allowText(new Rule(0x7F, 6 * 60, 0)).contains("关键应用"),
-                "★ 不参与闸门的要在文案里标成「关键应用」");
-        ok(!Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)).contains("关键应用"),
+        ok(Guard.allowText(new Rule(0x7F, 6 * 60, 0)).contains("不受学习闸门影响"),
+                "不参与闸门的要明确显示豁免");
+        ok(!Guard.allowText(new Rule(0x7F, 22 * 60, 23 * 60)).contains("不受学习闸门影响"),
                 "参与闸门的不加后缀");
         // 闸门命中时：只有 gate=true 的被冻
         Rule gateOn = new Rule(0x7F, 22 * 60, 23 * 60);
@@ -631,12 +566,132 @@ public final class GuardTest {
         ok(got == want, name + "（got=" + got + " want=" + want + "）");
     }
 
+    /* ---------- 禁忌卡（黑卡） ---------- */
+
+    private static void tabooCard() {
+        System.out.println("-- taboo card");
+        long now = 1_000_000_000L;
+        // 惩罚期未过 → hold；正好到期 → 放行
+        eq(StudyGate.tabooHolding(now, now + 1), true, "惩罚期内继续冻结");
+        eq(StudyGate.tabooHolding(now, now), false, "到点即放行");
+        eq(StudyGate.tabooHolding(now, 0), false, "没惩罚在身放行");
+        // shouldHold 为 false（目标打完）时，holding 由禁忌卡兜住 —— 逻辑在
+        // holding(Context) 里，离线只能验纯层：这里保证纯判定与 holding 的组合口径一致
+        eq(StudyGate.tabooHolding(now - 60_000L, now + 60_000L), true, "剩余 1 分钟也照样冻");
+
+        tabooLogParse();
+        tabooDaily();
+        tabooPending();
+    }
+
+    /** 黑卡并进卡组后，要按天判「今天做了没有」—— 判错就会天天显示已认领。 */
+    private static void tabooDaily() {
+        System.out.println("-- taboo daily");
+        String log = "[{\"name\":\"吃辣\",\"ts\":100},{\"name\":\"吃甜\",\"ts\":5000}]";
+        eq(StudyGate.tabooClaimedOn(log, "吃辣", 0, 1000), true, "区间内认过算今天做过");
+        eq(StudyGate.tabooClaimedOn(log, "吃辣", 1000, 9000), false, "昨天的认领不算今天");
+        eq(StudyGate.tabooClaimedOn(log, "吃甜", 0, 1000), false, "没认过的项不算（1/2）");
+        eq(StudyGate.tabooClaimedOn(log, "吃甜", 4000, 9000), true, "没认过的项不算（2/2）");
+        eq(StudyGate.tabooClaimedOn(log, "", 0, 9000), false, "空名不算");
+        eq(StudyGate.tabooClaimedOn("bad", "吃辣", 0, 9000), false, "坏 JSON 当没认过");
+        // 区间左闭右开：正好压在零点的算新的一天的第一笔
+        eq(StudyGate.tabooClaimedOn("[{\"name\":\"吃辣\",\"ts\":1000}]", "吃辣", 1000, 2000),
+                true, "左闭");
+        eq(StudyGate.tabooClaimedOn("[{\"name\":\"吃辣\",\"ts\":1000}]", "吃辣", 0, 1000),
+                false, "右开");
+
+        String dec = "{\"吃辣\":100,\"吃甜\":5000}";
+        eq(StudyGate.tabooDeclinedOn(dec, "吃辣", 0, 1000), true, "今天滑过没做");
+        eq(StudyGate.tabooDeclinedOn(dec, "吃辣", 1000, 9000), false, "昨天的没做不算今天");
+        eq(StudyGate.tabooDeclinedOn(dec, "吃甜", 0, 1000), false, "没滑过的项不算");
+        eq(StudyGate.tabooDeclinedOn("bad", "吃辣", 0, 9000), false, "坏 JSON 当没滑过");
+        eq(StudyGate.tabooDeclinedOn("{}", "吃辣", 0, 9000), false, "空表当没滑过");
+    }
+
+    /**
+     * 首页「打卡」按钮要把禁忌卡算进待办：禁忌卡并进队列后，
+     * 只数目标会出现"按钮说打完了、点进去还有黑卡"。
+     */
+    private static void tabooPending() {
+        System.out.println("-- taboo pending");
+        String items = "[\"吃辣\",\"吃甜\",\"吃油\"]";
+        eq(StudyGate.tabooItems(items).size(), 3, "解析出 3 张禁忌卡");
+        eq(StudyGate.tabooItems("[]").size(), 0, "空表没有卡");
+        eq(StudyGate.tabooItems("bad").size(), 0, "坏 JSON 当没有卡");
+        eq(StudyGate.tabooItems("[\"\",\"  \",\"吃辣\"]").size(), 1, "空名不计入");
+
+        // 一张都没答
+        eq(StudyGate.tabooPendingOn(items, "[]", "{}", 0, 1000), 3, "全没答");
+        // 认了一张、滑了一张 → 只剩一张
+        eq(StudyGate.tabooPendingOn(items, "[{\"name\":\"吃辣\",\"ts\":100}]",
+                "{\"吃甜\":200}", 0, 1000), 1, "认+没做各抵一张");
+        // 昨天的认领不算今天
+        eq(StudyGate.tabooPendingOn(items, "[{\"name\":\"吃辣\",\"ts\":100}]",
+                "{}", 1000, 2000), 3, "昨天的认领不抵今天的卡");
+        // 全答完
+        eq(StudyGate.tabooPendingOn(items,
+                "[{\"name\":\"吃辣\",\"ts\":100},{\"name\":\"吃甜\",\"ts\":300},{\"name\":\"吃油\",\"ts\":500}]",
+                "{}", 0, 1000), 0, "全答完为 0");
+        // 没有禁忌项 = 没有待办（不挡住"今天已经打完"）
+        eq(StudyGate.tabooPendingOn("[]", "[]", "{}", 0, 1000), 0, "没配禁忌卡时不影响打卡状态");
+
+        // 首页「打卡」按钮文案：学习联动并进来之后，"冻不冻"只能靠这颗按钮说
+        eq(StudyGate.checkinLabel(3, 0, StudyGate.ST_ACTIVE, true),
+                "打卡 · 还有 3 个目标 · 冻结中", "没打完 + 冻结中");
+        eq(StudyGate.checkinLabel(3, 2, StudyGate.ST_ACTIVE, true),
+                "打卡 · 还有 3 个目标 · 禁忌 2 · 冻结中", "目标+禁忌一起欠");
+        eq(StudyGate.checkinLabel(0, 2, StudyGate.ST_DONE, true),
+                "打卡 · 只剩禁忌 2 张 · 冻结中", "目标打完但禁忌还欠");
+        eq(StudyGate.checkinLabel(0, 0, StudyGate.ST_DONE, false),
+                "打卡 · 今天已经打完", "全清 + 不冻结");
+        eq(StudyGate.checkinLabel(0, 0, StudyGate.ST_STALE, false),
+                "打卡 · 今天已经打完 · ⚠ 联动过期", "★ 数据过期必须盖过\"打完了\"");
+        eq(StudyGate.checkinLabel(-1, 0, StudyGate.ST_NONE, false),
+                "打卡", "没有数据就退回光秃秃的「打卡」");
+    }
+
+    /** 认领流水的纯解析/裁剪：打卡历史页红色条目的数据层。 */
+    private static void tabooLogParse() {
+        System.out.println("-- taboo log parse");
+        // 空数据 / 坏 JSON 都当不存在
+        eq(StudyGate.tabooLogParse("[]", 20).size(), 0, "空流水");
+        eq(StudyGate.tabooLogParse("not json", 20).size(), 0, "坏 JSON 当不存在");
+        eq(StudyGate.tabooLogParse("{\"a\":1}", 20).size(), 0, "对象当不存在");
+        // 最新在前；空名/坏条目跳过；limit 截断
+        java.util.List<StudyGate.TabooClaim> got = StudyGate.tabooLogParse(
+                "[{\"name\":\"吃辣\",\"ts\":100},{\"name\":\"\",\"ts\":200},"
+                        + "\"junk\",{\"name\":\"吃甜\",\"ts\":300}]", 20);
+        eq(got.size(), 2, "空名与非对象条目跳过");
+        eq(got.get(0).name, "吃甜", "最新在前（1/2）");
+        eq(got.get(0).ts, 300L, "最新在前（2/2）");
+        eq(got.get(1).name, "吃辣", "次序保持");
+        eq(StudyGate.tabooLogParse(
+                "[{\"name\":\"吃辣\",\"ts\":100},{\"name\":\"吃甜\",\"ts\":300}]", 1).size(),
+                1, "limit 截断");
+        // 裁剪：只留最近 max 条，丢数组头（最旧的）
+        try {
+            org.json.JSONArray a = new org.json.JSONArray(
+                    "[{\"name\":\"旧1\",\"ts\":1},{\"name\":\"旧2\",\"ts\":2},{\"name\":\"新\",\"ts\":3}]");
+            org.json.JSONArray capped = StudyGate.capTabooLog(a, 2);
+            eq(capped.length(), 2, "裁剪到上限");
+            eq(capped.getJSONObject(0).optString("name"), "旧2", "丢的是最旧的");
+            eq(capped.getJSONObject(1).optString("name"), "新", "最新的保留");
+            eq(StudyGate.capTabooLog(new org.json.JSONArray("[]"), 2).length(), 0, "空数组不裁");
+        } catch (Throwable t) {
+            ok(false, "capTabooLog 异常: " + t);
+        }
+    }
+
     private static void eq(boolean got, boolean want, String name) {
         ok(got == want, name + "（got=" + got + " want=" + want + "）");
     }
 
     private static void eq(String got, String want, String name) {
         ok(got != null && got.equals(want), name + "（got=" + got + " want=" + want + "）");
+    }
+
+    private static void eq(long got, long want, String name) {
+        ok(got == want, name + "（got=" + got + " want=" + want + "）");
     }
 
     private static void ok(boolean cond, String name) {

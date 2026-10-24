@@ -1,11 +1,23 @@
 package com.afs.guard;
 
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.TimePickerDialog;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -35,26 +47,26 @@ public class AppListActivity extends Activity {
 
     private static final int REQ_PICK = 22;
 
-    private static final int BG = 0xFFF1F2F3;
+    private static final int BG = 0xFFF3F4F6;
     private static final int SURFACE = 0xFFFFFFFF;
-    private static final int TEXT = 0xFF18191C;
-    private static final int TEXT2 = 0xFF61666D;
-    private static final int BRAND = 0xFF00AEEC;
-    private static final int RED = 0xFFF85A54;
-    private static final int GREEN = 0xFF20A162;
-    private static final int LINE = 0xFFE3E5E7;
+    private static final int TEXT = 0xFF14161A;
+    private static final int TEXT2 = 0xFF5F6570;
+    private static final int BRAND = 0xFF2F6FED;
+    private static final int RED = 0xFFD93A3A;
+    private static final int GREEN = 0xFF12A150;
+    private static final int LINE = 0xFFE3E6EB;
 
     // 全部屏蔽时整页切深色（跟首页同一套）
-    private static final int BG_DARK      = 0xFF0D0D0F;
-    private static final int SURFACE_DARK  = 0xFF1A1A1D;
-    private static final int TEXT_DARK     = 0xFFEDEDEF;
-    private static final int TEXT2_DARK    = 0xFF9B9BA2;
-    private static final int OFF_DARK      = 0xFF2A2A2E;
+    private static final int BG_DARK      = 0xFF0B0C10;
+    private static final int SURFACE_DARK  = 0xFF16171C;
+    private static final int TEXT_DARK     = 0xFFF2F3F5;
+    private static final int TEXT2_DARK    = 0xFF9096A1;
+    private static final int OFF_DARK      = 0xFF262932;
     private static final int OFF_LIGHT     = 0xFFE3E5E7;
     private static final int RED_DARK      = 0xFFFF7B72;
     private static final int GREEN_DARK    = 0xFF3DDC84;
     /** 组卡片里子行的底色：比组头深一档，做出"嵌在里面"的层级。 */
-    private static final int CHILD_DARK    = 0xFF141417;
+    private static final int CHILD_DARK    = 0xFF121317;
 
     /** 每一行的句柄，tick 只更新状态文字，不整页重建（保住滚动位置）。 */
     private static final class Row {
@@ -64,6 +76,8 @@ public class AppListActivity extends Activity {
         LinearLayout box;
         TextView name;
         TextView state;
+        /** 冻结特效：状态字呼吸动画（null = 没在闪）。 */
+        ValueAnimator frost;
     }
 
     /**
@@ -83,6 +97,8 @@ public class AppListActivity extends Activity {
         TextView names;
         TextView state;
         TextView arrow;
+        /** 冻结特效：状态字呼吸动画（null = 没在闪）。 */
+        ValueAnimator frost;
     }
 
     private ScrollView scroll;
@@ -94,6 +110,7 @@ public class AppListActivity extends Activity {
     private Button pkgBtn;
     private Button batchBtn;
     private Button keyBtn;
+    private Button applyBtn;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final java.util.List<Row> rows = new ArrayList<>();
@@ -135,7 +152,7 @@ public class AppListActivity extends Activity {
         root.addView(title);
 
         hint = new TextView(this);
-        hint.setText("点一行改它的放行时段，长按从黑名单移除。");
+        hint.setText("点一行改它的冻结时间，长按从黑名单移除。");
         hint.setTextSize(12);
         hint.setTextColor(TEXT2);
         hint.setPadding(0, dp(4), 0, dp(12));
@@ -231,6 +248,49 @@ public class AppListActivity extends Activity {
         klp.topMargin = dp(6);
         root.addView(keyBtn, klp);
 
+        // 立即应用：把当前这套规则立刻落地（从主页搬过来 —— 配完名单就地生效，
+        // 不用再退回主页找按钮）。★ 已与「立即检测」合并：先拉一次最新的学习台数据
+        // （绕过 10 分钟节流），再执行 Guard.apply —— 打完结怎么还冻着，点这一下就够。
+        applyBtn = new Button(this);
+        applyBtn.setText("立即应用");
+        applyBtn.setAllCaps(false);
+        applyBtn.setTextSize(14);
+        applyBtn.setTextColor(BRAND);
+        applyBtn.setBackgroundColor(SURFACE);
+        applyBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                applyBtn.setEnabled(false);
+                applyBtn.setText("检测并应用中…");
+                Config.arm(AppListActivity.this);   // 确认过了，宽限立即结束
+                new Thread(new Runnable() {
+                    public void run() {
+                        try {
+                            StudyGate.refreshNow(AppListActivity.this);
+                        } catch (Throwable t) {
+                            // 网络挂了也要继续落地：用旧快照应用，不能把入口焊死
+                            android.util.Log.w(Guard.TAG, "refreshNow failed: " + t);
+                        }
+                        final String msg = Guard.apply(AppListActivity.this);
+                        runOnUiThread(new Runnable() {
+                            public void run() {
+                                applyBtn.setEnabled(true);
+                                applyBtn.setText("立即应用");
+                                int nl = msg.indexOf('\n');
+                                // 明细太长，只弹摘要行
+                                toast((nl > 0 ? msg.substring(0, nl) : msg)
+                                        + " · 已重新检测");
+                                rebuild();
+                            }
+                        });
+                    }
+                }, "afs-detect-apply").start();
+            }
+        });
+        LinearLayout.LayoutParams al2 = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        al2.topMargin = dp(18);   // 和上面的配置项拉开一点：这是「动手」不是「配置」
+        root.addView(applyBtn, al2);
+
         setContentView(scroll);
         rebuild();
     }
@@ -238,6 +298,10 @@ public class AppListActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (themeApplied && darkState != Ui.isDark(this)) {
+            recreate();
+            return;
+        }
         rebuild();
         handler.removeCallbacks(tick);
         handler.post(tick);
@@ -247,6 +311,32 @@ public class AppListActivity extends Activity {
     protected void onPause() {
         super.onPause();
         handler.removeCallbacks(tick);
+        // 页面切走就停呼吸：动画挂在 Activity 的 UI 线程上，留着白耗电
+        for (Row r : rows) {
+            stopFrost(r.state, r.frost);
+            r.frost = null;
+            stopIce(r.box);
+        }
+        for (Group g : groups) {
+            stopFrost(g.state, g.frost);
+            g.frost = null;
+            stopIce(g.card);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        for (Row r : rows) {
+            stopFrost(r.state, r.frost);
+            r.frost = null;
+            stopIce(r.box);
+        }
+        for (Group g : groups) {
+            stopFrost(g.state, g.frost);
+            g.frost = null;
+            stopIce(g.card);
+        }
     }
 
     @Override
@@ -292,7 +382,7 @@ public class AppListActivity extends Activity {
     /* ==================== 列表 ==================== */
 
     private void rebuild() {
-        applyDark(true);   // 黑名单页固定深色，不跟随屏蔽状态
+        applyDark(Ui.isDark(this));   // 跟随全局主题（默认深色）
         surfaces.clear();
         rows.clear();
         groups.clear();
@@ -453,18 +543,6 @@ public class AppListActivity extends Activity {
         }
     }
 
-    /** 改完/套用完之后，把结果那张卡展开 —— 用户正想看它变成什么样。 */
-    private void revealGroupOf(String pkg) {
-        for (Group g : groups) {
-            if (g.pkgs.size() > 1 && g.pkgs.contains(pkg)) {
-                expandedKeys.add(g.key);
-                g.body.setVisibility(View.VISIBLE);
-                g.arrow.setText("▾");
-                return;
-            }
-        }
-    }
-
     /** 组卡上的名字预览："抖音、快手、小红书 等"。 */
     private String namesLine(java.util.List<String> pkgs) {
         StringBuilder sb = new StringBuilder();
@@ -553,9 +631,278 @@ public class AppListActivity extends Activity {
         return true;
     }
 
+    /* ==================== 冻结特效 ==================== */
+
+    /**
+     * 冻结单元格的冰壳：深冰蓝渐变 + 冰白描边圆角，上面撒会动的真·冰块，
+     * 底部按「连续冻结时长」积雪（满刻度 24 小时，堆满整个格子）。
+     * 夸张是故意的 —— 列表一长，一个小红字根本看不见"谁正被冻着"。
+     */
+    private Drawable iceBg() {
+        return new IceBgDrawable(dp(10), dp(56), dp(2));
+    }
+
+    /* ---------- 冻结起点登记（积雪数据源） ---------- */
+
+    /** 冻结起点存 SP：页面切走再回来、甚至进程重启，雪都不化（记录还在）。 */
+    private static SharedPreferences frostSp(Context c) {
+        return c.getSharedPreferences("frost_since", Context.MODE_PRIVATE);
+    }
+
+    private static long frostSince(Context c, String pkg) {
+        return frostSp(c).getLong("fs_" + pkg, 0L);
+    }
+
+    private static void frostMark(Context c, String pkg, long now) {
+        SharedPreferences sp = frostSp(c);
+        if (sp.getLong("fs_" + pkg, 0L) == 0L) {
+            sp.edit().putLong("fs_" + pkg, now).apply();
+        }
+    }
+
+    private static void frostClear(Context c, String pkg) {
+        frostSp(c).edit().remove("fs_" + pkg).apply();
+    }
+
+    /** 冻结时长的人话后缀：1 小时内报分，往上报时/分；不足 1 分钟不显示。 */
+    private static String frostDur(long ms) {
+        long min = ms / 60000L;
+        if (min < 1) {
+            return "";
+        }
+        if (min < 60) {
+            return "· " + min + "分";
+        }
+        long h = min / 60;
+        long m = min % 60;
+        return m == 0 ? "· " + h + "时" : "· " + h + "时" + m + "分";
+    }
+
+    /** 冰壳 + 冰块 + 积雪。位置用相对坐标，跟着格子大小走，不挑行高。 */
+    private static final class IceBgDrawable extends Drawable implements Runnable {
+
+        /** 积雪满刻度：连续冻结 24 小时，雪堆满整格。 */
+        private static final long SNOW_FULL_MS = 24L * 60 * 60 * 1000;
+        /** 冰块飘动帧间隔（毫秒）—— 相位按真实时间取，页面切回来动画也连续。 */
+        private static final long DRIFT_INTERVAL_MS = 40L;
+
+        /**
+         * 每块冰：x, y, 边长, 基准旋转角, 飘动幅度, 漂速。
+         * x/y/边长占格子宽/高的比例；幅度是水平漂移占格宽的比例；漂速单位是"圈/秒"。
+         */
+        private static final float[][] CUBES = {
+                {0.60f, 0.12f, 0.42f, 14f, 0.045f, 0.11f},
+                {0.78f, 0.42f, 0.34f, -22f, 0.035f, 0.08f},
+                {0.52f, 0.58f, 0.26f, 31f, 0.055f, 0.13f},
+                {0.88f, 0.10f, 0.24f, -9f, 0.030f, 0.10f},
+                {0.70f, 0.72f, 0.20f, 8f, 0.060f, 0.15f},
+                {0.44f, 0.30f, 0.17f, -27f, 0.040f, 0.09f},
+        };
+
+        private final GradientDrawable grad;
+        private final float radius;
+        private final float maxCube;
+        private final float stroke;
+        private final Handler ui = new Handler(Looper.getMainLooper());
+
+        private long frozenMs;      // 已连续冻结的毫秒数 → 积雪高度
+        private boolean drifting;   // 冰块飘动循环开关
+        private long anchorMs;      // 飘动相位锚点（开始飘的那一刻）
+
+        IceBgDrawable(float radiusPx, float maxCubePx, float strokePx) {
+            grad = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                    new int[]{0xFF0C3450, 0xFF16608C});
+            grad.setStroke((int) strokePx, 0xFF9FE0FF);
+            this.radius = radiusPx;
+            this.maxCube = maxCubePx;
+            this.stroke = strokePx;
+            anchorMs = System.currentTimeMillis();
+        }
+
+        /** 刷新积雪高度（每秒由 refreshStates 调，雪随冻结时长慢慢长起来）。 */
+        void setFrozenMs(long ms) {
+            if (ms < 0) {
+                ms = 0;
+            }
+            if (ms != frozenMs) {
+                frozenMs = ms;
+                invalidateSelf();
+            }
+        }
+
+        /** 让冰块飘起来（幂等：已经在飘就不管）。 */
+        void startDrift() {
+            if (!drifting) {
+                drifting = true;
+                anchorMs = System.currentTimeMillis();
+                ui.post(this);
+            }
+        }
+
+        /** 停飘 —— 页面切走/解冻时调用，Handler 循环不能再空转耗电。 */
+        void stopDrift() {
+            drifting = false;
+            ui.removeCallbacks(this);
+        }
+
+        @Override
+        public void run() {
+            if (!drifting) {
+                return;
+            }
+            invalidateSelf();
+            ui.postDelayed(this, DRIFT_INTERVAL_MS);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            Rect b = getBounds();
+            if (b.isEmpty()) {
+                return;
+            }
+            grad.setBounds(b);
+            grad.draw(canvas);
+
+            // 圆角裁剪：积雪和冰块都不能糊出描边外
+            canvas.save();
+            Path clip = new Path();
+            clip.addRoundRect(new RectF(b), radius, radius, Path.Direction.CW);
+            canvas.clipPath(clip);
+
+            float h = b.height();
+            float w = b.width();
+            float base = Math.min(h, maxCube);   // 冰块别在大组卡上疯长
+            float t = (System.currentTimeMillis() - anchorMs) / 1000f;
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            for (float[] c : CUBES) {
+                float size = base * c[2];
+                // 漂移：水平 sin + 垂直 cos，各冰块速度/相位不同，互不同步
+                float phase = t * (float) Math.PI * 2f * c[5];
+                float dx = (float) Math.sin(phase) * c[4] * w;
+                float dy = (float) Math.cos(phase * 0.8f) * c[4] * 0.6f * h;
+                float rot = c[3] + (float) Math.sin(phase) * 7f;
+                float cx = b.left + w * c[0] + dx;
+                float cy = b.top + h * c[1] + dy;
+                canvas.save();
+                canvas.translate(cx, cy);
+                canvas.rotate(rot, size / 2f, size / 2f);
+
+                // 冰体：半透明冰蓝
+                p.setStyle(Paint.Style.FILL);
+                p.setColor(0x52BFEAFF);
+                canvas.drawRoundRect(0, 0, size, size, size * 0.22f, size * 0.22f, p);
+
+                // 棱边：冰白描边
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(Math.max(1.5f, size * 0.06f));
+                p.setColor(0xA9E8FAFF);
+                canvas.drawRoundRect(0, 0, size, size, size * 0.22f, size * 0.22f, p);
+
+                // 高光：左上一条短斜线，做出玻璃感
+                p.setStrokeWidth(Math.max(1.5f, size * 0.09f));
+                p.setColor(0x8CFFFFFF);
+                canvas.drawLine(size * 0.22f, size * 0.62f, size * 0.42f, size * 0.22f, p);
+
+                canvas.restore();
+            }
+
+            drawSnow(canvas, b, w, h);
+            canvas.restore();
+        }
+
+        /** 底部积雪：高度 = 冻结时长 / 24h，雪面起几个鼓包，堆满 24 小时铺满全格。 */
+        private void drawSnow(Canvas canvas, Rect b, float w, float h) {
+            float frac = frozenMs >= SNOW_FULL_MS ? 1f : frozenMs / (float) SNOW_FULL_MS;
+            if (frac <= 0f) {
+                return;
+            }
+            float snowH = frac * h;
+            float amp = Math.min(h * 0.07f, snowH * 0.4f);   // 鼓包起伏，别太夸张
+            float baseY = b.bottom - snowH;
+            int k = 4;                                       // 沿宽度 4 个鼓包
+            float seg = w / k;
+
+            Path pile = new Path();
+            pile.moveTo(b.left, b.bottom);
+            pile.lineTo(b.left, baseY + amp * 0.4f);
+            for (int i = 0; i < k; i++) {
+                float x0 = b.left + seg * i;
+                // 中点鼓起来，交接处凹一点，交替错开显得自然
+                float peak = baseY + (i % 2 == 0 ? -amp : amp * 0.5f);
+                pile.quadTo(x0 + seg * 0.5f, peak, x0 + seg, baseY + amp * 0.4f);
+            }
+            pile.lineTo(b.right, b.bottom);
+            pile.close();
+
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(0xE6F7FDFF);                          // 带一点冰蓝的雪白
+            canvas.drawPath(pile, p);
+
+            // 雪面顶部一条淡蓝阴影，做出厚度
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(Math.max(1.5f, h * 0.015f));
+            p.setColor(0x59A8D8FF);
+            Path top = new Path();
+            top.moveTo(b.left, baseY + amp * 0.4f);
+            for (int i = 0; i < k; i++) {
+                float x0 = b.left + seg * i;
+                float peak = baseY + (i % 2 == 0 ? -amp : amp * 0.5f);
+                top.quadTo(x0 + seg * 0.5f, peak, x0 + seg, baseY + amp * 0.4f);
+            }
+            canvas.drawPath(top, p);
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+            grad.setAlpha(alpha);
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+            grad.setColorFilter(colorFilter);
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
+    }
+
+    /** 冻结状态字的呼吸：0.35 ↔ 1.0 来回闪，谁在冻着一目了然。 */
+    private ValueAnimator frostAnim(final TextView tv) {
+        ValueAnimator a = ValueAnimator.ofFloat(0.35f, 1f);
+        a.setDuration(850);
+        a.setRepeatMode(ValueAnimator.REVERSE);
+        a.setRepeatCount(ValueAnimator.INFINITE);
+        a.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            public void onAnimationUpdate(ValueAnimator anim) {
+                tv.setAlpha((Float) anim.getAnimatedValue());
+            }
+        });
+        a.start();
+        return a;
+    }
+
+    /** 停掉呼吸动画并把透明度复原 —— 松手就别再闪。 */
+    private void stopFrost(TextView tv, ValueAnimator anim) {
+        if (anim != null) {
+            anim.cancel();
+        }
+        tv.setAlpha(1f);
+    }
+
+    /** 停掉视图背景里冰壳的飘动循环 —— 解冻/切页时必须，否则 Handler 空转耗电。 */
+    private static void stopIce(View v) {
+        Drawable d = v == null ? null : v.getBackground();
+        if (d instanceof IceBgDrawable) {
+            ((IceBgDrawable) d).stopDrift();
+        }
+    }
+
     /** 每秒跑：刷每行状态 + 刷按钮可用性。主题固定深色。 */
     private void refreshStates() {
-        boolean dark = true;   // 黑名单页固定深色
+        boolean dark = Ui.isDark(this);   // 跟随全局主题（默认深色）
         applyDark(dark);
 
         int text2 = dark ? TEXT2_DARK : TEXT2;
@@ -564,9 +911,14 @@ public class AppListActivity extends Activity {
         int surface = dark ? SURFACE_DARK : SURFACE;
         int childSurface = dark ? CHILD_DARK : SURFACE;
 
+        // 冰蓝色（冻结特效专用）
+        final int iceText = 0xFF9FDCFF;
+        final int iceName = 0xFFEAF8FF;
+
         // 这一秒的冻结/安装快照：行和组头共用，同一个应用只算一遍
         java.util.Map<String, Boolean> blockedOf = new java.util.HashMap<>();
         java.util.Map<String, Boolean> installedOf = new java.util.HashMap<>();
+        final long now = System.currentTimeMillis();
 
         for (Row r : rows) {
             String label = Guard.labelOf(getPackageManager(), r.pkg);
@@ -575,19 +927,49 @@ public class AppListActivity extends Activity {
             blockedOf.put(r.pkg, blocked);
             installedOf.put(r.pkg, installed);
 
-            r.name.setText(label);
-            r.name.setTextColor(dark ? TEXT_DARK : TEXT);
+            r.name.setText(blocked ? "❄ " + label : label);
+            r.name.setTextColor(blocked ? iceName : (dark ? TEXT_DARK : TEXT));
             if (!installed) {
+                stopFrost(r.state, r.frost);
+                r.frost = null;
+                frostClear(this, r.pkg);
+                stopIce(r.box);
                 r.state.setText("未安装");
                 r.state.setTextColor(text2);
+                r.state.setTypeface(Typeface.DEFAULT);
+                r.box.setBackgroundColor(r.child ? childSurface : surface);
             } else if (blocked) {
-                r.state.setText("冻结中");
-                r.state.setTextColor(red);
+                // 冻结起点：第一次看到它被冻就记下时刻，雪从那一刻开始堆
+                long since = frostSince(this, r.pkg);
+                if (since <= 0) {
+                    since = now;
+                    frostMark(this, r.pkg, now);
+                }
+                boolean scheduled = Guard.blocked(RuleStore.get(this, r.pkg),
+                        java.util.Calendar.getInstance());
+                r.state.setText((scheduled ? "🧊 冻结中 " : "学习闸门冻结 ")
+                        + frostDur(now - since));
+                r.state.setTextColor(iceText);
+                r.state.setTypeface(Typeface.DEFAULT_BOLD);
+                if (!(r.box.getBackground() instanceof IceBgDrawable)) {
+                    r.box.setBackground(iceBg());
+                }
+                IceBgDrawable ice = (IceBgDrawable) r.box.getBackground();
+                ice.setFrozenMs(now - since);
+                ice.startDrift();
+                if (r.frost == null) {
+                    r.frost = frostAnim(r.state);
+                }
             } else {
+                stopFrost(r.state, r.frost);
+                r.frost = null;
+                frostClear(this, r.pkg);
+                stopIce(r.box);
                 r.state.setText("放行中");
                 r.state.setTextColor(green);
+                r.state.setTypeface(Typeface.DEFAULT);
+                r.box.setBackgroundColor(r.child ? childSurface : surface);
             }
-            r.box.setBackgroundColor(r.child ? childSurface : surface);
         }
 
         // 组头只报汇总："全部冻结 / 全部放行 / 5/10 冻结"
@@ -605,18 +987,54 @@ public class AppListActivity extends Activity {
                 }
             }
             g.title.setTextColor(dark ? TEXT_DARK : TEXT);
+            boolean allFrozen = n > 0 && b == n;
             if (n == 0) {
+                stopFrost(g.state, g.frost);
+                g.frost = null;
+                stopIce(g.card);
                 g.state.setText("未安装");
                 g.state.setTextColor(text2);
-            } else if (b == 0) {
-                g.state.setText("全部放行");
-                g.state.setTextColor(green);
-            } else if (b == n) {
-                g.state.setText("全部冻结");
-                g.state.setTextColor(red);
+                g.state.setTypeface(Typeface.DEFAULT);
+                g.card.setBackgroundColor(surface);
+            } else if (allFrozen) {
+                // 组卡积雪：取成员里最早被冻的那个 —— 谁冻得最久，雪就按谁算
+                long earliest = 0;
+                for (String p : g.pkgs) {
+                    Boolean bl = blockedOf.get(p);
+                    if (bl == null || !bl) {
+                        continue;
+                    }
+                    long s = frostSince(this, p);
+                    if (s > 0 && (earliest == 0 || s < earliest)) {
+                        earliest = s;
+                    }
+                }
+                g.state.setText("🧊 全部冻结"
+                        + (earliest > 0 ? " " + frostDur(now - earliest) : ""));
+                g.state.setTextColor(iceText);
+                g.state.setTypeface(Typeface.DEFAULT_BOLD);
+                if (!(g.card.getBackground() instanceof IceBgDrawable)) {
+                    g.card.setBackground(iceBg());
+                }
+                IceBgDrawable ice = (IceBgDrawable) g.card.getBackground();
+                ice.setFrozenMs(earliest > 0 ? now - earliest : 0);
+                ice.startDrift();
+                if (g.frost == null) {
+                    g.frost = frostAnim(g.state);
+                }
             } else {
-                g.state.setText(b + "/" + n + " 冻结");
-                g.state.setTextColor(red);
+                stopFrost(g.state, g.frost);
+                g.frost = null;
+                stopIce(g.card);
+                g.state.setTypeface(Typeface.DEFAULT);
+                if (b == 0) {
+                    g.state.setText("全部放行");
+                    g.state.setTextColor(green);
+                } else {
+                    g.state.setText(b + "/" + n + " 冻结");
+                    g.state.setTextColor(red);
+                }
+                g.card.setBackgroundColor(surface);
             }
         }
 
@@ -637,7 +1055,7 @@ public class AppListActivity extends Activity {
         keyBtn.setBackgroundColor(surface);
         keyBtn.setAlpha(1f);
 
-        hint.setText("点一行改它的放行时段。时段相同的一批应用会折成一张卡，点卡片展开明细。"
+        hint.setText("点一行改它的冻结时间。时段相同的一批应用会折成一张卡，点卡片展开明细。"
                 + "只进不出：加入后不能移出（刚加的 10 分钟内除外）。");
         hint.setTextColor(text2);
         empty.setTextColor(text2);
@@ -664,8 +1082,12 @@ public class AppListActivity extends Activity {
         } catch (Throwable ignored) {
         }
         title.setTextColor(d ? TEXT_DARK : TEXT);
+        // 卡片改成大圆角：黑名单是一组一组的，直角块在深色底上显得很硬
         for (View v : surfaces) {
-            v.setBackgroundColor(d ? SURFACE_DARK : SURFACE);
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(d ? SURFACE_DARK : SURFACE);
+            bg.setCornerRadius(dp(18));
+            v.setBackground(bg);
         }
         for (TextView v : labels) {
             v.setTextColor(d ? TEXT2_DARK : TEXT2);
@@ -689,6 +1111,8 @@ public class AppListActivity extends Activity {
         private final android.widget.CheckBox gateCb;
         /** 批量套用时不显示闸门开关：改时段不该顺手改关键名单。 */
         private final boolean allowGateEdit;
+        private Rule legacy;
+        private boolean edited;
 
         RuleEditor(Rule start) {
             this(start, true);
@@ -700,6 +1124,12 @@ public class AppListActivity extends Activity {
          */
         RuleEditor(Rule start, boolean allowGateEdit) {
             this.allowGateEdit = allowGateEdit;
+            Rule converted = start.freezeEditorRule();
+            if (converted == null) {
+                legacy = start;
+                converted = new Rule(Rule.ALL_DAYS, new int[0][2], start.gate, true);
+            }
+            start = converted;
             mask = new int[] { start.days };
             for (int i = 0; i < start.windowCount(); i++) {
                 wins.add(new int[] { start.startAt(i), start.endAt(i) });
@@ -712,8 +1142,15 @@ public class AppListActivity extends Activity {
             daysText = new TextView(AppListActivity.this);
             daysText.setTextSize(12);
             daysText.setTextColor(TEXT2);
-            daysText.setText("放行星期（没选中的日子整天冻结）");
+            daysText.setText("冻结星期（未选中的日子不定时冻结）");
             box.addView(daysText);
+            if (legacy != null) {
+                TextView note = new TextView(AppListActivity.this);
+                note.setText("现有规则保持生效：" + legacy.freezeSummary() + "\n设置新的冻结星期和时间后保存，才会替换原规则。未修改时间则保留原规则。");
+                note.setTextColor(TEXT2);
+                note.setTextSize(12);
+                box.addView(note);
+            }
 
             // 速选：最常用的几条规则。批量给十几个应用设时段时，
             // 逐个点 7 个星期 + 拨两次时间太费手，点一下就够。
@@ -722,7 +1159,7 @@ public class AppListActivity extends Activity {
             LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             qlp.topMargin = dp(8);
-            String[] qLabels = { "每天 22-23", "每天 21-23", "全天冻结" };
+            String[] qLabels = { "每天冻 22-23", "每天冻 21-23", "全天冻结" };
             for (int i = 0; i < qLabels.length; i++) {
                 final int which = i;
                 Button qb = new Button(AppListActivity.this);
@@ -757,6 +1194,7 @@ public class AppListActivity extends Activity {
                 b.setPadding(0, 0, 0, 0);
                 b.setOnClickListener(new View.OnClickListener() {
                     public void onClick(View v) {
+                        edited = true;
                         mask[0] ^= (1 << idx);
                         styleDays();
                     }
@@ -784,16 +1222,14 @@ public class AppListActivity extends Activity {
             // 是否受学习闸门牵连。默认值按放行时长自动判断（≤6 小时/天算娱乐），
             // 这里让用户能改 —— 不然微信这种每天放行 18 小时的工具也会被锁。
             gateCb = new android.widget.CheckBox(AppListActivity.this);
-            gateCb.setText("参与学习闸门（目标没完成时也跟着延长冻结）");
+            gateCb.setText("参与学习闸门（只有关键应用可豁免）");
             gateCb.setTextSize(13);
             gateCb.setTextColor(TEXT);
             gateCb.setChecked(start.gate);
             gateCb.setPadding(0, dp(12), 0, 0);
             if (allowGateEdit) {
-                box.addView(gateCb);
                 TextView gateHint = new TextView(AppListActivity.this);
-                gateHint.setText("工作/通讯类可以去黑名单页的「🔒 关键应用名单」里勾上，"
-                        + "勾了就只按自己的时段冻结，学习目标不再延长它");
+                gateHint.setText("只有关键应用不受学习闸门影响；其他应用在 20:00 检查后可能延长冻结。");
                 gateHint.setTextSize(11);
                 gateHint.setTextColor(TEXT2);
                 gateHint.setPadding(0, dp(4), 0, 0);
@@ -814,11 +1250,12 @@ public class AppListActivity extends Activity {
                 dayBtns[k].setTextColor(on ? 0xFFFFFFFF : TEXT2);
                 dayBtns[k].setBackgroundColor(on ? BRAND : LINE);
             }
-            daysText.setText("放行星期 " + Rule.daysText(mask[0]));
+            daysText.setText("冻结星期 " + Rule.daysText(mask[0]));
         }
 
         /** 0=每天 22-23 / 1=每天 21-23 / 2=全天冻结（一天都不选）。 */
         private void applyPreset(int which) {
+            edited = true;
             wins.clear();
             if (which == 0) {
                 mask[0] = Rule.ALL_DAYS;
@@ -827,7 +1264,8 @@ public class AppListActivity extends Activity {
                 mask[0] = Rule.ALL_DAYS;
                 wins.add(new int[] { 21 * 60, 23 * 60 });
             } else {
-                mask[0] = 0;   // 一天都不选 = 整天冻结
+                mask[0] = Rule.ALL_DAYS;
+                wins.add(new int[] { 0, 0 });
             }
             // 三个预设都是"娱乐型"规则，勾上闸门才符合直觉
             gateCb.setChecked(true);
@@ -839,7 +1277,7 @@ public class AppListActivity extends Activity {
             winBox.removeAllViews();
             if (wins.isEmpty()) {
                 TextView none = new TextView(AppListActivity.this);
-                none.setText("没有任何时段 = 整天冻结");
+                none.setText("没有冻结时段 = 不定时冻结（学习闸门仍可生效）");
                 none.setTextSize(12);
                 none.setTextColor(TEXT2);
                 winBox.addView(none);
@@ -865,7 +1303,8 @@ public class AppListActivity extends Activity {
                     public void onClick(View v) {
                         pickWindow(wins, idx, new Runnable() {
                             public void run() {
-                                refreshWins();
+                                edited = true;
+                            refreshWins();
                             }
                         });
                     }
@@ -878,6 +1317,7 @@ public class AppListActivity extends Activity {
                 del.setAllCaps(false);
                 del.setOnClickListener(new View.OnClickListener() {
                     public void onClick(View v) {
+                        edited = true;
                         wins.remove(idx);
                         refreshWins();
                     }
@@ -897,6 +1337,7 @@ public class AppListActivity extends Activity {
                 public void onClick(View v) {
                     pickWindow(wins, -1, new Runnable() {
                         public void run() {
+                            edited = true;
                             refreshWins();
                         }
                     });
@@ -906,7 +1347,7 @@ public class AppListActivity extends Activity {
                     ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
             alp2.topMargin = dp(6);
             winBox.addView(add, alp2);
-            winText.setText("放行时段　" + joinWins(wins));
+            winText.setText("冻结时间　" + joinWins(wins));
         }
 
         Rule result() {
@@ -915,7 +1356,8 @@ public class AppListActivity extends Activity {
                 w[i][0] = wins.get(i)[0];
                 w[i][1] = wins.get(i)[1];
             }
-            return new Rule(mask[0], w, gateCb.isChecked());
+            if (legacy != null && !edited) return legacy.withGate(gateCb.isChecked());
+            return new Rule(mask[0], w, gateCb.isChecked(), true);
         }
     }
 
@@ -936,11 +1378,10 @@ public class AppListActivity extends Activity {
                     public void onClick(DialogInterface d, int which) {
                         Rule r = ed.result();
                         if (r.days == 0) {
-                            toast("一天都没选 = 整天冻结，已保存");
+                            toast("未选择冻结星期，不定时冻结，已保存");
                         }
                         RuleStore.put(AppListActivity.this, pkg, r);
                         rebuild();
-                        revealGroupOf(pkg);
                         applyInBackground();
                     }
                 })
@@ -977,76 +1418,12 @@ public class AppListActivity extends Activity {
      * 多选同样自己画行：ColorOS 上 setMultiChoiceItems 的项 clickable=false。
      */
     private void openKeyApps() {
-        final java.util.List<String> pkgs =
-                new java.util.ArrayList<>(RuleStore.packages(this));
-        if (pkgs.isEmpty()) {
-            toast("黑名单是空的，先添加应用");
-            return;
-        }
-        final String[] labels = new String[pkgs.size()];
-        final boolean[] checked = new boolean[pkgs.size()];
-        final Set<String> keys = RuleStore.keyApps(this);
-        for (int i = 0; i < pkgs.size(); i++) {
-            String p = pkgs.get(i);
-            labels[i] = Guard.labelOf(getPackageManager(), p);
-            checked[i] = keys.contains(p);
-        }
-
-        android.widget.ArrayAdapter<String> ad =
-                new android.widget.ArrayAdapter<String>(this, 0, labels) {
-                    @Override
-                    public View getView(final int pos, View convert, ViewGroup parent) {
-                        LinearLayout row = new LinearLayout(AppListActivity.this);
-                        row.setOrientation(LinearLayout.HORIZONTAL);
-                        row.setGravity(Gravity.CENTER_VERTICAL);
-                        row.setPadding(dp(18), dp(12), dp(18), dp(12));
-
-                        final android.widget.CheckBox cb =
-                                new android.widget.CheckBox(AppListActivity.this);
-                        cb.setChecked(checked[pos]);
-                        cb.setClickable(false);
-                        cb.setFocusable(false);
-                        row.addView(cb);
-
-                        TextView tv = new TextView(AppListActivity.this);
-                        tv.setText(labels[pos]);
-                        tv.setTextSize(15);
-                        tv.setTextColor(checked[pos] ? 0xFF4CAF50 : TEXT);
-                        tv.setPadding(dp(10), 0, 0, 0);
-                        row.addView(tv, new LinearLayout.LayoutParams(0,
-                                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-                        row.setOnClickListener(new View.OnClickListener() {
-                            public void onClick(View v) {
-                                checked[pos] = !checked[pos];
-                                cb.setChecked(checked[pos]);
-                            }
-                        });
-                        return row;
-                    }
-                };
-
         new AlertDialog.Builder(this)
-                .setTitle("关键应用（目标没完成也不延长冻结）")
-                .setAdapter(ad, null)
-                .setPositiveButton("保存", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface d, int which) {
-                        Set<String> picked = new java.util.LinkedHashSet<>();
-                        for (int i = 0; i < pkgs.size(); i++) {
-                            if (checked[i]) {
-                                picked.add(pkgs.get(i));
-                            }
-                        }
-                        RuleStore.setKeyApps(AppListActivity.this, picked);
-                        rebuild();
-                        applyInBackground();
-                        toast("关键应用 " + picked.size() + " 个：目标没完成时只按自己的时段走");
-                    }
-                })
-                .setNegativeButton("取消", null)
+                .setTitle("关键应用：微信")
+                .setMessage("微信是唯一关键应用，只在每天 00:00–06:00 冻结。其他黑名单应用都参与学习闸门。")
+                .setPositiveButton("知道了", null)
                 .show();
     }
-
     private void batchSetRule() {
         final java.util.List<String> pkgs =
                 new java.util.ArrayList<>(RuleStore.packages(this));
@@ -1153,7 +1530,6 @@ public class AppListActivity extends Activity {
                             return;
                         }
                         rebuild();
-                        revealGroupOf(done.get(0));
                         applyInBackground();
                         toast("已套用：" + Rule.daysText(base.days) + " " + base.windowText()
                                 + " · " + done.size() + " 个"
@@ -1182,7 +1558,7 @@ public class AppListActivity extends Activity {
         }
         new AlertDialog.Builder(this)
                 .setTitle("新加了 " + added.size() + " 个应用")
-                .setMessage(names + "\n\n现在统一套一条放行时段？之后也可以单独改。")
+                .setMessage(names + "\n\n现在统一设置冻结时间？之后也可以单独改。")
                 .setPositiveButton("现在设", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
                         applyRuleTo(added);

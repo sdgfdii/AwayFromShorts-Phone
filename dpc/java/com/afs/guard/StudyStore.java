@@ -429,17 +429,27 @@ public final class StudyStore {
         return r;
     }
 
-    public static void deleteRec(Context c, String recId) {
+    static boolean canUndoDate(String recordDate, String currentDate) {
+        return recordDate != null && !recordDate.isEmpty() && recordDate.equals(currentDate);
+    }
+
+    /** 只允许撤回当天记录，确认框跨过午夜也必须拒绝。 */
+    public static boolean deleteRec(Context c, String recId) {
         synchronized (LOCK) {
             JSONObject db = load(c);
             JSONArray arr = db.optJSONArray("recs");
             JSONArray keep = new JSONArray();
+            boolean removed = false;
+            String currentDate = today();
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.optJSONObject(i);
-                if (o != null && !recId.equals(o.optString("id", ""))) {
-                    keep.put(o);
-                }
+                if (o == null) continue;
+                if (recId.equals(o.optString("id", ""))) {
+                    if (!canUndoDate(o.optString("date", ""), currentDate)) return false;
+                    removed = true;
+                } else keep.put(o);
             }
+            if (!removed) return false;
             try {
                 db.put("recs", keep);
             } catch (Throwable ignored) {
@@ -447,6 +457,7 @@ public final class StudyStore {
             save(c, db);
         }
         invalidate(c);
+        return true;
     }
 
     /** 某个目标到今天为止一共做了多少（历史基数 + 本机所有记录）。 */

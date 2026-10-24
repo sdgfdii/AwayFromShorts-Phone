@@ -32,6 +32,10 @@ public final class GuardTest {
         studyGate();
         tabooCard();
         pcStats();
+        ok(StudyStore.canUndoDate("2026-10-24", "2026-10-24"), "当天打卡允许撤回");
+        ok(!StudyStore.canUndoDate("2026-10-23", "2026-10-24"), "昨天打卡不允许撤回");
+        ok(!StudyStore.canUndoDate("2026-10-24", "2026-10-25"), "确认期间跨午夜也不允许撤回");
+        ok(!StudyStore.canUndoDate("", ""), "缺少日期不能撤回");
 
         System.out.println();
         System.out.println("== " + pass + " PASS / " + fail + " FAIL ==");

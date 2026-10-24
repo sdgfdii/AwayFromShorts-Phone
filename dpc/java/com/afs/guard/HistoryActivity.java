@@ -316,7 +316,7 @@ public class HistoryActivity extends Activity {
         LinearLayout recCard = card(body);
         head(recCard, "最近流水");
         TextView undoTip = new TextView(this);
-        undoTip.setText("误触了？点一笔打卡记录可以撤销（两步确认）；红色是认领禁忌");
+        undoTip.setText("当天的打卡可点记录撤回；昨天及更早的记录已锁定。红色是认领禁忌");
         undoTip.setTextColor(TEXT3);
         undoTip.setTextSize(11);
         undoTip.setPadding(0, dp(2), 0, 0);
@@ -343,10 +343,10 @@ public class HistoryActivity extends Activity {
                     final String unit = g == null ? "" : g.unit;
                     rowT.setText(r.date.substring(5) + "  " + name
                             + "  +" + fmt(r.amount) + (unit.isEmpty() ? "" : " " + unit)
-                            + "  ·点撤");
+                            + (StudyStore.canUndoDate(r.date, StudyStore.today()) ? "  ·点撤回" : "  ·已锁定"));
                     rowT.setTextColor(TEXT);
                     // 撤销入口搬到历史页：打卡页的卡片上不再放可点的东西
-                    rowT.setOnClickListener(new View.OnClickListener() {
+                    if (StudyStore.canUndoDate(r.date, StudyStore.today())) rowT.setOnClickListener(new View.OnClickListener() {
                         public void onClick(View v) {
                             confirmUndo(r, unit);
                         }
@@ -539,6 +539,11 @@ public class HistoryActivity extends Activity {
 
     /** 撤销一笔打卡：两步确认防误触；删记录 → 闸门立刻重算 → hub 脏标记自动跟上。 */
     private void confirmUndo(final StudyStore.Rec r, final String unit) {
+        if (!StudyStore.canUndoDate(r.date, StudyStore.today())) {
+            Toast.makeText(this, "只能撤回当天的打卡记录", Toast.LENGTH_SHORT).show();
+            recreate();
+            return;
+        }
         StudyStore.G g = null;
         for (StudyStore.G x : StudyStore.goals(this)) {
             if (x.id.equals(r.goalId)) {
@@ -557,7 +562,11 @@ public class HistoryActivity extends Activity {
                         + "\n\n删掉后进度和冻结闸门立刻重算。")
                 .setPositiveButton("撤销", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
-                        StudyStore.deleteRec(HistoryActivity.this, r.id);
+                        if (!StudyStore.deleteRec(HistoryActivity.this, r.id)) {
+                            Toast.makeText(HistoryActivity.this, "记录已锁定或已不存在，只能撤回当天打卡", Toast.LENGTH_SHORT).show();
+                            recreate();
+                            return;
+                        }
                         Toast.makeText(HistoryActivity.this,
                                 "已撤销 " + name + "  -" + fmt(r.amount) + unit2,
                                 Toast.LENGTH_SHORT).show();

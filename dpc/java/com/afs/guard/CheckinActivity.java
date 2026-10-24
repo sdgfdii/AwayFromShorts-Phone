@@ -1826,7 +1826,7 @@ public class CheckinActivity extends Activity {
 
 
     private AlertDialog dlg;                     // 字体颜色弹窗
-    private AlertDialog tabooDialog;
+    private android.app.Dialog tabooDialog;
     private boolean reopeningTaboo;
     private Typeface customFont;                 // 用户选的 ttf/otf；null=系统默认
     private boolean customFontTried;             // 只试读一次，失败不反复读盘
@@ -2458,17 +2458,12 @@ public class CheckinActivity extends Activity {
                 });
 
         sc.addView(box);
-        final AlertDialog shown = new AlertDialog.Builder(this).setView(sc).show();
+        final android.app.Dialog shown = new android.app.Dialog(this,
+                android.R.style.Theme_Material_Light_NoActionBar_Fullscreen);
+        shown.setContentView(sc);
+        shown.show();
         tabooDialog = shown;
-        shown.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT);
-        shown.getWindow().setBackgroundDrawable(
-                new android.graphics.drawable.ColorDrawable(manageBg()));
-        shown.getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        shown.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
-        shown.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                | android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        styleFullScreenDialog(shown);
         shown.setOnDismissListener(new DialogInterface.OnDismissListener() {
             public void onDismiss(DialogInterface ignored) {
                 if (tabooDialog != shown) return;
@@ -2768,22 +2763,12 @@ public class CheckinActivity extends Activity {
         });
 
         sc.addView(box);
-        android.app.AlertDialog d = new AlertDialog.Builder(this)
-                .setView(sc)
-                .show();
+        android.app.Dialog d = new android.app.Dialog(this,
+                android.R.style.Theme_Material_Light_NoActionBar_Fullscreen);
+        d.setContentView(sc);
+        d.show();
         manageDialog = d;
-        if ("manage".equals(getIntent().getStringExtra(EXTRA_OPEN))) {
-            d.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT);
-            d.getWindow().setBackgroundDrawable(
-                    new android.graphics.drawable.ColorDrawable(manageBg()));
-            // 与打卡页同样沉浸式；ColorOS 会忽略 Dialog 的状态栏颜色。
-            d.getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            d.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
-            d.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
-            d.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-        }
+        styleFullScreenDialog(d);
         d.setOnDismissListener(new DialogInterface.OnDismissListener() {
             public void onDismiss(DialogInterface ignored) {
                 manageDialog = null;
@@ -2832,6 +2817,25 @@ public class CheckinActivity extends Activity {
 
     private int manageBg() {
         return look.bg();
+    }
+
+    /** Dialog 也要像 Activity 一样铺进状态栏区域，避免顶部露出一条灰色底。 */
+    private void styleFullScreenDialog(android.app.Dialog d) {
+        android.view.Window w = d.getWindow();
+        if (w == null) return;
+        w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(manageBg()));
+        w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
+                | android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
+        w.setStatusBarColor(manageBg());
+        w.setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        w.clearFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                | android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
 
     /** 数据变了：把管理对话框关掉重开一份，列表才会反映最新状态。 */

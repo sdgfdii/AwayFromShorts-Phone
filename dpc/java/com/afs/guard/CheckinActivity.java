@@ -1825,7 +1825,9 @@ public class CheckinActivity extends Activity {
     }
 
 
-    private AlertDialog dlg;                     // 当前打开的弹窗（色板点了要收掉）
+    private AlertDialog dlg;                     // 字体颜色弹窗
+    private AlertDialog tabooDialog;
+    private boolean reopeningTaboo;
     private Typeface customFont;                 // 用户选的 ttf/otf；null=系统默认
     private boolean customFontTried;             // 只试读一次，失败不反复读盘
     private static final String FONT_KEY = "font_family";
@@ -2295,95 +2297,186 @@ public class CheckinActivity extends Activity {
                 u.get(Calendar.HOUR_OF_DAY), u.get(Calendar.MINUTE));
     }
 
-    /**
-     * 禁忌卡弹窗：上面是设置（惩罚时长 / 添加 / 长按删项），下面一排黑卡 ——
-     * 点一张 = 认领一次禁忌，冻结程序立刻延长一段惩罚时长（可叠加）。
-     */
+    /** 禁忌卡管理页：逐张显示状态，认领和设置分开。 */
     private void tabooManage() {
-        if (dlg != null) {
-            dlg.dismiss();
+        if (tabooDialog != null) {
+            reopeningTaboo = true;
+            tabooDialog.dismiss();
+            tabooDialog = null;
+            reopeningTaboo = false;
         }
         ScrollView sc = new ScrollView(this);
+        sc.setBackgroundColor(manageBg());
+        sc.setFillViewport(true);
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(20), dp(8), dp(20), dp(12));
+        box.setPadding(dp(18), dp(20), dp(18), dp(28));
 
-        long until = StudyGate.tabooUntil(this);
-        TextView status = new TextView(this);
-        if (StudyGate.tabooHolding(System.currentTimeMillis(), until)) {
-            status.setText("⚠ 冻结延长中：至 " + hmOf(until));
-            status.setTextColor(RED_L);
-        } else {
-            status.setText("当前没有禁忌惩罚在身");
-            status.setTextColor(DLG_TEXT2);
-        }
-        status.setTextSize(13);
-        status.setPadding(0, dp(4), 0, dp(6));
-        box.addView(status);
-
-        TextView pen = new TextView(this);
-        pen.setText("每次认领延长冻结：" + tabooPenaltyMin(this) + " 分钟（点此修改）");
-        pen.setTextColor(DLG_LINK);
-        pen.setTextSize(13);
-        pen.setPadding(0, dp(6), 0, dp(2));
-        pen.setOnClickListener(new View.OnClickListener() {
+        LinearLayout nav = new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = look.sub("禁忌卡");
+        title.setTextSize(22);
+        title.setTextColor(look.text());
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER_VERTICAL);
+        nav.addView(title, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        TextView close = manageButton("完成", look.surface(), look.accent());
+        close.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                askTabooPenalty();
+                if (tabooDialog != null) tabooDialog.dismiss();
             }
         });
-        box.addView(pen);
-        box.addView(line());
+        nav.addView(close, new LinearLayout.LayoutParams(dp(64), dp(38)));
+        box.addView(nav);
+        TextView subtitle = look.sub("每天核对每张卡，记录做了还是没做");
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
+        subLp.topMargin = dp(12);
+        box.addView(subtitle, subLp);
 
+        long until = StudyGate.tabooUntil(this);
         List<String> items = tabooItems(this);
+        int pending = StudyGate.tabooPendingToday(this);
+        boolean holding = StudyGate.tabooHolding(System.currentTimeMillis(), until);
+        LinearLayout overview = look.card();
+        LinearLayout.LayoutParams overviewLp = new LinearLayout.LayoutParams(-1, -2);
+        overviewLp.topMargin = dp(20);
+        box.addView(overview, overviewLp);
+        overview.addView(look.sub("今日禁忌"));
+        TextView count = look.title(items.isEmpty() ? "还没有禁忌卡"
+                : pending == 0 ? "今天已确认" : "还有 " + pending + " 张待确认");
+        count.setTextSize(22);
+        count.setTextColor(pending == 0 ? look.green() : look.red());
+        overview.addView(count);
+        TextView summary = look.sub(holding
+                ? "冻结已延长至 " + hmOf(until)
+                : "当前没有禁忌卡带来的延长冻结");
+        LinearLayout.LayoutParams sumLp = new LinearLayout.LayoutParams(-1, -2);
+        sumLp.topMargin = dp(6);
+        overview.addView(summary, sumLp);
+
+        LinearLayout section = look.section("■", Ui.RUST, "禁忌卡列表", null, null);
+        LinearLayout.LayoutParams sectionLp = new LinearLayout.LayoutParams(-1, -2);
+        sectionLp.topMargin = dp(24);
+        sectionLp.bottomMargin = dp(10);
+        box.addView(section, sectionLp);
         if (items.isEmpty()) {
-            TextView empty = new TextView(this);
-            empty.setText("还没有禁忌卡。\n先在下面添加（如：吃辣、吃甜），认领一次冻结就延长一次。");
-            empty.setTextColor(DLG_TEXT2);
-            empty.setTextSize(13);
-            empty.setPadding(0, dp(10), 0, dp(4));
+            LinearLayout empty = look.card();
+            empty.addView(look.sub("添加一张禁忌卡后，每天都可以单独确认它。"));
             box.addView(empty);
         }
         for (final String name : items) {
-            Button card = new Button(this);
-            card.setText("■ " + name + "（点此认领）");
-            card.setAllCaps(false);
-            card.setTextSize(14);
-            card.setTextColor(0xFFF2F5FA);
-            card.setBackgroundColor(0xFF18191C);   // 黑卡
-            card.setPadding(dp(12), dp(10), dp(12), dp(10));
-            card.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    claimTaboo(name);
-                }
+            boolean claimed = tabooClaimedToday(name);
+            boolean declined = !claimed && tabooDeclinedToday(name);
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(18), dp(17), dp(18), dp(17));
+            card.setBackground(look.round(TABOO_CARD, 20f));
+            card.setElevation(dp(5));
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
+            cardLp.bottomMargin = dp(12);
+            box.addView(card, cardLp);
+
+            LinearLayout top = new LinearLayout(this);
+            top.setOrientation(LinearLayout.HORIZONTAL);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+            TextView tag = new TextView(this);
+            tag.setText("禁忌卡  /  每日确认");
+            tag.setTextSize(11);
+            tag.setTextColor(TABOO_TEXT2);
+            top.addView(tag, new LinearLayout.LayoutParams(0, -2, 1f));
+            TextView remove = new TextView(this);
+            remove.setText("删除");
+            remove.setTextSize(12);
+            remove.setTextColor(TABOO_TEXT2);
+            remove.setPadding(dp(10), dp(6), 0, dp(6));
+            remove.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) { confirmRemoveTaboo(name); }
             });
-            card.setOnLongClickListener(new View.OnLongClickListener() {
-                public boolean onLongClick(View v) {
-                    confirmRemoveTaboo(name);
-                    return true;
-                }
+            top.addView(remove);
+            card.addView(top);
+
+            TextView nameText = new TextView(this);
+            nameText.setText(name);
+            nameText.setTextSize(22);
+            nameText.setTypeface(Typeface.DEFAULT_BOLD);
+            nameText.setTextColor(TABOO_TEXT);
+            LinearLayout.LayoutParams nameLp = new LinearLayout.LayoutParams(-1, -2);
+            nameLp.topMargin = dp(10);
+            card.addView(nameText, nameLp);
+            TextView state = new TextView(this);
+            state.setText(claimed ? "今天已认领 · 冻结已延长" : declined ? "今天没做 · 无额外冻结" : "今天还未确认");
+            state.setTextColor(claimed ? RED_D : declined ? GREEN_D : TABOO_TEXT2);
+            state.setTextSize(13);
+            LinearLayout.LayoutParams stateLp = new LinearLayout.LayoutParams(-1, -2);
+            stateLp.topMargin = dp(5);
+            card.addView(state, stateLp);
+
+            LinearLayout actions = new LinearLayout(this);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams actionsLp = new LinearLayout.LayoutParams(-1, dp(42));
+            actionsLp.topMargin = dp(17);
+            card.addView(actions, actionsLp);
+            TextView claim = manageButton(claimed ? "再次认领" : "认领", 0xFF34363D, TABOO_TEXT);
+            claim.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) { claimTaboo(name); }
             });
-            box.addView(card);
+            actions.addView(claim, new LinearLayout.LayoutParams(0, -1, 1f));
+            if (!claimed && !declined) {
+                TextView no = manageButton("今天没做", 0xFF23262D, TABOO_TEXT);
+                LinearLayout.LayoutParams noLp = new LinearLayout.LayoutParams(0, -1, 1f);
+                noLp.leftMargin = dp(8);
+                actions.addView(no, noLp);
+                no.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        StudyGate.declineTaboo(CheckinActivity.this, name, System.currentTimeMillis());
+                        tabooManage();
+                        render(false);
+                    }
+                });
+            }
         }
 
-        TextView add = new TextView(this);
-        add.setText("＋ 添加禁忌卡（如：吃辣、吃甜）");
-        add.setTextColor(DLG_LINK);
-        add.setTextSize(14);
-        add.setPadding(0, dp(14), 0, dp(4));
+        TextView add = manageButton("＋  添加禁忌卡", Ui.BLUE, 0xFFFFFFFF);
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(-1, dp(48));
+        addLp.topMargin = dp(4);
+        box.addView(add, addLp);
         add.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 askAddTaboo();
             }
         });
-        box.addView(add);
 
-        sc.addView(box);   // ★ 之前漏了这一行：box 没挂进 ScrollView，弹窗永远空白
+        LinearLayout rules = look.section("⚙", Ui.PURPLE, "冻结规则", null, null);
+        LinearLayout.LayoutParams rulesLp = new LinearLayout.LayoutParams(-1, -2);
+        rulesLp.topMargin = dp(26);
+        rulesLp.bottomMargin = dp(10);
+        box.addView(rules, rulesLp);
+        manageOption(box, "认领一次延长冻结", tabooPenaltyMin(this) + " 分钟 · 点此修改",
+                new View.OnClickListener() {
+                    public void onClick(View v) { askTabooPenalty(); }
+                });
 
-        dlg = new AlertDialog.Builder(this)
-                .setTitle("禁忌卡")
-                .setView(sc)
-                .setNegativeButton("关闭", null)
-                .show();
+        sc.addView(box);
+        final AlertDialog shown = new AlertDialog.Builder(this).setView(sc).show();
+        tabooDialog = shown;
+        shown.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        shown.getWindow().setBackgroundDrawable(
+                new android.graphics.drawable.ColorDrawable(manageBg()));
+        shown.getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        shown.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);
+        shown.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                | android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        shown.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            public void onDismiss(DialogInterface ignored) {
+                if (tabooDialog != shown) return;
+                tabooDialog = null;
+                if ("taboo".equals(getIntent().getStringExtra(EXTRA_OPEN))
+                        && !reopeningTaboo && !isFinishing()) finish();
+            }
+        });
     }
 
     /** 认领禁忌卡：确认后冻结立刻延长一段惩罚时长。 */

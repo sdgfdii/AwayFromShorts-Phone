@@ -1828,6 +1828,13 @@ public class CheckinActivity extends Activity {
     private AlertDialog dlg;                     // 当前打开的弹窗（色板点了要收掉）
     private Typeface customFont;                 // 用户选的 ttf/otf；null=系统默认
     private boolean customFontTried;             // 只试读一次，失败不反复读盘
+    private static final String FONT_KEY = "font_family";
+    private static final String[] FONT_IDS = {
+            "default", "sans-serif-medium", "serif", "monospace", "casual"
+    };
+    private static final String[] FONT_NAMES = {
+            "系统默认", "醒目黑体", "衬线字体", "等宽字体", "手写风格"
+    };
 
     private static File fontFile(Context c) {
         return new File(c.getExternalFilesDir(null), "custom_font.ttf");
@@ -1838,8 +1845,23 @@ public class CheckinActivity extends Activity {
         return getSharedPreferences("afs_ui", 0);
     }
 
-    /** 打卡页字体：选了字体文件用它，否则系统默认。 */
+    private String fontChoice() {
+        String saved = ui().getString(FONT_KEY, "");
+        if ("custom".equals(saved) && !fontFile(this).exists()) return "default";
+        return saved.isEmpty() && fontFile(this).exists() ? "custom"
+                : saved.isEmpty() ? "default" : saved;
+    }
+
+    /** 打卡页字体：系统内置字体与导入字体共用一处设置。 */
     private Typeface uiFont() {
+        String choice = fontChoice();
+        if (!"custom".equals(choice)) {
+            return "default".equals(choice) ? Typeface.DEFAULT : Typeface.create(choice, Typeface.NORMAL);
+        }
+        return importedFont();
+    }
+
+    private Typeface importedFont() {
         if (customFont == null && !customFontTried) {
             customFontTried = true;
             File f = fontFile(this);
@@ -1852,6 +1874,68 @@ public class CheckinActivity extends Activity {
             }
         }
         return customFont != null ? customFont : Typeface.DEFAULT;
+    }
+
+    private void fontMenu() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout rows = new LinearLayout(this);
+        rows.setOrientation(LinearLayout.VERTICAL);
+        rows.setPadding(dp(18), dp(6), dp(18), dp(12));
+        scroll.addView(rows);
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("打卡字体")
+                .setView(scroll)
+                .setNegativeButton("取消", null)
+                .create();
+        String current = fontChoice();
+        for (int i = 0; i < FONT_IDS.length; i++) {
+            final String id = FONT_IDS[i];
+            fontMenuRow(rows, FONT_NAMES[i], id, id.equals(current), dialog);
+        }
+        if (fontFile(this).exists()) {
+            fontMenuRow(rows, "已导入的字体", "custom", "custom".equals(current), dialog);
+        }
+        TextView importFile = new TextView(this);
+        importFile.setText("＋  从文件导入 ttf / otf");
+        importFile.setTextSize(15);
+        importFile.setTextColor(DLG_LINK);
+        importFile.setPadding(dp(12), dp(18), dp(12), dp(18));
+        rows.addView(importFile);
+        importFile.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                dialog.dismiss();
+                Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
+                pick.addCategory(Intent.CATEGORY_OPENABLE);
+                pick.setType("*/*");
+                try {
+                    startActivityForResult(Intent.createChooser(pick, "选字体文件（ttf/otf）"), RC_FONT);
+                } catch (Throwable t) {
+                    toast("没有能选文件的程序");
+                }
+            }
+        });
+        dialog.show();
+    }
+
+    private void fontMenuRow(LinearLayout rows, String name, final String id,
+                             boolean selected, final AlertDialog dialog) {
+        TextView row = new TextView(this);
+        row.setText((selected ? "✓  " : "    ") + name + "\n    目标打卡 123 · 今天继续");
+        row.setTextSize(16);
+        row.setTextColor(DLG_TEXT);
+        row.setLineSpacing(dp(5), 1f);
+        row.setPadding(dp(12), dp(12), dp(12), dp(12));
+        row.setTypeface("custom".equals(id) ? importedFont() :
+                "default".equals(id) ? Typeface.DEFAULT : Typeface.create(id, Typeface.NORMAL));
+        rows.addView(row);
+        row.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                ui().edit().putString(FONT_KEY, id).apply();
+                dialog.dismiss();
+                render();
+                reopenManage();
+            }
+        });
     }
 
     /** 粗体变体：自定义字体也能加粗（系统合成粗体）。 */
@@ -1876,6 +1960,7 @@ public class CheckinActivity extends Activity {
             out.flush();
             customFont = null;
             customFontTried = false;
+            ui().edit().putString(FONT_KEY, "custom").apply();
             toast("打卡字体已更新");
         } catch (Throwable t) {
             toast("字体没存上: " + t.getClass().getSimpleName());
@@ -2567,20 +2652,13 @@ public class CheckinActivity extends Activity {
             public void onClick(View v) { tabooManage(); }
         });
 
-        // 打卡字体：选 ttf/otf 文件，全页粗体文字跟着换
-        manageOption(box, "打卡字体", fontFile(this).exists() ? "已自定义 · 点此替换"
-                : "选择 ttf/otf 文件", new View.OnClickListener() {
-            public void onClick(View v) {
-                Intent i = new Intent(Intent.ACTION_GET_CONTENT);
-                i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("*/*");
-                try {
-                    startActivityForResult(
-                            Intent.createChooser(i, "选字体文件（ttf/otf）"), RC_FONT);
-                } catch (Throwable t) {
-                    toast("没有能选文件的程序");
-                }
-            }
+        String chosenFont = fontChoice();
+        String chosenName = "已导入的字体";
+        for (int i = 0; i < FONT_IDS.length; i++) {
+            if (FONT_IDS[i].equals(chosenFont)) chosenName = FONT_NAMES[i];
+        }
+        manageOption(box, "打卡字体", chosenName + " · 点此选择或导入", new View.OnClickListener() {
+            public void onClick(View v) { fontMenu(); }
         });
 
         // 打卡字体颜色：色板直选 / 十六进制输入
@@ -2595,18 +2673,6 @@ public class CheckinActivity extends Activity {
         manageOption(box, "备份与恢复", "换手机时导出或导入数据", new View.OnClickListener() {
             public void onClick(View v) { backupMenu(); }
         });
-
-        if (fontFile(this).exists()) {
-            manageOption(box, "恢复默认字体", "移除自定义字体文件", new View.OnClickListener() {
-                public void onClick(View v) {
-                    fontFile(CheckinActivity.this).delete();
-                    customFont = null;
-                    customFontTried = true;
-                    toast("已恢复默认字体");
-                    reopenManage();
-                }
-            });
-        }
 
         sc.addView(box);
         android.app.AlertDialog d = new AlertDialog.Builder(this)

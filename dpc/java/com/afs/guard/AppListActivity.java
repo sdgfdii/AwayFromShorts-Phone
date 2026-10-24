@@ -1418,10 +1418,63 @@ public class AppListActivity extends Activity {
      * 多选同样自己画行：ColorOS 上 setMultiChoiceItems 的项 clickable=false。
      */
     private void openKeyApps() {
+        final Set<String> selected = new java.util.LinkedHashSet<>(RuleStore.keyApps(this));
+        final java.util.List<String> pkgs = new ArrayList<>(RuleStore.packages(this));
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(10), dp(18), dp(12));
+        scroll.addView(box);
+
+        TextView hint = new TextView(this);
+        hint.setText("选中的应用只按各自的冻结时间执行，不受学习闸门延长。冻结时间仍可在应用列表中修改。");
+        hint.setTextSize(13);
+        hint.setTextColor(TEXT2);
+        hint.setPadding(0, 0, 0, dp(12));
+        box.addView(hint);
+
+        if (pkgs.isEmpty()) {
+            TextView emptyHint = new TextView(this);
+            emptyHint.setText("黑名单为空，请先添加应用。");
+            emptyHint.setTextSize(14);
+            emptyHint.setTextColor(TEXT);
+            box.addView(emptyHint);
+        }
+        for (final String pkg : pkgs) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(4), dp(8), dp(4), dp(8));
+            final android.widget.CheckBox check = new android.widget.CheckBox(this);
+            check.setChecked(selected.contains(pkg));
+            check.setClickable(false);
+            row.addView(check);
+            TextView label = new TextView(this);
+            label.setText(Guard.labelOf(getPackageManager(), pkg));
+            label.setTextSize(15);
+            label.setTextColor(TEXT);
+            label.setPadding(dp(8), 0, 0, 0);
+            row.addView(label, new LinearLayout.LayoutParams(0, -2, 1f));
+            row.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    if (selected.contains(pkg)) selected.remove(pkg);
+                    else selected.add(pkg);
+                    check.setChecked(selected.contains(pkg));
+                }
+            });
+            box.addView(row);
+        }
         new AlertDialog.Builder(this)
-                .setTitle("关键应用：微信")
-                .setMessage("微信是唯一关键应用，只在每天 00:00–06:00 冻结。其他黑名单应用都参与学习闸门。")
-                .setPositiveButton("知道了", null)
+                .setTitle("关键应用名单")
+                .setView(scroll)
+                .setPositiveButton("保存", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) {
+                        RuleStore.setKeyApps(AppListActivity.this, selected);
+                        rebuild();
+                        applyInBackground();
+                    }
+                })
+                .setNegativeButton("取消", null)
                 .show();
     }
     private void batchSetRule() {

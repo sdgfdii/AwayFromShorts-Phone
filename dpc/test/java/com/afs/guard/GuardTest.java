@@ -31,6 +31,7 @@ public final class GuardTest {
         groupKeyTests();
         studyGate();
         tabooCard();
+        pcStats();
 
         System.out.println();
         System.out.println("== " + pass + " PASS / " + fail + " FAIL ==");
@@ -522,6 +523,28 @@ public final class GuardTest {
                 "切换关键身份保留相机原冻结时间");
         ok(!all.get("com.tencent.mm").gate && all.get("com.android.camera").gate,
                 "设置名单不修改输入规则");
+    }
+
+    private static void pcStats() {
+        String json = "{\"month\":\"2026-10\",\"monthApps\":{\"editor\":300,\"browser\":50},"
+                + "\"totalApps\":{\"editor\":500,\"browser\":90},\"days\":{"
+                + "\"2026-09-30\":{\"apps\":{\"editor\":20}},"
+                + "\"2026-10-01\":{\"apps\":{\"editor\":30,\"browser\":10}},"
+                + "\"2026-10-24\":{\"apps\":{\"editor\":5}}}}";
+        eq(PcStats.totalMinutes(PcStats.periodApps(json, "month", "2026-10-24")), 350L,
+                "电脑本月读取完整汇总，不把每日前列漏项当成零");
+        eq(PcStats.totalMinutes(PcStats.periodApps(json, "total", "")), 590L,
+                "电脑累计读取历史汇总");
+        eq(PcStats.periodApps(json, "month", "2026-10-24").get(0).name, "editor",
+                "电脑排行按时长排序");
+        eq(PcStats.totalMinutes(PcStats.periodApps(json, "month", "2026-11-01")), 0L,
+                "跨月不显示上月汇总");
+        String old = "{\"days\":{\"2026-09-30\":{\"apps\":{\"editor\":20}},"
+                + "\"2026-10-01\":{\"apps\":{\"editor\":30}},\"2026-10-24\":{\"apps\":{\"editor\":5}}}}";
+        eq(PcStats.totalMinutes(PcStats.periodApps(old, "month", "2026-10-24")), 35L,
+                "旧快照按本月日期聚合");
+        eq(PcStats.totalMinutes(PcStats.periodApps(old, "total", "")), 55L,
+                "旧快照累计所有已有日期");
     }
 
     /* ---------- 工具 ---------- */

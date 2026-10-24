@@ -425,37 +425,60 @@ public class StatsActivity extends Activity {
         // —— 电脑端应用时长（Gist 同步的 PC 面板采样数据）——
         LinearLayout pc = card();
         head(pc, "电脑端应用时长");
-        String pcDay = PcStats.latestDay(this);
-        List<PcStats.Entry> pcApps = PcStats.dayApps(this, pcDay);
-        if (pcApps.isEmpty()) {
+        String today = ymd(Calendar.getInstance());
+        final List<List<PcStats.Entry>> periods = new ArrayList<>();
+        periods.add(PcStats.dayApps(this, today));
+        periods.add(PcStats.monthApps(this, today));
+        periods.add(PcStats.totalApps(this));
+        if (periods.get(2).isEmpty()) {
             note(pc, "还没拉到电脑数据。电脑开着面板时每 15 分钟推一次，晚点再进来看。");
         } else {
-            boolean isToday = pcDay.equals(ymd(Calendar.getInstance()));
             String up = PcStats.updatedAt(this);
-            TextView u = note(pc, (isToday ? "今天" : pcDay)
-                    + " · 共 " + pcDayTotalMin(pcApps) + " 分钟 · 更新于 "
-                    + (up.length() > 0 ? up : "-"));
-            u.setPadding(0, 0, 0, dp(6));
-            long maxMin = Math.max(1, pcApps.get(0).min);
-            int n = Math.min(10, pcApps.size());
-            for (int i = 0; i < n; i++) {
-                PcStats.Entry e = pcApps.get(i);
-                rankBar(pc,
-                        (i + 1) + ". " + PcStats.label(e.name),
-                        fmt(e.min * 60000L),
-                        e.min / (float) maxMin,
-                        0xFF9B7BE8);   // 紫：跟手机端的品牌蓝区分开
+            note(pc, "累计自 " + PcStats.since(this) + " 起 · 更新于 " + (up.isEmpty() ? "-" : up));
+            LinearLayout tabs = new LinearLayout(this);
+            tabs.setOrientation(LinearLayout.HORIZONTAL);
+            final LinearLayout detail = new LinearLayout(this);
+            detail.setOrientation(LinearLayout.VERTICAL);
+            final String[] labels = {"本日", "本月", "总计"};
+            final TextView[] buttons = new TextView[3];
+            LinearLayout.LayoutParams tabsLp = new LinearLayout.LayoutParams(-1, -2);
+            tabsLp.topMargin = dp(12);
+            tabsLp.bottomMargin = dp(12);
+            pc.addView(tabs, tabsLp);
+            pc.addView(detail);
+            for (int i = 0; i < 3; i++) {
+                final int selected = i;
+                TextView tab = new TextView(this);
+                tab.setText(labels[i] + "\n" + fmt(PcStats.totalMinutes(periods.get(i)) * 60000L));
+                tab.setTextSize(13);
+                tab.setGravity(Gravity.CENTER);
+                tab.setTypeface(Typeface.DEFAULT_BOLD);
+                tab.setPadding(dp(4), dp(10), dp(4), dp(10));
+                tab.setTextColor(i == 0 ? 0xFF9B7BE8 : TEXT2_DARK);
+                buttons[i] = tab;
+                tabs.addView(tab, new LinearLayout.LayoutParams(0, -2, 1f));
+                tab.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        for (int j = 0; j < buttons.length; j++) buttons[j].setTextColor(j == selected ? 0xFF9B7BE8 : TEXT2_DARK);
+                        detail.removeAllViews();
+                        pcRanking(detail, periods.get(selected), labels[selected]);
+                    }
+                });
             }
+            pcRanking(detail, periods.get(0), labels[0]);
         }
         addCard(pc);
     }
 
-    private static int pcDayTotalMin(List<PcStats.Entry> apps) {
-        int sum = 0;
-        for (PcStats.Entry e : apps) {
-            sum += e.min;
+    private void pcRanking(LinearLayout parent, List<PcStats.Entry> apps, String period) {
+        head(parent, period + "应用排行");
+        if (apps.isEmpty()) { note(parent, "这个时段暂时没有同步记录"); return; }
+        long max = Math.max(1, apps.get(0).min);
+        for (int i = 0; i < Math.min(10, apps.size()); i++) {
+            PcStats.Entry e = apps.get(i);
+            rankBar(parent, (i + 1) + ". " + PcStats.label(e.name), fmt(e.min * 60000L),
+                    e.min / (float) max, 0xFF9B7BE8);
         }
-        return sum;
     }
 
     /** 造一张卡片，调用方自己决定什么时候 add 进 body（只 add 一次）。 */

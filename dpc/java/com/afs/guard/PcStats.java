@@ -52,6 +52,7 @@ public final class PcStats {
     /** 日期（yyyy-MM-dd，升序）→ 当天应用时长列表（已按分钟降序）。 */
     private static LinkedHashMap<String, List<Entry>> days;
     private static String updated;   // PC 端推送时间
+    private static String rawSnapshot = "";
 
     private static volatile long lastTryMs;
     private static volatile long fetchStartedAt;
@@ -82,6 +83,7 @@ public final class PcStats {
                     if (parsed != null && !parsed.isEmpty()) {
                         days = parsed;
                         updated = extractUpdated(raw);
+                        rawSnapshot = raw;
                     }
                 }
             } catch (Throwable ignored) {
@@ -113,6 +115,7 @@ public final class PcStats {
                     synchronized (LOCK) {
                         days = parsed;
                         updated = extractUpdated(raw);
+                        rawSnapshot = raw;
                     }
                     sp(c).edit().putString("raw", raw)
                             .putLong("fetched_at", System.currentTimeMillis()).apply();
@@ -145,6 +148,10 @@ public final class PcStats {
     public static List<Entry> dayApps(Context c, String date) {
         ensureLoaded(c);
         synchronized (LOCK) {
+            if (date != null && date.equals(stringField(rawSnapshot, "date"))) {
+                Matcher today = Pattern.compile("\"todayApps\"\\s*:\\s*\\{([^{}]*)\\}").matcher(rawSnapshot);
+                if (today.find()) return appEntries(today.group(1));
+            }
             List<Entry> l = date == null ? null : days.get(date);
             return l == null ? new ArrayList<Entry>() : new ArrayList<Entry>(l);
         }
@@ -156,6 +163,79 @@ public final class PcStats {
         synchronized (LOCK) {
             return updated == null ? "" : updated;
         }
+    }
+
+    public static List<Entry> monthApps(Context c, String date) {
+        ensureLoaded(c);
+        synchronized (LOCK) { return periodApps(rawSnapshot, "month", date); }
+    }
+
+    public static List<Entry> totalApps(Context c) {
+        ensureLoaded(c);
+        synchronized (LOCK) { return periodApps(rawSnapshot, "total", ""); }
+    }
+
+    public static String since(Context c) {
+        ensureLoaded(c);
+        synchronized (LOCK) {
+            String since = stringField(rawSnapshot, "since");
+            if (!since.isEmpty()) return since;
+            String first = "";
+            for (String date : days.keySet()) if (first.isEmpty() || date.compareTo(first) < 0) first = date;
+            return first;
+        }
+    }
+
+    public static long totalMinutes(List<Entry> entries) {
+        long sum = 0;
+        for (Entry e : entries) sum += e.min;
+        return sum;
+    }
+
+    /** 新版读取完整汇总；旧快照按已有日记录聚合，不能把日值冒充月值。 */
+    static List<Entry> periodApps(String json, String period, String date) {
+        String month = date.length() >= 7 ? date.substring(0, 7) : "";
+        String key = "total".equals(period) ? "totalApps" : "monthApps";
+        if (json != null && ("total".equals(period) || month.equals(stringField(json, "month")))) {
+            Matcher rollup = Pattern.compile("\"" + key + "\"\\s*:\\s*\\{([^{}]*)\\}").matcher(json);
+            if (rollup.find()) return appEntries(rollup.group(1));
+        }
+        LinkedHashMap<String, List<Entry>> parsed = parse(json);
+        LinkedHashMap<String, Integer> sums = new LinkedHashMap<>();
+        if (parsed != null) for (Map.Entry<String, List<Entry>> day : parsed.entrySet()) {
+            if (!"total".equals(period) && !day.getKey().startsWith(month)) continue;
+            for (Entry e : day.getValue()) {
+                Integer old = sums.get(e.name);
+                sums.put(e.name, (old == null ? 0 : old) + e.min);
+            }
+        }
+        List<Entry> out = new ArrayList<>();
+        for (Map.Entry<String, Integer> e : sums.entrySet()) out.add(new Entry(e.getKey(), e.getValue()));
+        sortEntries(out);
+        return out;
+    }
+
+    private static String stringField(String json, String key) {
+        if (json == null) return "";
+        Matcher m = Pattern.compile("\"" + key + "\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
+        return m.find() ? m.group(1) : "";
+    }
+
+    private static List<Entry> appEntries(String contents) {
+        List<Entry> out = new ArrayList<>();
+        Matcher m = APP_P.matcher(contents);
+        while (m.find()) {
+            try { out.add(new Entry(m.group(1), Integer.parseInt(m.group(2)))); }
+            catch (NumberFormatException ignored) { }
+        }
+        sortEntries(out);
+        return out;
+    }
+
+    private static void sortEntries(List<Entry> entries) {
+        Collections.sort(entries, new java.util.Comparator<Entry>() {
+            public int compare(Entry a, Entry b) { return Integer.compare(b.min, a.min); }
+        });
     }
 
     /* ==================== 解析 ==================== */

@@ -664,7 +664,17 @@ public class CheckinActivity extends Activity {
 
     /** 按队列项分派：黑卡走禁忌那套版式，白卡走目标那套。 */
     private View buildEntryCard(Entry e, int index) {
-        return e.type == Entry.TABOO ? buildTabooCard(e, index) : buildCard(e.goal, index);
+        View built = e.type == Entry.TABOO ? buildTabooCard(e, index) : buildCard(e.goal, index);
+        if (!"default".equals(fontChoice())) applyCardFont(built);
+        return built;
+    }
+
+    private void applyCardFont(View view) {
+        if (view instanceof TextView) ((TextView) view).setTypeface(uiFont());
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) applyCardFont(group.getChildAt(i));
+        }
     }
 
     /**
@@ -977,6 +987,7 @@ public class CheckinActivity extends Activity {
 
                 cap.setColor(capColor);
                 cap.setTextAlign(Paint.Align.CENTER);
+                cap.setTypeface(uiFont());
                 cap.setTextSize(dp(11));
                 c.drawText("已完成", cx, cy + dp(28), cap);
             }
@@ -1827,16 +1838,19 @@ public class CheckinActivity extends Activity {
 
     private AlertDialog dlg;                     // 字体颜色弹窗
     private android.app.Dialog tabooDialog;
+    private View tabooPage;
+    private boolean closingTaboo;
     private boolean reopeningTaboo;
     private Typeface customFont;                 // 用户选的 ttf/otf；null=系统默认
     private boolean customFontTried;             // 只试读一次，失败不反复读盘
     private static final String FONT_KEY = "font_family";
     private static final String[] FONT_IDS = {
-            "default", "sans-serif-medium", "serif", "monospace", "casual"
+            "default", "asset_xiaowei", "asset_mashan"
     };
     private static final String[] FONT_NAMES = {
-            "系统默认", "醒目黑体", "衬线字体", "等宽字体", "手写风格"
+            "系统黑体", "小薇宋体", "马善政楷体"
     };
+    private final java.util.Map<String, Typeface> bundledFonts = new java.util.HashMap<>();
 
     private static File fontFile(Context c) {
         return new File(c.getExternalFilesDir(null), "custom_font.ttf");
@@ -1849,6 +1863,9 @@ public class CheckinActivity extends Activity {
 
     private String fontChoice() {
         String saved = ui().getString(FONT_KEY, "");
+        if ("serif".equals(saved) || "monospace".equals(saved)) return "asset_xiaowei";
+        if ("casual".equals(saved)) return "asset_mashan";
+        if ("sans-serif-medium".equals(saved)) return "default";
         if ("custom".equals(saved) && !fontFile(this).exists()) return "default";
         return saved.isEmpty() && fontFile(this).exists() ? "custom"
                 : saved.isEmpty() ? "default" : saved;
@@ -1856,11 +1873,21 @@ public class CheckinActivity extends Activity {
 
     /** 打卡页字体：系统内置字体与导入字体共用一处设置。 */
     private Typeface uiFont() {
-        String choice = fontChoice();
-        if (!"custom".equals(choice)) {
-            return "default".equals(choice) ? Typeface.DEFAULT : Typeface.create(choice, Typeface.NORMAL);
+        return fontTypeface(fontChoice());
+    }
+
+    private Typeface fontTypeface(String choice) {
+        if ("custom".equals(choice)) return importedFont();
+        if ("asset_xiaowei".equals(choice) || "asset_mashan".equals(choice)) {
+            Typeface loaded = bundledFonts.get(choice);
+            if (loaded == null) {
+                loaded = Typeface.createFromAsset(getAssets(), "fonts/"
+                        + ("asset_xiaowei".equals(choice) ? "xiaowei.ttf" : "mashanzheng.ttf"));
+                bundledFonts.put(choice, loaded);
+            }
+            return loaded;
         }
-        return importedFont();
+        return Typeface.DEFAULT;
     }
 
     private Typeface importedFont() {
@@ -1927,8 +1954,7 @@ public class CheckinActivity extends Activity {
         row.setTextColor(DLG_TEXT);
         row.setLineSpacing(dp(5), 1f);
         row.setPadding(dp(12), dp(12), dp(12), dp(12));
-        row.setTypeface("custom".equals(id) ? importedFont() :
-                "default".equals(id) ? Typeface.DEFAULT : Typeface.create(id, Typeface.NORMAL));
+        row.setTypeface(fontTypeface(id));
         rows.addView(row);
         row.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -1942,7 +1968,7 @@ public class CheckinActivity extends Activity {
 
     /** 粗体变体：自定义字体也能加粗（系统合成粗体）。 */
     private Typeface bold() {
-        return Typeface.create(uiFont(), Typeface.BOLD);
+        return "default".equals(fontChoice()) ? Typeface.DEFAULT_BOLD : uiFont();
     }
 
     /** 把选中的字体文件拷进 app 目录（ttf/otf 通吃）。 */
@@ -2299,6 +2325,7 @@ public class CheckinActivity extends Activity {
 
     /** 禁忌卡管理页：逐张显示状态，认领和设置分开。 */
     private void tabooManage() {
+        boolean animatePage = tabooDialog == null;
         if (tabooDialog != null) {
             reopeningTaboo = true;
             tabooDialog.dismiss();
@@ -2448,19 +2475,42 @@ public class CheckinActivity extends Activity {
 
         sc.addView(box);
         final android.app.Dialog shown = new android.app.Dialog(this,
-                android.R.style.Theme_Material_Light_NoActionBar_Fullscreen);
+                android.R.style.Theme_Material_Light_NoActionBar_Fullscreen) {
+            @Override public void onBackPressed() { closeTabooPage(); }
+        };
         shown.setContentView(sc);
         shown.show();
         tabooDialog = shown;
+        tabooPage = sc;
+        closingTaboo = false;
         styleFullScreenDialog(shown);
+        if (animatePage) {
+            sc.setTranslationX(dp(36));
+            sc.setAlpha(0f);
+            sc.animate().translationX(0f).alpha(1f).setDuration(220)
+                    .setInterpolator(new DecelerateInterpolator(1.6f)).start();
+        }
         shown.setOnDismissListener(new DialogInterface.OnDismissListener() {
             public void onDismiss(DialogInterface ignored) {
                 if (tabooDialog != shown) return;
                 tabooDialog = null;
+                tabooPage = null;
                 if ("taboo".equals(getIntent().getStringExtra(EXTRA_OPEN))
                         && !reopeningTaboo && !isFinishing()) finish();
             }
         });
+    }
+
+    private void closeTabooPage() {
+        final android.app.Dialog shown = tabooDialog;
+        if (shown == null || closingTaboo) return;
+        closingTaboo = true;
+        if (tabooPage == null) { shown.dismiss(); return; }
+        tabooPage.animate().translationX(dp(36)).alpha(0f).setDuration(180)
+                .setInterpolator(new DecelerateInterpolator(1.4f))
+                .withEndAction(new Runnable() {
+                    public void run() { closingTaboo = false; shown.dismiss(); }
+                }).start();
     }
 
     /** 认领禁忌卡：确认后冻结立刻延长一段惩罚时长。 */
@@ -2564,28 +2614,12 @@ public class CheckinActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(18), dp(20), dp(18), dp(28));
 
-        LinearLayout nav = new LinearLayout(this);
-        nav.setOrientation(LinearLayout.HORIZONTAL);
-        nav.setGravity(Gravity.CENTER_VERTICAL);
         TextView brand = look.sub("学习目标");
         brand.setTextSize(22);
         brand.setTextColor(look.text());
         brand.setTypeface(Typeface.DEFAULT_BOLD);
-        nav.addView(brand, new LinearLayout.LayoutParams(0, dp(42), 1f));
         brand.setGravity(Gravity.CENTER_VERTICAL);
-        TextView close = look.sub("完成");
-        close.setTextColor(look.accent());
-        close.setTextSize(14);
-        close.setTypeface(Typeface.DEFAULT_BOLD);
-        close.setGravity(Gravity.CENTER);
-        close.setBackground(look.round(look.surface(), 13f));
-        close.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                if (manageDialog != null) manageDialog.dismiss();
-            }
-        });
-        nav.addView(close, new LinearLayout.LayoutParams(dp(64), dp(38)));
-        box.addView(nav);
+        box.addView(brand, new LinearLayout.LayoutParams(-1, dp(42)));
 
         TextView subtitle = look.sub("管理进度、默认完成量和打卡设置");
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
@@ -2813,6 +2847,7 @@ public class CheckinActivity extends Activity {
         android.view.Window w = d.getWindow();
         if (w == null) return;
         w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        w.setWindowAnimations(0);
         w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(manageBg()));
         w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
                 | android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN);

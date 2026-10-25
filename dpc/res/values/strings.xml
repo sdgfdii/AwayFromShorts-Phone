@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">AwayFromShorts</string>
     <string name="pick_title">选择要冻结的应用</string>
-    <string name="list_title">黑名单与时段</string>
+    <string name="list_title">冻结应用</string>
     <string name="checkin_title">打卡</string>
     <string name="stats_title">统计</string>
     <string name="history_title">打卡历史</string>

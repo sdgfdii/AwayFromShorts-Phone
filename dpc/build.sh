@@ -92,21 +92,47 @@ echo "[2/7] aapt2 link"
   -o "$OUT/base.apk" \
   -I "$ANDROID_JAR" \
   --manifest AndroidManifest.xml \
-  -A assets \
   --java "$OUT/gen" \
   --min-sdk-version 24 \
   --target-sdk-version 34 \
-  --version-code 2101 \
-  --version-name 1.36.14 \
+  --version-code 2138 \
+  --version-name 1.49.3 \
   "$OUT"/flat/*.flat
+
+# ---------- 2b. 打包 assets（zip 里必须是正斜杠） ----------
+# aapt2 在 Windows 上会把 assets 子目录写成反斜杠（assets/fonts\xiaowei.ttf），
+# AssetManager 按 "fonts/xiaowei.ttf" 找不到，打卡页选内置字体会直接崩。
+# 所以这里不用 aapt2 的 -A，改用 python 自己打，保证路径分隔符统一。
+echo "[2b/7] pack assets"
+PY="${AFS_PYTHON:-$(command -v python3 || command -v python || true)}"
+if [ -z "$PY" ]; then
+  echo "需要 python 来打包 assets（或用 AFS_PYTHON=/path/to/python 指定）。" >&2
+  exit 1
+fi
+"$PY" - "$OUT/base.apk" assets <<'PYEOF'
+import os, sys, zipfile
+apk, root = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(apk, "a", zipfile.ZIP_DEFLATED) as z:
+    existing = set(z.namelist())
+    for base, dirs, files in os.walk(root):
+        for name in files:
+            full = os.path.join(base, name)
+            rel = os.path.relpath(full, root).replace(os.sep, "/")
+            arc = "assets/" + rel
+            if arc in existing:
+                continue
+            z.write(full, arc)
+PYEOF
 
 # ---------- 3. 编译 Java ----------
 echo "[3/7] javac"
 find java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
 # ★ javac 失败必须让构建死掉：以前管道接 grep || true, 编译错了构建照样走到
 #   打包, 装上的是"没有新代码"的旧 dex（PcStats 漏 import 就这么漏装过一次）。
-if ! javac -encoding UTF-8 -nowarn -source 8 -target 8 \
-  -bootclasspath "$ANDROID_JAR" -classpath "$ANDROID_JAR" \
+# --release supplies Java 8's LambdaMetafactory signatures; Android's boot stubs
+# omit them. d8 below desugars lambdas for minSdk 24.
+if ! javac -encoding UTF-8 -nowarn --release 8 \
+  -classpath "$ANDROID_JAR" \
   -d "$OUT/classes" @"$OUT/sources.txt" 2> "$OUT/javac.log"; then
   grep -v '^warning:' "$OUT/javac.log" >&2 || true
   rm -rf "$OUT/classes"

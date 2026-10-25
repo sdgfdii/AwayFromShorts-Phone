@@ -13,16 +13,9 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * 全 App 的设计基线：照手机里「Voyage 工具箱」那套改的。
- *
- * 那套界面的骨架其实就四条：
- *   1. 底色近乎纯黑（#0B0C10），卡片比底色亮一档（#16171C），没有描边、只有圆角；
- *   2. 圆角很大（卡片 18dp、图标格 16dp、胶囊全圆），间隙 10~12dp，留白多；
- *   3. 强调色只有一种蓝（#2F6FED），其余靠彩色圆形图标格区分功能；
- *   4. 字号档位少：大标题 26、区块标题 16、正文 13、注释 11。
- *
- * 主题：默认深色，设置里可以切浅色（或跟随系统）。浅色不是翻转出来的，
- * 是单独一组值 —— 深色靠"提亮一档"分层，浅色靠"白卡 + 灰底"分层，两套逻辑不同。
+ * Shared colors and components for the Swiss layout grid.
+ * Every skin uses 20dp page margins, 16dp panel insets and semantic text roles.
+ * ThemeStore applies the chosen font and SwissTypography supplies size, leading and weight.
  */
 public final class Ui {
 
@@ -66,30 +59,25 @@ public final class Ui {
 
     private final Context ctx;
     public final boolean dark;
+    public final AppearancePalette palette;
+    public final boolean amap;
 
     public Ui(Context c) {
         this.ctx = c;
         this.dark = isDark(c);
+        this.palette = ThemeStore.palette(c,dark);
+        this.amap = ThemeStore.load(c).amap();
     }
 
     /* ==================== 主题 ==================== */
 
     /** 当前是否深色。auto 跟随系统（夜里深、白天浅）。 */
     public static boolean isDark(Context c) {
-        String t = prefs(c).getString(K_THEME, "dark");
-        if ("light".equals(t)) {
-            return false;
-        }
-        if ("auto".equals(t)) {
-            int mode = c.getResources().getConfiguration().uiMode
-                    & Configuration.UI_MODE_NIGHT_MASK;
-            return mode == Configuration.UI_MODE_NIGHT_YES;
-        }
-        return true;   // 默认深色
+        return ThemeStore.dark(c);
     }
 
     public static void setTheme(Context c, String theme) {
-        prefs(c).edit().putString(K_THEME, theme).apply();
+        AppearanceConfig a=ThemeStore.load(c);a.mode=theme;ThemeStore.save(c,a);
     }
 
     /** 深/浅互切（首页右上角那个按钮用）。 */
@@ -98,7 +86,7 @@ public final class Ui {
     }
 
     public static String themeName(Context c) {
-        return prefs(c).getString(K_THEME, "dark");
+        return ThemeStore.load(c).mode;
     }
 
     private static SharedPreferences prefs(Context c) {
@@ -108,38 +96,39 @@ public final class Ui {
     /* ==================== 颜色 ==================== */
 
     public int bg() {
-        return dark ? D_BG : L_BG;
+        return palette.bg;
     }
 
     public int surface() {
-        return dark ? D_SURFACE : L_SURFACE;
+        return palette.surface;
     }
 
     /** 比卡片再亮一档：卡片里再嵌一层（进度条底、内嵌行）时才用。 */
     public int surface2() {
-        return dark ? D_SURFACE2 : L_SURFACE2;
+        return palette.surface2;
     }
 
     public int line() {
-        return dark ? D_LINE : L_LINE;
+        return palette.line;
     }
 
     public int text() {
-        return dark ? D_TEXT : L_TEXT;
+        return palette.text;
     }
 
     public int text2() {
-        return dark ? D_TEXT2 : L_TEXT2;
+        return palette.text2;
     }
 
     public int text3() {
-        return dark ? D_TEXT3 : L_TEXT3;
+        return palette.text3;
     }
 
     /** 深色下用亮一点的蓝，浅色下用标准蓝，保证各自对比度。 */
     public int accent() {
-        return dark ? 0xFF4C86F7 : BLUE;
+        return palette.accent;
     }
+    public int onAccent(){return palette.onAccent;}
 
     public int green() {
         return dark ? 0xFF3DDC84 : 0xFF12A150;
@@ -162,7 +151,9 @@ public final class Ui {
         GradientDrawable g = new GradientDrawable();
         g.setShape(GradientDrawable.RECTANGLE);
         g.setColor(color);
-        g.setCornerRadius(dp(radiusDp));
+        float radius=amap&&radiusDp>=10&&radiusDp<90?Math.min(radiusDp,16):radiusDp;
+        g.setCornerRadius(dp(radius));
+        if(amap&&color==surface()&&radiusDp>=16)g.setStroke(Math.max(1,dp(.5f)),line());
         return g;
     }
 
@@ -189,8 +180,12 @@ public final class Ui {
         box.setBackground(round(surface(), radiusDp));
         int p = dp(padDp);
         box.setPadding(p, p, p, p);
+        if(amap){box.setElevation(dp(1));box.setClipToOutline(true);}
         return box;
     }
+
+    /** Amap's pale blue header fades into the neutral page; classic stays unchanged. */
+    public void page(View view){if(amap)view.setBackground(AmapStyle.page(this));else view.setBackgroundColor(bg());}
 
     /** 卡片之间统一留 10dp，看起来才像一组。 */
     public LinearLayout.LayoutParams gap(int bottomDp) {
@@ -204,20 +199,20 @@ public final class Ui {
     public TextView title(String s) {
         TextView tv = new TextView(ctx);
         tv.setText(s);
-        tv.setTextSize(26);
+        tv.setTextSize(28);
         tv.setTextColor(text());
         tv.setTypeface(Typeface.DEFAULT_BOLD);
         tv.setLineSpacing(dp(4), 1f);
-        return tv;
+        return SwissTypography.role(tv,SwissTypography.Role.TITLE);
     }
 
     /** 次级说明行（日期、副标题）。 */
     public TextView sub(String s) {
         TextView tv = new TextView(ctx);
         tv.setText(s);
-        tv.setTextSize(13);
+        tv.setTextSize(12);
         tv.setTextColor(text2());
-        return tv;
+        return SwissTypography.role(tv,SwissTypography.Role.META);
     }
 
     /** 区块标题：彩色小方块 + 标题 + 右侧动作，一眼看出这是"一组"。 */
@@ -227,6 +222,8 @@ public final class Ui {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
+        if(amap){row.addView(new AmapStyle.Icon(ctx,name,text()),new LinearLayout.LayoutParams(dp(24),dp(24)));}
+        else {
         TextView icon = new TextView(ctx);
         icon.setText(glyph);
         icon.setTextSize(11);
@@ -234,15 +231,17 @@ public final class Ui {
         icon.setGravity(Gravity.CENTER);
         icon.setBackground(round(glyphBg, 7f));
         row.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        }
 
         TextView t = new TextView(ctx);
         t.setText(name);
-        t.setTextSize(16);
+        t.setTextSize(18);
         t.setTextColor(text());
         t.setTypeface(Typeface.DEFAULT_BOLD);
+        SwissTypography.role(t,SwissTypography.Role.SECTION);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        tlp.leftMargin = dp(9);
+        tlp.leftMargin = dp(12);
         row.addView(t, tlp);
 
         if (action != null) {
@@ -289,7 +288,8 @@ public final class Ui {
 
         LinearLayout iconWrap = new LinearLayout(ctx);
         iconWrap.setGravity(Gravity.CENTER);
-        iconWrap.addView(circle(glyph, circleColor, 44f, 17));
+        if(amap)iconWrap.addView(new AmapStyle.Icon(ctx,label,text()),new LinearLayout.LayoutParams(dp(32),dp(32)));
+        else iconWrap.addView(circle(glyph, circleColor, 44f, 17));
         box.addView(iconWrap);
 
         TextView t = new TextView(ctx);
@@ -330,6 +330,7 @@ public final class Ui {
     /** 圆角图标按钮（右上角主题切换那种）。 */
     public TextView iconButton(String glyph, int fg, int fill) {
         TextView tv = new TextView(ctx);
+        ThemeStore.excludeFont(tv);
         tv.setText(glyph);
         tv.setTextSize(15);
         tv.setTextColor(fg);

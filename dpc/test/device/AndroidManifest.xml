@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.memoryqa">
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
+    <application android:label="AFS memory device QA" />
+    <instrumentation android:name="com.afs.guard.MemoryDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true" />
+</manifest>

@@ -121,10 +121,27 @@ public final class Guard {
      * 两条路：① 不在自己的放行窗口里；② 它参与学习闸门、且闸门正在生效。
      */
     public static boolean blockedNow(Context ctx, String pkg) {
+        return blockReasonNow(ctx, pkg) != 0;
+    }
+
+    /** 0=可使用，1=自身时段，2=学习联动，3=禁忌惩罚。与实际冻结使用同一判定。 */
+    public static int blockReasonNow(Context ctx, String pkg) {
         Calendar c = Calendar.getInstance();
         Rule r = RuleStore.get(ctx, pkg);
-        return blocked(r, c) || (!RuleStore.keyApps(ctx).contains(pkg)
-                && StudyGate.holding(ctx, c));
+        boolean holding = StudyGate.holding(ctx, c);
+        boolean taboo = StudyGate.tabooHolding(c.getTimeInMillis(), StudyGate.tabooUntil(ctx));
+        return blockReason(r, RuleStore.keyApps(ctx).contains(pkg), holding, taboo, c);
+    }
+
+    static int blockReason(Rule rule, boolean keyApp, boolean holding, boolean taboo, Calendar now) {
+        if (blocked(rule, now)) return 1;
+        if (keyApp) return 0;
+        if (taboo) return 3;
+        return holding ? 2 : 0;
+    }
+
+    public static String blockReasonText(int reason) {
+        return reason == 1 ? "时段冻结" : reason == 2 ? "学习联动冻结" : reason == 3 ? "禁忌延长冻结" : "可使用";
     }
 
     /** 这个应用现在是否在自己的放行窗口里（不看学习闸门）。 */

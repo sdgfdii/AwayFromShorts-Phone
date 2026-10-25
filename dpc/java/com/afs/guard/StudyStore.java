@@ -402,6 +402,9 @@ public final class StudyStore {
      * @param date 允许补记最近几天，但传什么都不改手机时钟 —— 用调用方给的日期
      */
     public static Rec check(Context c, String goalId, double amount, String date) {
+        if (goalId.startsWith(MemoryData.GOAL_PREFIX)) {
+            throw new IllegalArgumentException("记忆复习独立保存，不写入打卡");
+        }
         Rec r = new Rec();
         r.id = "r" + System.currentTimeMillis() + "_" + (int) (Math.random() * 1000);
         r.goalId = goalId;

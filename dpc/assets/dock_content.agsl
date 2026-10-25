@@ -1,0 +1,31 @@
+// Independent, live glyph lens. Input contains only dock icons and labels.
+uniform shader glyphs;
+uniform float4 lens;
+uniform float density;
+uniform float lift;
+uniform float2 bounds;
+uniform float ultra;
+
+half4 sampleGlyph(float2 p) {
+    if(p.x<0.0||p.y<0.0||p.x>bounds.x||p.y>bounds.y)return half4(0);
+    return glyphs.eval(p);
+}
+
+half4 main(float2 p) {
+    half4 original = sampleGlyph(p);
+    if (lift<.001) return original;
+    float2 halfSize = (lens.zw-lens.xy)*.5;
+    float2 center = (lens.xy+lens.zw)*.5;
+    float2 axis = p-center;
+    axis.x -= clamp(axis.x,-max(halfSize.x-halfSize.y,0.0),max(halfSize.x-halfSize.y,0.0));
+    float distance = length(axis)-halfSize.y;
+    if (distance>1.0) return original;
+    float2 n = axis/max(length(axis),.001);
+    float edge = pow(clamp(1.0+distance/(11.2*density),0.0,1.0),1.6);
+    float2 q = center+(p-center)/(1.0+.16*lift)+n*(4.5*density*edge*lift*ultra);
+    float2 split = n.yx*(1.8*density*edge*lift*ultra);
+    half4 r = sampleGlyph(q+split), g = sampleGlyph(q), b = sampleGlyph(q-split);
+    half alpha = max(r.a,max(g.a,b.a));
+    half4 warped = half4(r.r,g.g,b.b,alpha);
+    return mix(original,warped,half(lift*(1.0-smoothstep(-.7,1.0,distance))));
+}

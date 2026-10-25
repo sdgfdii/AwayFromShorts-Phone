@@ -33,7 +33,7 @@ import java.util.Calendar;
  * 并进来还有个实打实的好处 —— 打完卡能在同一个进程里立刻解闸，
  * 不用等 Gist 往返和 10 分钟的拉取节流。
  */
-public class MainActivity extends Activity {
+public class MainActivity extends ThemedActivity {
 
     private static volatile boolean homeVisible;
 
@@ -54,7 +54,6 @@ public class MainActivity extends Activity {
     private TextView lockNote;
     private TextView checkinTitle;
     private TextView checkinSub;
-    private TextView appsHint;
     private TextView foot;
     private LinearLayout checkinCard;
     private FrostView frost;
@@ -75,11 +74,11 @@ public class MainActivity extends Activity {
         ui = new Ui(this);
 
         scroll = new ScrollView(this);
-        scroll.setBackgroundColor(ui.bg());
+        ui.page(scroll);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(ui.dp(18), ui.dp(16), ui.dp(18), ui.dp(28));
+        root.setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32));
         scroll.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -94,54 +93,37 @@ public class MainActivity extends Activity {
         subLine.setLetterSpacing(0.18f);
         subLine.setTextColor(ui.text3());
         subLine.setTypeface(Typeface.DEFAULT_BOLD);
+        SwissTypography.role(subLine,SwissTypography.Role.LABEL);
         bar.addView(subLine, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         String themeMode = Ui.themeName(this);
-        TextView themeBtn = ui.iconButton("auto".equals(themeMode) ? "◐"
+        View themeBtn = ui.amap?new AmapStyle.Icon(this,"主题",ui.text()):ui.iconButton("auto".equals(themeMode) ? "◐"
                 : (ui.dark ? "☀" : "☾"), ui.text2(), ui.surface());
+        if(ui.amap){themeBtn.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(34),ui.dp(34)));themeBtn.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);}
         themeBtn.setContentDescription("主题设置");
-        themeBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                final String[] modes = {"auto", "dark", "light"};
-                String current = Ui.themeName(MainActivity.this);
-                int selected = "auto".equals(current) ? 0
-                        : ("light".equals(current) ? 2 : 1);
-                new android.app.AlertDialog.Builder(MainActivity.this)
-                        .setTitle("主题")
-                        .setSingleChoiceItems(new String[] {"跟随系统", "深色", "浅色"},
-                                selected, new android.content.DialogInterface.OnClickListener() {
-                                    public void onClick(android.content.DialogInterface dialog, int which) {
-                                        Ui.setTheme(MainActivity.this, modes[which]);
-                                        dialog.dismiss();
-                                        recreate();
-                                    }
-                                })
-                        .setNegativeButton("取消", null)
-                        .show();
-            }
-        });
+        themeBtn.setOnClickListener(v -> startActivity(new Intent(this, ThemeActivity.class)));
         bar.addView(themeBtn);
         root.addView(bar);
 
         /* ---------- 问候 + 日期 ---------- */
-        greet = ui.title(greeting());
+        greet = ui.title(ui.amap?"守卫":"设置");
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        glp.topMargin = ui.dp(18);
+        glp.topMargin = ui.dp(24);
         root.addView(greet, glp);
 
         dateLine = ui.sub("");
         dateLine.setTextSize(13);
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = ui.dp(6);
+        dlp.topMargin = ui.dp(8);
         root.addView(dateLine, dlp);
 
         /* ---------- 状态卡 ---------- */
         LinearLayout statusCard = ui.card();
-        LinearLayout.LayoutParams scLp = ui.gap(10);
-        scLp.topMargin = ui.dp(20);
+        LinearLayout.LayoutParams scLp = ui.gap(16);
+        scLp.topMargin = ui.dp(24);
         root.addView(statusCard, scLp);
 
         LinearLayout statusHead = new LinearLayout(this);
@@ -161,6 +143,7 @@ public class MainActivity extends Activity {
         st.setTextSize(15);
         st.setTypeface(Typeface.DEFAULT_BOLD);
         st.setTextColor(ui.text());
+        SwissTypography.role(st,SwissTypography.Role.SECTION);
         LinearLayout.LayoutParams stLp = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         stLp.leftMargin = ui.dp(9);
@@ -195,68 +178,19 @@ public class MainActivity extends Activity {
             }
         });
 
-        /* ---------- 打卡主卡：整块蓝，全页唯一的重色 ---------- */
-        checkinCard = new LinearLayout(this);
-        checkinCard.setOrientation(LinearLayout.HORIZONTAL);
-        checkinCard.setGravity(Gravity.CENTER_VERTICAL);
-        checkinCard.setBackground(ui.round(Ui.BLUE, 18f));
-        int cp = ui.dp(18);
-        checkinCard.setPadding(cp, cp, cp, cp);
-        root.addView(checkinCard, ui.gap(0));
-
-        LinearLayout checkinCol = new LinearLayout(this);
-        checkinCol.setOrientation(LinearLayout.VERTICAL);
-        checkinTitle = new TextView(this);
-        checkinTitle.setText("打卡");
-        checkinTitle.setTextSize(21);
-        checkinTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        checkinTitle.setTextColor(0xFFFFFFFF);
-        checkinCol.addView(checkinTitle);
-
-        checkinSub = new TextView(this);
-        checkinSub.setTextSize(12);
-        checkinSub.setTextColor(0xCCFFFFFF);
-        checkinSub.setMaxLines(2);
-        LinearLayout.LayoutParams cslp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cslp.topMargin = ui.dp(5);
-        checkinCol.addView(checkinSub, cslp);
-        checkinCard.addView(checkinCol, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        TextView arrow = new TextView(this);
-        arrow.setText("→");
-        arrow.setTextSize(20);
-        arrow.setTextColor(0xFFFFFFFF);
-        arrow.setGravity(Gravity.CENTER);
-        arrow.setBackground(ui.round(0x33FFFFFF, 99f));
-        checkinCard.addView(arrow, new LinearLayout.LayoutParams(ui.dp(38), ui.dp(38)));
-
-        checkinCard.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                openCheckin();
-            }
-        });
-        // 同步凭据是隐藏配置：长按打卡进打卡页后直接弹凭据框（打卡页本体没有别的 UI 了）
-        checkinCard.setOnLongClickListener(new View.OnLongClickListener() {
-            public boolean onLongClick(View v) {
-                Intent it = new Intent(MainActivity.this, CheckinActivity.class);
-                it.putExtra(CheckinActivity.EXTRA_OPEN, "token");
-                startActivity(it);
-                return true;
-            }
-        });
-
         /* ---------- 快捷：三格彩色图标 ---------- */
-        LinearLayout sec = ui.section("▦", Ui.BLUE, "功能", null, null);
+        LinearLayout sec = ui.section("▦", ui.accent(), "功能", null, null);
         LinearLayout.LayoutParams seclp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        seclp.topMargin = ui.dp(22);
-        seclp.bottomMargin = ui.dp(10);
+        seclp.topMargin = ui.dp(24);
+        seclp.bottomMargin = ui.dp(12);
         root.addView(sec, seclp);
 
-        LinearLayout tiles = new LinearLayout(this);
-        tiles.setOrientation(LinearLayout.HORIZONTAL);
+        // 四格排成 2×2：三格挤一行时 hint 会被截断，两行两列每个都读得全
+        LinearLayout firstRow = new LinearLayout(this);
+        firstRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout secondRow = new LinearLayout(this);
+        secondRow.setOrientation(LinearLayout.HORIZONTAL);
 
         LinearLayout tManage = ui.tile("◎", Ui.TILE_TEAL, "目标管理", "增删 · 改默认量",
                 new View.OnClickListener() {
@@ -272,29 +206,39 @@ public class MainActivity extends Activity {
                         startActivity(new Intent(MainActivity.this, HistoryActivity.class));
                     }
                 });
-        LinearLayout tApps = ui.tile("≡", Ui.TILE_RUST, "黑名单", "",
+        // 备忘录是纯本机的速记，不参与冻结/打卡，所以只给一个入口，不占底栏
+        LinearLayout tMemo = ui.tile("✎", Ui.TILE_RUST, "备忘录", "速记 · 置顶",
                 new View.OnClickListener() {
                     public void onClick(View v) {
-                        startActivity(new Intent(MainActivity.this, AppListActivity.class));
+                        startActivity(new Intent(MainActivity.this, MemoActivity.class));
                     }
                 });
-
-        LinearLayout.LayoutParams t1 = new LinearLayout.LayoutParams(0,
+        // 工具箱同样纯本机：计时、抽签、文本整理，不联网
+        LinearLayout tToolbox = ui.tile("▦", Ui.TILE_BLUE, "工具箱", "计时 · 抽签 · 文本",
+                new View.OnClickListener() {
+                    public void onClick(View v) {
+                        startActivity(new Intent(MainActivity.this, ToolboxActivity.class));
+                    }
+                });
+        // 每行只有左格留 12dp 列缝；右格不再加边距，否则两行会差 12dp、右边缘对不齐
+        LinearLayout.LayoutParams halfLeftTop = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        t1.rightMargin = ui.dp(8);
-        LinearLayout.LayoutParams t2 = new LinearLayout.LayoutParams(0,
+        halfLeftTop.rightMargin = ui.dp(12);
+        LinearLayout.LayoutParams halfRight = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        t2.rightMargin = ui.dp(8);
-        LinearLayout.LayoutParams t3 = new LinearLayout.LayoutParams(0,
+        LinearLayout.LayoutParams halfLeftBottom = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        tiles.addView(tManage, t1);
-        tiles.addView(tHist, t2);
-        tiles.addView(tApps, t3);
-        root.addView(tiles);
-
-        // 黑名单那格底下的小字要能跟着数量变，单独留引用（tile 的第 3 个子 view）
-        View appsHintView = tApps.getChildAt(2);
-        appsHint = (TextView) appsHintView;
+        halfLeftBottom.rightMargin = ui.dp(12);
+        firstRow.addView(tManage, halfLeftTop);
+        firstRow.addView(tHist, halfRight);
+        secondRow.addView(tMemo, halfLeftBottom);
+        secondRow.addView(tToolbox, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        root.addView(firstRow);
+        LinearLayout.LayoutParams secondLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        secondLp.topMargin = ui.dp(12);
+        root.addView(secondRow, secondLp);
 
         foot = new TextView(this);
         foot.setText("移除守卫只有一条路：\n"
@@ -303,6 +247,7 @@ public class MainActivity extends Activity {
         foot.setTextColor(ui.text3());
         foot.setLineSpacing(ui.dp(3), 1f);
         foot.setPadding(0, ui.dp(20), 0, 0);
+        if(ui.amap)foot.setVisibility(View.GONE);
         root.addView(foot);
 
         // 薄霜层盖在内容上面：全屏蔽时有"被冻住"的体感，平时不画
@@ -316,7 +261,8 @@ public class MainActivity extends Activity {
         android.widget.FrameLayout host = new android.widget.FrameLayout(this);
         host.setBackgroundColor(ui.bg());
         host.addView(shell);
-        setContentView(host);
+        root.setPadding(root.getPaddingLeft(),root.getPaddingTop(),root.getPaddingRight(),root.getPaddingBottom()+ui.dp(94));
+        setContentView(FloatingNav.wrap(this, host, 4));
         immersive();
         Guard.ensureService(this);   // 每次打开 App 顺手保证常驻守护在跑
         Gist.seedToken(this); // 带 token 的构建第一次打开就落盘
@@ -331,7 +277,7 @@ public class MainActivity extends Activity {
         // 只有冷启动才播加载动画：转屏、从后台切回来都不该再挡一次
         android.util.Log.i(Guard.TAG, "main: savedInstanceState="
                 + (savedInstanceState == null ? "null(冷启动)" : "非空"));
-        if (savedInstanceState == null) {
+        if (savedInstanceState == null && !getIntent().getBooleanExtra("from_bottom_nav", false)) {
             shell.setAlpha(0f);
             splash = new SplashView(this);
             host.addView(splash, new ViewGroup.LayoutParams(
@@ -435,10 +381,14 @@ public class MainActivity extends Activity {
         }
         immersive();      // 从别的页面/别的 App 回来时状态栏可能又冒出来，重新藏
         nextSwitchMinute = -1L;
-        render();
         handler.removeCallbacks(tick);
         handler.post(tick);
-        Hub.kick(this);   // onResume 也踢：常驻进程不会反复 onCreate，只有这里能保证周期同步
+        // 状态刷新和同步都放到首帧之后：切页那一帧只负责把页面画出来
+        handler.post(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            render();
+            Hub.kick(MainActivity.this);   // 常驻进程不会反复 onCreate，只有这里能保证周期同步
+        });
     }
 
     @Override
@@ -510,7 +460,7 @@ public class MainActivity extends Activity {
             lockNote.setText("全部应用都在屏蔽中：现在改不了，到点自动解锁。没有解除按钮。");
         } else if (grace) {
             lockNote.setVisibility(View.VISIBLE);
-            lockNote.setText("首次使用：现在可以随便配，到黑名单页点「立即应用」后按锁定规则走。");
+            lockNote.setText("首次使用：现在可以配置，在冻结应用的设置里点「立即应用」后按锁定规则执行。");
         } else {
             lockNote.setVisibility(View.GONE);
         }
@@ -518,9 +468,6 @@ public class MainActivity extends Activity {
         if (frost != null) {
             frost.setVisibility(dark && !grace ? View.VISIBLE : View.GONE);
         }
-        appsHint.setText(total + " 个应用");
-        styleCheckin();
-
         // 「今天还没学完」不用通知催 —— 整页变灰（健康使用手机那套），
         // 打完自动恢复彩色。比通知安静，但一眼就能看见。
         applyGray(false);

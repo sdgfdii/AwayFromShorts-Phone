@@ -29,7 +29,7 @@ import java.util.Locale;
 import java.util.Set;
 
 /** 从已安装的可启动应用里勾选要冻结的 App。 */
-public class AppPickerActivity extends Activity {
+public class AppPickerActivity extends ThemedActivity {
 
     private static final class Entry {
         String label;

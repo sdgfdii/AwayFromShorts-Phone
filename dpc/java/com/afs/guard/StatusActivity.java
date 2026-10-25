@@ -13,16 +13,16 @@ import java.util.Date;
 import java.util.Locale;
 
 /** 运行状态卡的完整执行明细。 */
-public class StatusActivity extends Activity {
+public class StatusActivity extends ThemedActivity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         Ui ui = new Ui(this);
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(ui.bg());
+        ui.page(scroll);
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(ui.dp(18), ui.dp(20), ui.dp(18), ui.dp(28));
+        body.setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32));
         scroll.addView(body, new ViewGroup.LayoutParams(-1, -2));
 
         TextView back = ui.sub("‹ 返回");

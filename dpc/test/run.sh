@@ -42,9 +42,11 @@ public final class BuildConfig {
 EOF
 
 find java test/java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
-"$JAVAC" -encoding UTF-8 -nowarn -source 8 -target 8 \
-  -bootclasspath "$ANDROID_JAR" -classpath "$ANDROID_JAR" \
-  -d "$OUT" @"$OUT/sources.txt" 2>&1 | grep -vE '^(warning|注意|Note)' || true
+if ! "$JAVAC" -encoding UTF-8 -nowarn --release 8 \
+  -classpath "$ANDROID_JAR" -d "$OUT" @"$OUT/sources.txt" > "$OUT/javac.log" 2>&1; then
+  cat "$OUT/javac.log" >&2
+  exit 1
+fi
 
 # android.jar 里的 org.json 是编译桩（运行到就是 RuntimeException: Stub!）。
 # 运行时挂 gradle 缓存里的真实现 jar（只含 org.json 包，不影响其它桩类）；
@@ -60,3 +62,7 @@ fi
 
 "$JAVA" -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 \
   -cp "$RUN_CP" com.afs.guard.GuardTest
+
+for TEST in FreezeRuleTest LedgerMergeTest MemoryTest MemoryFlashcardsTest FreezeSlotTest QuizTest DockSpringTest AppearanceTest MemoTest ToolboxTest; do
+  "$JAVA" -Dfile.encoding=UTF-8 -cp "$RUN_CP" "com.afs.guard.$TEST"
+done

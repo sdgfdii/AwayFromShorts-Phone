@@ -338,7 +338,7 @@ public final class StudyGate {
         // 只库内全是用户手建的目标（g* 前缀）才跳过。没网时导入静默失败，
         // 1 小时节流后随 init 重试。
         if (sp(c).getInt(K_IMPORT_VER, 0) < 4) {
-            boolean has = StudyStore.hasGoals(c);
+            boolean has = !StudyStore.goals(c).isEmpty();
             boolean fromPc = StudyStore.hasImportedGoals(c);
             if (has && !fromPc) {
                 sp(c).edit().putInt(K_IMPORT_VER, 4).apply();   // 全是手建的，不碰
@@ -411,7 +411,8 @@ public final class StudyGate {
     static boolean localMode(Context c) {
         long now = System.currentTimeMillis();
         if (now - localModeAt > 5000L) {
-            localMode = StudyStore.hasGoals(c);
+            // Memory-only users still retain the legacy remote study gate, if configured.
+            localMode = !StudyStore.goals(c).isEmpty();
             localModeAt = now;
         }
         return localMode;
@@ -556,6 +557,7 @@ public final class StudyGate {
     public static boolean holding(Context c, Calendar now) {
         init(c);
         refreshIfNeeded(c);
+        if (now.get(Calendar.HOUR_OF_DAY) >= 20 && MemoryStore.pending(c) > 0) return true;
         if (shouldHold(cached, now)) {
             return true;
         }
@@ -905,7 +907,9 @@ public final class StudyGate {
     /** 首页状态行文案（describe 里展示）。 */
     public static String statusText(Context c, Calendar now) {
         init(c);
-        return statusTextOf(cached, now);
+        int pending = MemoryStore.pending(c);
+        return statusTextOf(cached, now) + (pending > 0 ? "\n记忆复习　还有 " + pending + " 个目标"
+                + (now.get(Calendar.HOUR_OF_DAY) >= 20 ? "（延长冻结中）" : "（20:00 检查）") : "");
     }
 
     static String statusTextOf(Snapshot s, Calendar now) {

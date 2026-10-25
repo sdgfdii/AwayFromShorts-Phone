@@ -9,3 +9,6 @@ checkin/build/
 blocker/build/
 .workbuddy/
 afs-guard-*.apk
+
+# Local inspection, device captures and temporary QA packages
+.codex-fix/

@@ -43,11 +43,11 @@ import java.util.Set;
  *
  * 页面固定深色，跟黑名单页一致。
  */
-public class StatsActivity extends Activity {
+public class StatsActivity extends ThemedActivity {
 
     private int BG_DARK, SURFACE_DARK, TEXT_DARK, TEXT2_DARK, TRACK, RED_DARK, GREEN_DARK;
     private Ui look;
-    private static final int BRAND        = Ui.BLUE;
+    private int BRAND = Ui.BLUE;
 
     private LinearLayout body;
     private Button permBtn;
@@ -59,6 +59,7 @@ public class StatsActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         look = new Ui(this);
+        BRAND = look.accent();
         BG_DARK = look.bg();
         SURFACE_DARK = look.surface();
         TEXT_DARK = look.text();
@@ -68,10 +69,10 @@ public class StatsActivity extends Activity {
         GREEN_DARK = look.green();
 
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(BG_DARK);
+        look.page(scroll);
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(16), dp(22), dp(16), dp(28));
+        body.setPadding(dp(20), dp(24), dp(20), dp(32));
         scroll.addView(body, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         setContentView(scroll);

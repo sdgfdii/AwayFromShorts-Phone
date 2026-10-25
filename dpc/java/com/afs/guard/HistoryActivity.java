@@ -35,7 +35,7 @@ import java.util.Map;
  * 数据全部来自本机 {@link StudyStore}——本机就是学习台，打卡记录都在 study.json 里，
  * 这一页只是把它变成能看的。PC 链路（goal-* 那套）的记录在电脑那边，不归这页管。
  */
-public class HistoryActivity extends Activity {
+public class HistoryActivity extends ThemedActivity {
 
     /* 配色/圆角全部来自 {@link Ui}：深色为主，浅色跟随全局设置。
        这些值原来是写死的静态常量，只支持深色；改成实例字段后能跟着主题走。 */
@@ -151,12 +151,12 @@ public class HistoryActivity extends Activity {
 
         // ==================== 画 ====================
         ScrollView sc = new ScrollView(this);
-        sc.setBackgroundColor(BG);
+        look.page(sc);
         sc.setFillViewport(true);
 
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(16), dp(16), dp(16), dp(24));
+        body.setPadding(dp(20), dp(24), dp(20), dp(32));
         sc.addView(body);
 
         TextView title = new TextView(this);
@@ -503,7 +503,7 @@ public class HistoryActivity extends Activity {
     private void stat(LinearLayout row, String big, String small) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setGravity(Gravity.CENTER);
+        box.setGravity(Gravity.START);
         box.setBackground(round(SURFACE, dp(16)));
         box.setPadding(dp(10), dp(14), dp(10), dp(14));
         TextView b = new TextView(this);
@@ -511,13 +511,13 @@ public class HistoryActivity extends Activity {
         b.setTextColor(TEXT);
         b.setTextSize(18);
         b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setGravity(Gravity.CENTER);
+        b.setGravity(Gravity.START);
         box.addView(b);
         TextView s = new TextView(this);
         s.setText(small);
         s.setTextColor(TEXT3);
         s.setTextSize(11);
-        s.setGravity(Gravity.CENTER);
+        s.setGravity(Gravity.START);
         s.setPadding(0, dp(4), 0, 0);
         box.addView(s);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -556,7 +556,7 @@ public class HistoryActivity extends Activity {
         String when = r.date + (r.ts > 0
                 ? " " + new java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
                         .format(new java.util.Date(r.ts)) : "");
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("撤销这笔打卡？")
                 .setMessage(name + "  +" + fmt(r.amount) + unit2 + "\n" + when
                         + "\n\n删掉后进度和冻结闸门立刻重算。")

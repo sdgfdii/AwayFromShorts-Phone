@@ -74,7 +74,7 @@ import java.util.Random;
  * 打完那一刻本机数据就变了，页面和闸门同时刷新；上传云端是后台顺带做的事
  * （Hub 推 checkin-ledger.json，PC 读它）。
  */
-public class CheckinActivity extends Activity {
+public class CheckinActivity extends ThemedActivity {
 
     /** 主题跟着首页走：全部屏蔽时是深色，否则浅色。 */
     public static final String EXTRA_DARK = "dark";
@@ -92,7 +92,7 @@ public class CheckinActivity extends Activity {
     private static final int RC_FONT = 45;
 
     /** Voyage 那套蓝：深色底上比原来的青色克制，也和首页主卡同一个色。 */
-    private static final int ACCENT = 0xFF3D7BF5;
+    private int ACCENT = 0xFF3D7BF5;
     private static final int RED_L = 0xFFF85A54;
     private static final int RED_D = 0xFFFF7B72;
     private static final int GREEN_L = 0xFF12A150;
@@ -199,8 +199,7 @@ public class CheckinActivity extends Activity {
         buildUi();
         applyStatusBar();
         loadLocal();
-        render();
-        refreshAsync();
+        render(false);
         Hub.kick(this);   // 进页面顺手把台账推一下（有节流，脏标记优先）
         // 别的页面直接点名要某个功能（打卡页本体已经收成纯卡片）
         String open = getIntent() == null ? null : getIntent().getStringExtra(EXTRA_OPEN);
@@ -219,6 +218,21 @@ public class CheckinActivity extends Activity {
     }
 
     @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        String previous=getIntent().getStringExtra(EXTRA_OPEN);
+        setIntent(intent);
+        if(intent.getBooleanExtra("from_bottom_nav",false) && previous!=null) {
+            if(manageDialog!=null)manageDialog.dismiss();
+            if(tabooDialog!=null)tabooDialog.dismiss();
+            rootBox.setVisibility(View.VISIBLE);
+            backdropView.setVisibility(Backdrop.has(this)?View.VISIBLE:View.GONE);
+            backdropTint.setVisibility(Backdrop.has(this)?View.VISIBLE:View.GONE);
+            reloadBackdrop();
+        }
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         if (dark != Ui.isDark(this)) {
@@ -226,6 +240,7 @@ public class CheckinActivity extends Activity {
             return;
         }
         applyStatusBar();   // 从别的页面回来时状态栏可能又冒头，重新藏
+        if (card != null && !busy) startHover();
         refreshAsync();
     }
 
@@ -233,6 +248,7 @@ public class CheckinActivity extends Activity {
     protected void onPause() {
         super.onPause();
         ui.removeCallbacks(longPress);
+        stopHover();
     }
 
     @Override
@@ -267,11 +283,12 @@ public class CheckinActivity extends Activity {
     }
 
     private void pickColors() {
+        ACCENT = look.accent(); DLG_LINK = look.accent();
         // 直接用全 App 那套基线：打卡页以前自己定义了一份，和首页差半个色阶，
         // 两页互相跳的时候底色的差别看得出来。
         bg = look.bg();
-        cardBg = dark ? 0xFF303744 : look.surface();
-        ghostBg = dark ? 0xFF1B2028 : look.surface2();
+        cardBg = look.surface();
+        ghostBg = look.surface2();
         // 开了亚克力底之后，卡片要半透明才透得出后面的图 —— 那才是"亚克力"。
         // 不透明的话背景只是贴在底下的一张壁纸，一点材质感都没有。
         if (Backdrop.has(this)) {
@@ -282,7 +299,7 @@ public class CheckinActivity extends Activity {
         text2C = look.text2();
         text3C = look.text3();
         lineC = look.line();
-        trackC = dark ? 0xFF23262D : 0xFFEDEFF2;
+        trackC = look.surface2();
         greenC = look.green();
         redC = look.red();
         // 用户自定义打卡字体颜色：主文字一档全换，次级/三级用同色降透明度，
@@ -301,7 +318,7 @@ public class CheckinActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(bg);
-        root.setFitsSystemWindows(true);
+        root.setFitsSystemWindows(false);
 
         // ---- 顶部：只留一行状态 + 刷新 ----
         // 原来这里有个 24sp 的"打卡"大标题，占掉一整条；
@@ -309,7 +326,7 @@ public class CheckinActivity extends Activity {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.setPadding(dp(18), dp(14), dp(14), dp(2));
+        head.setPadding(dp(20), dp(8), dp(20), dp(4));
 
         topSub = new TextView(this);
         topSub.setTextColor(text3C);
@@ -412,13 +429,14 @@ public class CheckinActivity extends Activity {
         root.addView(head, hlp);
 
         // ---- 卡片舞台：悬浮在更暗的底色上，立体感从这里来 ----
-        int pageBg = dark ? 0xFF232A34 : 0xFFE2E5EA;
+        int pageBg = look.amap?look.bg():(dark ? 0xFF232A34 : 0xFFE2E5EA);
         // 开了亚克力底，页面自身就不能再铺死色 —— 让底下的模糊图透上来。
         root.setBackgroundColor(Backdrop.has(this) ? Color.TRANSPARENT : pageBg);
+        if(look.amap&&!Backdrop.has(this))look.page(root);
         stage = new FrameLayout(this);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
-        slp.setMargins(dp(14), dp(12), dp(14), dp(20));   // 四周留空，投影才看得见
+        slp.setMargins(dp(20), dp(16), dp(20), dp(24));
         root.addView(stage, slp);
         root.setClipChildren(false);
         stage.setClipChildren(false);
@@ -468,7 +486,8 @@ public class CheckinActivity extends Activity {
         host.addView(root, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        setContentView(host);
+        root.setPadding(root.getPaddingLeft(),root.getPaddingTop(),root.getPaddingRight(),root.getPaddingBottom()+dp(94));
+        setContentView(FloatingNav.wrap(this, host, 3));
         loadBackdrop();
     }
 
@@ -510,7 +529,7 @@ public class CheckinActivity extends Activity {
                 "从相册选一张…",
                 "清除自定义图片"
         };
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("打卡页背景")
                 .setItems(items, new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
@@ -569,6 +588,7 @@ public class CheckinActivity extends Activity {
         if (rootBox != null) {
             rootBox.setBackgroundColor(Backdrop.has(this)
                     ? Color.TRANSPARENT : (dark ? 0xFF08090B : 0xFFE2E5EA));
+            if(look.amap&&!Backdrop.has(this))look.page(rootBox);
         }
         loadBackdrop();
         render();
@@ -586,6 +606,8 @@ public class CheckinActivity extends Activity {
      *                  两段动画同时改 alpha/translation 会互相打架，看着一顿一顿的。
      */
     private void render(boolean animateIn) {
+        stopHover();
+        if (card != null) card.animate().cancel();
         stage.removeAllViews();
         dots.removeAllViews();
         card = null;
@@ -665,7 +687,8 @@ public class CheckinActivity extends Activity {
     /** 按队列项分派：黑卡走禁忌那套版式，白卡走目标那套。 */
     private View buildEntryCard(Entry e, int index) {
         View built = e.type == Entry.TABOO ? buildTabooCard(e, index) : buildCard(e.goal, index);
-        if (!"default".equals(fontChoice())) applyCardFont(built);
+        if (!"default".equals(fontChoice())) { ThemeStore.excludeFont(built); applyCardFont(built); }
+        ThemeStore.typography(built); // Apply metrics before a sliding card is first laid out.
         return built;
     }
 
@@ -686,7 +709,7 @@ public class CheckinActivity extends Activity {
 
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(24), dp(22), dp(24), dp(22));
+        box.setPadding(dp(16), dp(24), dp(16), dp(24));
         box.setBackground(cardBackground(done));
 
         // ---- 顶行：序号 ----
@@ -720,7 +743,7 @@ public class CheckinActivity extends Activity {
         name.setLineSpacing(dp(2), 1f);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        nlp.topMargin = dp(14);
+        nlp.topMargin = dp(16);
         box.addView(name, nlp);
 
         TextView meta = new TextView(this);
@@ -741,7 +764,8 @@ public class CheckinActivity extends Activity {
         // ---- 要记多少 ----
         LinearLayout amountRow = new LinearLayout(this);
         amountRow.setOrientation(LinearLayout.HORIZONTAL);
-        amountRow.setGravity(Gravity.CENTER);
+        amountRow.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
+        amountRow.setBaselineAligned(true);
         if (done) {
             TextView ok = new TextView(this);
             ok.setText("✓ 已打卡");
@@ -759,10 +783,10 @@ public class CheckinActivity extends Activity {
             amountRow.addView(num);
 
             TextView unit = new TextView(this);
-            unit.setText(" " + g.unit);
+            unit.setText(g.unit);
             unit.setTextColor(text2C);
             unit.setTextSize(15);
-            unit.setPadding(0, 0, 0, dp(7));
+            unit.setPadding(dp(8), 0, 0, 0);
             amountRow.addView(unit);
         }
         box.addView(amountRow);
@@ -772,7 +796,7 @@ public class CheckinActivity extends Activity {
                 : "还差 " + fmt(g.total - g.done) + " " + g.unit + " 完成");
         left.setTextColor(text3C);
         left.setTextSize(11);
-        left.setGravity(Gravity.CENTER);
+        left.setGravity(Gravity.START);
         left.setPadding(0, dp(6), 0, 0);
         box.addView(left);
 
@@ -781,7 +805,7 @@ public class CheckinActivity extends Activity {
         cardHint.setText(done ? "已打卡 · 左右推换目标" : "");
         cardHint.setTextColor(done ? text3C : ACCENT);
         cardHint.setTextSize(13);
-        cardHint.setGravity(Gravity.CENTER);
+        cardHint.setGravity(Gravity.START);
         cardHint.setPadding(0, dp(22), 0, 0);
         box.addView(cardHint);
 
@@ -804,7 +828,7 @@ public class CheckinActivity extends Activity {
 
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(24), dp(22), dp(24), dp(22));
+        box.setPadding(dp(16), dp(24), dp(16), dp(24));
         GradientDrawable bgd = round(dark ? TABOO_CARD_DARK : TABOO_CARD, dp(22));
         bgd.setStroke(dp(1), claimed ? 0xFF2E7D5B : TABOO_LINE);
         box.setBackground(bgd);
@@ -840,7 +864,7 @@ public class CheckinActivity extends Activity {
         nameTv.setLineSpacing(dp(2), 1f);
         LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        nlp.topMargin = dp(14);
+        nlp.topMargin = dp(16);
         box.addView(nameTv, nlp);
 
         TextView meta = new TextView(this);
@@ -864,7 +888,7 @@ public class CheckinActivity extends Activity {
         TextView state = new TextView(this);
         state.setTextSize(24);
         state.setTypeface(bold());
-        state.setGravity(Gravity.CENTER);
+        state.setGravity(Gravity.START);
         if (claimed) {
             state.setText("✓ 今天认了");
             state.setTextColor(greenC);
@@ -880,7 +904,7 @@ public class CheckinActivity extends Activity {
 
         TextView sub = new TextView(this);
         sub.setTextSize(11);
-        sub.setGravity(Gravity.CENTER);
+        sub.setGravity(Gravity.START);
         sub.setPadding(0, dp(6), 0, 0);
         if (claimed) {
             sub.setText("冻结延长至 " + hmOf(until) + " · 长按可再认一次");
@@ -899,7 +923,7 @@ public class CheckinActivity extends Activity {
         cardHint.setText(claimed ? "已认领 · 左右推换卡" : "");
         cardHint.setTextColor(claimed ? TABOO_TEXT2 : 0xFFFFFFFF);
         cardHint.setTextSize(13);
-        cardHint.setGravity(Gravity.CENTER);
+        cardHint.setGravity(Gravity.START);
         cardHint.setPadding(0, dp(22), 0, 0);
         box.addView(cardHint);
 
@@ -999,7 +1023,7 @@ public class CheckinActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER);
         box.setPadding(dp(26), dp(26), dp(26), dp(26));
-        GradientDrawable bgd = round(cardBg, dp(22));
+        GradientDrawable bgd = round(cardBg, dp(look.amap?16:22));
         bgd.setStroke(dp(1), lineC);
         box.setBackground(bgd);
 
@@ -1254,8 +1278,13 @@ public class CheckinActivity extends Activity {
 
     /* ---------- 悬浮立体 ---------- */
 
-    /** 悬浮的呼吸投影：高度 8↔16dp 来回，卡就像悬在桌面上方轻轻起伏。 */
+    /** 小幅、缓慢变化的投影，拖动时交给手势接管。 */
     private ValueAnimator hoverAnim;
+
+    private boolean cardMotion() {
+        return !ui().getBoolean("reduce_motion", false)
+                && (Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled());
+    }
 
     /** 圆角轮廓 + 投影高度：elevation 的影子只有配了 outline 才是圆角的。 */
     private void floatify(View v, float elevPx) {
@@ -1265,13 +1294,20 @@ public class CheckinActivity extends Activity {
             }
         });
         v.setClipToOutline(false);
-        v.setElevation(elevPx);
+        v.setElevation(Math.min(elevPx, dp(16)));
+        v.setCameraDistance(dp(1000));
+        if (Build.VERSION.SDK_INT >= 28) {
+            v.setOutlineAmbientShadowColor(0x33000000);
+            v.setOutlineSpotShadowColor(0x55000000);
+        }
     }
 
     private void startHover() {
         stopHover();
-        hoverAnim = ValueAnimator.ofFloat(dp(18), dp(26));
-        hoverAnim.setDuration(1500);
+        if (!cardMotion()) return;
+        hoverAnim = ValueAnimator.ofFloat(dp(12), dp(16));
+        hoverAnim.setDuration(2800);
+        hoverAnim.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
         hoverAnim.setRepeatMode(ValueAnimator.REVERSE);
         hoverAnim.setRepeatCount(ValueAnimator.INFINITE);
         hoverAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
@@ -1361,6 +1397,7 @@ public class CheckinActivity extends Activity {
                 float pUp = claimed ? 0f : Math.min(1f, -up / upThreshold());
                 float pDown = claimed ? 0f : Math.min(1f, down / downThreshold());
                 float p = Math.max(pUp, pDown);
+                if (cardMotion()) { card.setRotationX(-3f * pUp + 2f * pDown); card.setElevation(dp(16 + 8 * p)); }
                 if (ghost != null) {
                     float s = 0.94f + 0.06f * p;
                     ghost.setScaleX(s);
@@ -1392,10 +1429,9 @@ public class CheckinActivity extends Activity {
             float up = Math.min(dy, 0f);
             float down = Math.max(dy, 0f) * 0.2f;
             float t = (up + down) * (done ? 0.2f : 1f);
-            // 平推式：卡保持平整 —— 不后仰、不缩小、不变透明，就是笔直往上推
-            // （立体感交给底下的呼吸投影，卡面本身一动不动才像"推"）
             card.setTranslationY(t);
             float p = done ? 0f : Math.min(1f, -up / upThreshold());
+            if (cardMotion()) { card.setRotationX(-3f * p); card.setElevation(dp(16 + 8 * p)); }
             // 上滑只推当前这张：不摆"下一张"跟上来（切不切目标由用户左右推决定）
             if (ghost != null) {
                 float s = 0.94f + 0.06f * p;
@@ -1655,7 +1691,7 @@ public class CheckinActivity extends Activity {
             }
         };
         if (c != null) {
-            shatter(c, after);
+            dismissCardUp(c, after);
         } else {
             after.run();
         }
@@ -1690,7 +1726,7 @@ public class CheckinActivity extends Activity {
             }
         };
         if (c != null) {
-            shatter(c, after);
+            dismissCardUp(c, after);
         } else {
             after.run();
         }
@@ -1753,7 +1789,7 @@ public class CheckinActivity extends Activity {
     /** 长按黑卡：一天犯两次忌（两顿辣）时再认一次，叠加。 */
     private void askClaimTabooAgain(final String name) {
         final int min = tabooPenaltyMin(this);
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("再认一次")
                 .setMessage("「" + name + "」今天再认一次？\n\n冻结再延长 "
                         + min + " 分钟（叠加）。")
@@ -1767,10 +1803,18 @@ public class CheckinActivity extends Activity {
                 .show();
     }
 
-    /**
-     * 上滑打卡的谢幕：把整张卡快照切成小碎块，四散炸开消失。
-     * 比"滑出屏幕"有仪式感 —— 这一单是彻底清掉的，不是挪走的。
-     */
+    /** 整张卡沿手势方向上移离场，下层卡片接位。 */
+    private void dismissCardUp(final View v, final Runnable end) {
+        stopHover();
+        if (!cardMotion()) { end.run(); return; }
+        if (ghost != null) ghost.animate().scaleX(1f).scaleY(1f).translationY(0)
+                .alpha(1f).setDuration(210).start();
+        v.animate().translationY(-stageHeight() * 1.12f).rotation(-2.2f).rotationX(-5f)
+                .scaleX(.96f).scaleY(.96f).alpha(.2f)
+                .setInterpolator(new DecelerateInterpolator(1.4f)).setDuration(240)
+                .withEndAction(end).start();
+    }
+
     private void shatter(final View v, final Runnable end) {
         int w = v.getWidth();
         int h = v.getHeight();
@@ -1881,8 +1925,13 @@ public class CheckinActivity extends Activity {
         if ("asset_xiaowei".equals(choice) || "asset_mashan".equals(choice)) {
             Typeface loaded = bundledFonts.get(choice);
             if (loaded == null) {
-                loaded = Typeface.createFromAsset(getAssets(), "fonts/"
-                        + ("asset_xiaowei".equals(choice) ? "xiaowei.ttf" : "mashanzheng.ttf"));
+                try {
+                    loaded = Typeface.createFromAsset(getAssets(), "fonts/"
+                            + ("asset_xiaowei".equals(choice) ? "xiaowei.ttf" : "mashanzheng.ttf"));
+                } catch (RuntimeException missing) {
+                    // 字体包缺失/路径坏掉时宁可回默认字体，也不能把整个打卡页崩掉
+                    loaded = Typeface.DEFAULT;
+                }
                 bundledFonts.put(choice, loaded);
             }
             return loaded;
@@ -1911,7 +1960,7 @@ public class CheckinActivity extends Activity {
         rows.setOrientation(LinearLayout.VERTICAL);
         rows.setPadding(dp(18), dp(6), dp(18), dp(12));
         scroll.addView(rows);
-        final AlertDialog dialog = new AlertDialog.Builder(this)
+        final AlertDialog dialog = ThemeStore.dialog(this)
                 .setTitle("打卡字体")
                 .setView(scroll)
                 .setNegativeButton("取消", null)
@@ -1954,7 +2003,7 @@ public class CheckinActivity extends Activity {
         row.setTextColor(DLG_TEXT);
         row.setLineSpacing(dp(5), 1f);
         row.setPadding(dp(12), dp(12), dp(12), dp(12));
-        row.setTypeface(fontTypeface(id));
+        row.setTypeface(fontTypeface(id)); ThemeStore.excludeFont(row);
         rows.addView(row);
         row.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -2058,7 +2107,7 @@ public class CheckinActivity extends Activity {
         box.addView(et);
 
         sv.addView(box);
-        dlg = new AlertDialog.Builder(this)
+        dlg = ThemeStore.dialog(this)
                 .setTitle("打卡字体颜色")
                 .setView(sv)
                 .setPositiveButton("用输入的颜色", new DialogInterface.OnClickListener() {
@@ -2085,11 +2134,13 @@ public class CheckinActivity extends Activity {
         if (card == null) {
             return;
         }
-        card.setTranslationY(-dp(40));
-        card.setAlpha(0f);
-        card.animate().translationY(0).alpha(1f)
-                .setInterpolator(new DecelerateInterpolator(1.8f))
-                .setDuration(190).start();
+        if (!cardMotion()) return;
+        card.setTranslationY(dp(32));
+        card.setScaleX(.98f); card.setScaleY(.98f);
+        card.setAlpha(.65f);
+        card.animate().translationY(0).alpha(1f).scaleX(1f).scaleY(1f)
+                .setInterpolator(new android.view.animation.OvershootInterpolator(.9f))
+                .setDuration(230).start();
     }
 
     /**
@@ -2126,7 +2177,7 @@ public class CheckinActivity extends Activity {
         ed.setText(fmt(defaultAmount(g)));
         ed.setSelectAllOnFocus(true);
         ed.setPadding(dp(20), dp(12), dp(20), dp(12));
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle(g.name + " 记多少 " + g.unit + "？")
                 .setView(ed)
                 .setPositiveButton("打卡", new DialogInterface.OnClickListener() {
@@ -2220,7 +2271,7 @@ public class CheckinActivity extends Activity {
         rebuildCards();
         int idx = queueIndexOfGoal(keepId);
         selected = idx >= 0 ? idx : firstPendingCard();
-        render();
+        render(false);
     }
 
     /** 状态行：还剩几个待打卡 + 禁忌卡待确认。 */
@@ -2259,7 +2310,7 @@ public class CheckinActivity extends Activity {
         if (!cur.isEmpty()) {
             ed.setText(cur);
         }
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("同步凭据")
                 .setMessage("打卡要写进 Gist 才能同步回电脑。\n粘一个只勾了 gist 权限的 token 即可。")
                 .setView(ed)
@@ -2288,7 +2339,7 @@ public class CheckinActivity extends Activity {
      * 那玩意儿在白底上只有 2.4:1 对比度，刺眼但不清。
      * #0A6FD8 在白底上是 4.9:1，既能点得明白，也看得清楚。
      */
-    private static final int DLG_LINK = 0xFF0A6FD8;
+    private int DLG_LINK = 0xFF0A6FD8;
 
     /** 管理入口：目标列表 + 新建。目标一多也只是在对话框里滚。 */
     /* ==================== 禁忌卡（黑卡） ==================== */
@@ -2337,7 +2388,7 @@ public class CheckinActivity extends Activity {
         sc.setFillViewport(true);
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(18), dp(20), dp(18), dp(28));
+        box.setPadding(dp(20), dp(24), dp(20), dp(32));
 
         TextView title = look.sub("禁忌卡");
         title.setTextSize(22);
@@ -2453,7 +2504,7 @@ public class CheckinActivity extends Activity {
             }
         }
 
-        TextView add = manageButton("＋  添加禁忌卡", Ui.BLUE, 0xFFFFFFFF);
+        TextView add = manageButton("＋  添加禁忌卡", look.accent(), look.onAccent());
         LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(-1, dp(48));
         addLp.topMargin = dp(4);
         box.addView(add, addLp);
@@ -2480,6 +2531,7 @@ public class CheckinActivity extends Activity {
         };
         shown.setContentView(sc);
         shown.show();
+        ThemeStore.typography(sc);
         tabooDialog = shown;
         tabooPage = sc;
         closingTaboo = false;
@@ -2516,7 +2568,7 @@ public class CheckinActivity extends Activity {
     /** 认领禁忌卡：确认后冻结立刻延长一段惩罚时长。 */
     private void claimTaboo(final String name) {
         final int min = tabooPenaltyMin(this);
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("认领禁忌卡")
                 .setMessage("「" + name + "」认领一次？\n\n冻结程序将延长 "
                         + min + " 分钟（可叠加）。")
@@ -2535,7 +2587,7 @@ public class CheckinActivity extends Activity {
         final EditText et = new EditText(this);
         et.setHint("禁忌名称，如：吃辣、吃甜");
         et.setSingleLine(true);
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("添加禁忌卡")
                 .setView(et)
                 .setPositiveButton("添加", new android.content.DialogInterface.OnClickListener() {
@@ -2561,7 +2613,7 @@ public class CheckinActivity extends Activity {
     }
 
     private void confirmRemoveTaboo(final String name) {
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("删除禁忌卡")
                 .setMessage("删掉「" + name + "」？")
                 .setPositiveButton("删除", new android.content.DialogInterface.OnClickListener() {
@@ -2582,7 +2634,7 @@ public class CheckinActivity extends Activity {
         et.setInputType(InputType.TYPE_CLASS_NUMBER);
         et.setHint("分钟数，如 30、60、120");
         et.setText(String.valueOf(tabooPenaltyMin(this)));
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("每次认领延长冻结")
                 .setView(et)
                 .setPositiveButton("保存", new android.content.DialogInterface.OnClickListener() {
@@ -2612,14 +2664,16 @@ public class CheckinActivity extends Activity {
         sc.setFillViewport(true);
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(18), dp(20), dp(18), dp(28));
+        box.setPadding(dp(20), dp(24), dp(20), dp(32));
 
         TextView brand = look.sub("学习目标");
         brand.setTextSize(22);
         brand.setTextColor(look.text());
         brand.setTypeface(Typeface.DEFAULT_BOLD);
         brand.setGravity(Gravity.CENTER_VERTICAL);
-        box.addView(brand, new LinearLayout.LayoutParams(-1, dp(42)));
+        SwissTypography.role(brand,SwissTypography.Role.TITLE);
+        brand.setMinimumHeight(dp(48));
+        box.addView(brand, new LinearLayout.LayoutParams(-1, -2));
 
         TextView subtitle = look.sub("管理进度、默认完成量和打卡设置");
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
@@ -2733,7 +2787,7 @@ public class CheckinActivity extends Activity {
             }
         }
 
-        TextView add = manageButton("＋  新目标", Ui.BLUE, 0xFFFFFFFF);
+        TextView add = manageButton("＋  新目标", look.accent(), look.onAccent());
         add.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 askGoal(null);
@@ -2790,6 +2844,7 @@ public class CheckinActivity extends Activity {
                 android.R.style.Theme_Material_Light_NoActionBar_Fullscreen);
         d.setContentView(sc);
         d.show();
+        ThemeStore.typography(sc);
         manageDialog = d;
         styleFullScreenDialog(d);
         d.setOnDismissListener(new DialogInterface.OnDismissListener() {
@@ -2847,6 +2902,7 @@ public class CheckinActivity extends Activity {
         android.view.Window w = d.getWindow();
         if (w == null) return;
         w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        if(android.os.Build.VERSION.SDK_INT>=28){android.view.WindowManager.LayoutParams attributes=w.getAttributes();attributes.layoutInDisplayCutoutMode=android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;w.setAttributes(attributes);}
         w.setWindowAnimations(0);
         w.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(manageBg()));
         w.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS
@@ -2884,7 +2940,7 @@ public class CheckinActivity extends Activity {
         }
         final String fName = name;
         final String fUnit = unit;
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setItems(new CharSequence[]{"编辑", "改每次默认完成量", "删除目标…"},
                         new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
@@ -2893,7 +2949,7 @@ public class CheckinActivity extends Activity {
                         } else if (w == 1) {
                             askDefaultAmount(id, fName, fUnit);
                         } else {
-                            final AlertDialog confirm = new AlertDialog.Builder(CheckinActivity.this)
+                            final AlertDialog confirm = ThemeStore.dialog(CheckinActivity.this)
                                     .setTitle("删除目标？")
                                     .setMessage("将「" + fName + "」及其打卡记录移到最近删除。可在目标列表中撤回。")
                                     .setNegativeButton("取消", null)
@@ -2950,7 +3006,7 @@ public class CheckinActivity extends Activity {
             due.setHint("截止日（空 = 30 天后自动）");
         }
 
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle(old == null ? "新目标" : "编辑目标")
                 .setView(box)
                 .setPositiveButton("保存", new DialogInterface.OnClickListener() {
@@ -3008,7 +3064,7 @@ public class CheckinActivity extends Activity {
             items[i] = t[0] + " · 总量 " + fmt(total) + " " + t[1] + " · 30 天";
         }
         items[TEMPLATES.length] = "自定义…";
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("从模板新建")
                 .setItems(items, new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
@@ -3042,7 +3098,7 @@ public class CheckinActivity extends Activity {
 
     /** 备份 / 恢复：走系统文件选择器（SAF），不用申请任何存储权限。 */
     private void backupMenu() {
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("备份 / 恢复")
                 .setItems(new CharSequence[]{
                         "导出到文件（目标 + 打卡记录全在里面）",
@@ -3368,7 +3424,7 @@ public class CheckinActivity extends Activity {
         ed.setText(fmt(defaultAmount(cur)));
         ed.setSelectAllOnFocus(true);
         ed.setPadding(dp(20), dp(12), dp(20), dp(12));
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle(name + " · 每次默认完成量")
                 .setMessage("现在默认记 " + fmt(defaultAmount(cur)) + " " + unit
                         + (hasAmountOverride(id) ? "（自定义）" : "（自动）")

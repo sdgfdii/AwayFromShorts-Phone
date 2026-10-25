@@ -1,0 +1,29 @@
+{
+  "schema": "afs-memory-cards/v1",
+  "cards": [
+    {
+      "subject": "英语单词",
+      "type": "input",
+      "front": "根据释义拼写单词：记忆；回忆",
+      "answer": "memory",
+      "source": "自编示例",
+      "note": "根据中文释义拼写英语单词。"
+    },
+    {
+      "subject": "医学",
+      "type": "qa",
+      "front": "术语 cell 的中文名称是什么？",
+      "answer": "细胞",
+      "source": "自编术语示例",
+      "note": "请用自己的教材核对并扩充。"
+    },
+    {
+      "subject": "工科概念",
+      "type": "cloze",
+      "front": "国际单位制中，力的单位是 {{牛顿（N）}}。",
+      "answer": "",
+      "source": "自编示例",
+      "note": "每张卡聚焦一个知识点。"
+    }
+  ]
+}

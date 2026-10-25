@@ -43,7 +43,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/AppTheme">
+            android:theme="@style/NavTheme">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -51,7 +51,43 @@
         </activity>
 
         <activity
+            android:name=".ThemeActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="主题"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".QuizActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="刷题"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".MemoActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="备忘录"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ToolboxActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="工具箱"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".MemoryActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="记忆学习"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".CheckinActivity"
+            android:theme="@style/NavTheme"
             android:exported="false"
             android:label="@string/checkin_title"
             android:windowSoftInputMode="adjustResize" />
@@ -60,6 +96,12 @@
             android:name=".AppListActivity"
             android:exported="false"
             android:label="@string/list_title" />
+
+        <activity
+            android:name=".FreezeBoardActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="冻结应用" />
 
         <activity
             android:name=".StatusActivity"

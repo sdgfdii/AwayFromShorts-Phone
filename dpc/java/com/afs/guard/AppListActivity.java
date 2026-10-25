@@ -36,14 +36,14 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 黑名单管理页：一行一个应用，点开改它的时段。
+ * 冻结应用管理页：一行一个应用，点开改它的时段。
  *
  * 单独一页是必须的 —— 主界面塞满卡片之后，应用一多就得一直往下滑，
- * 而这里本来就是"黑名单"，平时不需要看，需要时才进来改。
+ * 而这里本来就是"冻结应用"，平时不需要看，需要时才进来改。
  *
- * 配色：黑名单页固定深色（用户要求），不跟随屏蔽状态切换。
+ * 配色：冻结应用页固定深色（用户要求），不跟随屏蔽状态切换。
  */
-public class AppListActivity extends Activity {
+public class AppListActivity extends ThemedActivity {
 
     private static final int REQ_PICK = 22;
 
@@ -83,7 +83,7 @@ public class AppListActivity extends Activity {
     /**
      * 一张组卡片：放行时段完全相同的一批应用。
      *
-     * 一次性批量设时段之后，黑名单会变成十几行长得一模一样的条目，
+     * 一次性批量设时段之后，冻结应用会变成十几行长得一模一样的条目，
      * 翻起来又长又分不清谁是谁。折成一张卡："10 个应用 · 每天 22:00-23:00 放行"，
      * 点开才列出具体是哪些 —— 平时看总量，需要时才看明细。
      */
@@ -134,6 +134,12 @@ public class AppListActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (!getIntent().getBooleanExtra("legacy", false)) {
+            startActivity(new Intent(this, FreezeBoardActivity.class));
+            finish();
+            overridePendingTransition(0, 0);
+            return;
+        }
 
         scroll = new ScrollView(this);
         scroll.setBackgroundColor(BG);
@@ -145,14 +151,14 @@ public class AppListActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         title = new TextView(this);
-        title.setText("黑名单");
+        title.setText("冻结应用");
         title.setTextSize(22);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(TEXT);
         root.addView(title);
 
         hint = new TextView(this);
-        hint.setText("点一行改它的冻结时间，长按从黑名单移除。");
+        hint.setText("点一行改它的冻结时间，长按从冻结应用移除。");
         hint.setTextSize(12);
         hint.setTextColor(TEXT2);
         hint.setPadding(0, dp(4), 0, dp(12));
@@ -164,7 +170,7 @@ public class AppListActivity extends Activity {
         root.addView(list);
 
         empty = new TextView(this);
-        empty.setText("黑名单是空的。点下面的「添加应用」选一个。");
+        empty.setText("冻结应用是空的。点下面的「添加应用」选一个。");
         empty.setTextSize(13);
         empty.setTextColor(TEXT2);
         empty.setPadding(dp(2), dp(12), 0, dp(12));
@@ -192,7 +198,7 @@ public class AppListActivity extends Activity {
         alp.topMargin = dp(12);
         root.addView(addBtn, alp);
 
-        // 按包名加：还没装的应用也能先进黑名单，装上之后自动被管
+        // 按包名加：还没装的应用也能先进冻结应用，装上之后自动被管
         pkgBtn = new Button(this);
         pkgBtn.setText("＋ 按包名添加");
         pkgBtn.setAllCaps(false);
@@ -298,6 +304,7 @@ public class AppListActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (scroll == null) return;
         if (themeApplied && darkState != Ui.isDark(this)) {
             recreate();
             return;
@@ -369,7 +376,7 @@ public class AppListActivity extends Activity {
             }
         }
         if (refused > 0) {
-            toast(refused + " 个应用加入已超过 10 分钟，按「只进不出」不能移出黑名单");
+            toast(refused + " 个应用加入已超过 10 分钟，按「只进不出」不能移出冻结应用");
         }
         rebuild();
         applyInBackground();
@@ -1082,7 +1089,7 @@ public class AppListActivity extends Activity {
         } catch (Throwable ignored) {
         }
         title.setTextColor(d ? TEXT_DARK : TEXT);
-        // 卡片改成大圆角：黑名单是一组一组的，直角块在深色底上显得很硬
+        // 卡片改成大圆角：冻结应用是一组一组的，直角块在深色底上显得很硬
         for (View v : surfaces) {
             GradientDrawable bg = new GradientDrawable();
             bg.setColor(d ? SURFACE_DARK : SURFACE);
@@ -1371,7 +1378,7 @@ public class AppListActivity extends Activity {
 
         final RuleEditor ed = new RuleEditor(RuleStore.get(this, pkg));
 
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle(Guard.labelOf(getPackageManager(), pkg))
                 .setView(ed.view)
                 .setPositiveButton("保存", new DialogInterface.OnClickListener() {
@@ -1389,7 +1396,7 @@ public class AppListActivity extends Activity {
                 .setNeutralButton("移除", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         if (!Guard.canRemove(AppListActivity.this, pkg)) {
-                            toast("只进不出：已加入的应用不能移出黑名单（刚加的 10 分钟内除外）");
+                            toast("只进不出：已加入的应用不能移出冻结应用（刚加的 10 分钟内除外）");
                             return;
                         }
                         RuleStore.remove(AppListActivity.this, pkg);
@@ -1435,7 +1442,7 @@ public class AppListActivity extends Activity {
 
         if (pkgs.isEmpty()) {
             TextView emptyHint = new TextView(this);
-            emptyHint.setText("黑名单为空，请先添加应用。");
+            emptyHint.setText("冻结应用为空，请先添加应用。");
             emptyHint.setTextSize(14);
             emptyHint.setTextColor(TEXT);
             box.addView(emptyHint);
@@ -1464,7 +1471,7 @@ public class AppListActivity extends Activity {
             });
             box.addView(row);
         }
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("关键应用名单")
                 .setView(scroll)
                 .setPositiveButton("保存", new DialogInterface.OnClickListener() {
@@ -1481,7 +1488,7 @@ public class AppListActivity extends Activity {
         final java.util.List<String> pkgs =
                 new java.util.ArrayList<>(RuleStore.packages(this));
         if (pkgs.isEmpty()) {
-            toast("黑名单是空的，先添加应用");
+            toast("冻结应用是空的，先添加应用");
             return;
         }
         final String[] labels = new String[pkgs.size()];
@@ -1532,7 +1539,7 @@ public class AppListActivity extends Activity {
                     }
                 };
 
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("选要一起设时段的 " + pkgs.size() + " 个应用")
                 .setAdapter(ad, null)
                 .setPositiveButton("下一步", new DialogInterface.OnClickListener() {
@@ -1559,7 +1566,7 @@ public class AppListActivity extends Activity {
         // false = 编辑框不显示闸门开关。批量改时段不该顺手把关键名单洗了：
         // 十个应用一次套用，gate 统一成同一个值时，微信这类会被悄悄拉回闸门。
         final RuleEditor ed = new RuleEditor(RuleStore.defaultRule(this), false);
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("给这 " + picked.size() + " 个应用套用")
                 .setView(ed.view)
                 .setPositiveButton("套用", new DialogInterface.OnClickListener() {
@@ -1609,7 +1616,7 @@ public class AppListActivity extends Activity {
         if (added.size() > show) {
             names.append(" 等 ").append(added.size()).append(" 个");
         }
-        new AlertDialog.Builder(this)
+        ThemeStore.dialog(this)
                 .setTitle("新加了 " + added.size() + " 个应用")
                 .setMessage(names + "\n\n现在统一设置冻结时间？之后也可以单独改。")
                 .setPositiveButton("现在设", new DialogInterface.OnClickListener() {
@@ -1678,8 +1685,8 @@ public class AppListActivity extends Activity {
         wrap.addView(input, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        new AlertDialog.Builder(this)
-                .setTitle("按包名添加到黑名单")
+        ThemeStore.dialog(this)
+                .setTitle("按包名添加到冻结应用")
                 .setMessage("应用还没装也可以先加：装上之后它会被自动冻结。\n包名必须完全一致，填错了这条规则不会匹配任何东西。")
                 .setView(wrap)
                 .setPositiveButton("添加", new DialogInterface.OnClickListener() {
@@ -1689,7 +1696,7 @@ public class AppListActivity extends Activity {
                             return;
                         }
                         if (RuleStore.packages(AppListActivity.this).contains(pkg)) {
-                            toast("它已经在黑名单里");
+                            toast("它已经在冻结应用里");
                             return;
                         }
                         RuleStore.put(AppListActivity.this, pkg, RuleStore.defaultRule(AppListActivity.this));
@@ -1703,11 +1710,11 @@ public class AppListActivity extends Activity {
 
     private void confirmRemove(final String pkg) {
         if (!Guard.canRemove(this, pkg)) {
-            toast("只进不出：已加入的应用不能移出黑名单（刚加的 10 分钟内除外）");
+            toast("只进不出：已加入的应用不能移出冻结应用（刚加的 10 分钟内除外）");
             return;
         }
-        new AlertDialog.Builder(this)
-                .setTitle("移出黑名单")
+        ThemeStore.dialog(this)
+                .setTitle("移出冻结应用")
                 .setMessage(Guard.labelOf(getPackageManager(), pkg) + " 将不再被管理（立刻解冻）。")
                 .setPositiveButton("移除", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {

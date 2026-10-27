@@ -1,0 +1,34 @@
+{
+  "name": "我的高数与线代题库",
+  "questions": [
+    {
+      "id": "afs-calc-1",
+      "subject": "高数",
+      "chapter": "极限与连续",
+      "type": "single",
+      "stem": "求 $\\displaystyle\\lim_{x\\to0}\\frac{\\sin x}{x}$。",
+      "answer": "B",
+      "analysis": "这是基本重要极限，结果为 $1$。",
+      "options": [
+        "$0$",
+        "$1$",
+        "$-1$",
+        "不存在"
+      ],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-3",
+      "subject": "线代",
+      "chapter": "矩阵",
+      "type": "solution",
+      "stem": "设 $A=\\begin{pmatrix}1&2\\\\0&1\\end{pmatrix}$，求 $A^{-1}$。",
+      "answer": "$A^{-1}=\\begin{pmatrix}1&-2\\\\0&1\\end{pmatrix}$",
+      "analysis": "二阶逆矩阵公式为 $A^{-1}=\\frac1{ad-bc}\\begin{pmatrix}d&-b\\\\-c&a\\end{pmatrix}$。本题行列式为 $1$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    }
+  ]
+}

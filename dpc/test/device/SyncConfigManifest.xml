@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.syncqa">
+    <application android:label="AFS Sync QA" />
+    <instrumentation android:name="com.afs.guard.SyncConfigDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true" />
+</manifest>

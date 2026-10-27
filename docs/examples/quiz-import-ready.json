@@ -1,0 +1,32 @@
+{
+  "name": "高数与线代示例",
+  "questions": [
+    {
+      "subject": "高数",
+      "chapter": "极限与连续",
+      "stem": "求 $\\lim_{x\\to0}\\frac{\\sin x}{x}$。",
+      "type": "single",
+      "options": [
+        "$0$",
+        "$1$",
+        "$-1$",
+        "不存在"
+      ],
+      "answer": "B",
+      "analysis": "由基本重要极限，答案为 $1$。",
+      "source": "自编示例",
+      "bank": "高数与线代示例"
+    },
+    {
+      "subject": "线代",
+      "chapter": "矩阵",
+      "stem": "求单位矩阵 $I$ 的逆。",
+      "type": "solution",
+      "options": [],
+      "answer": "$I$",
+      "analysis": "$II=I$。",
+      "source": "",
+      "bank": "高数与线代示例"
+    }
+  ]
+}

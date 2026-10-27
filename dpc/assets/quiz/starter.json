@@ -1,0 +1,333 @@
+{
+  "name": "入门示例",
+  "questions": [
+    {
+      "id": "afs-calc-1",
+      "subject": "高数",
+      "chapter": "极限与连续",
+      "type": "single",
+      "stem": "求 $\\displaystyle\\lim_{x\\to0}\\frac{\\sin x}{x}$。",
+      "answer": "B",
+      "analysis": "这是基本重要极限，结果为 $1$。",
+      "options": [
+        "$0$",
+        "$1$",
+        "$-1$",
+        "不存在"
+      ],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-2",
+      "subject": "高数",
+      "chapter": "极限与连续",
+      "type": "short",
+      "stem": "求 $\\displaystyle\\lim_{x\\to0}\\frac{1-\\cos x}{x^2}$。",
+      "answer": "$\\frac12$",
+      "analysis": "利用 $1-\\cos x=2\\sin^2(x/2)$，原式化为 $\\frac12\\left(\\frac{\\sin(x/2)}{x/2}\\right)^2$，极限为 $\\frac12$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-3",
+      "subject": "高数",
+      "chapter": "极限与连续",
+      "type": "judge",
+      "stem": "函数在一点可导，则它在该点连续。",
+      "answer": "A",
+      "analysis": "由导数存在可知 $f(x)-f(x_0)=\\frac{f(x)-f(x_0)}{x-x_0}(x-x_0)\\to0$。逆命题不成立，如 $|x|$ 在 $0$ 连续但不可导。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-4",
+      "subject": "高数",
+      "chapter": "导数与微分",
+      "type": "single",
+      "stem": "若 $f(x)=e^{2x}$，则 $f\\prime(x)$ 为？",
+      "answer": "C",
+      "analysis": "使用复合函数求导法则：$(e^{2x})\\prime=e^{2x}\\cdot2$。",
+      "options": [
+        "$e^{2x}$",
+        "$xe^{2x}$",
+        "$2e^{2x}$",
+        "$2xe^{2x}$"
+      ],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-5",
+      "subject": "高数",
+      "chapter": "导数与微分",
+      "type": "solution",
+      "stem": "求函数 $f(x)=x^2\\ln x$（$x>0$）的导数。",
+      "answer": "$f\\prime(x)=2x\\ln x+x$",
+      "analysis": "乘积求导：$(x^2\\ln x)\\prime=2x\\ln x+x^2\\cdot\\frac1x=2x\\ln x+x$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-6",
+      "subject": "高数",
+      "chapter": "导数与微分",
+      "type": "multiple",
+      "stem": "下列函数在整个实数域上处处可导的是？",
+      "answer": "AC",
+      "analysis": "$x^2$ 和 $\\sin x$ 处处可导；$|x|$ 在 $0$ 不可导；$1/x$ 在 $0$ 无定义。",
+      "options": [
+        "$x^2$",
+        "$|x|$",
+        "$\\sin x$",
+        "$1/x$"
+      ],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-7",
+      "subject": "高数",
+      "chapter": "积分",
+      "type": "short",
+      "stem": "计算 $\\displaystyle\\int_0^1 x^2\\,dx$。",
+      "answer": "$\\frac13$",
+      "analysis": "由牛顿—莱布尼茨公式，$\\left[\\frac{x^3}{3}\\right]_0^1=\\frac13$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-8",
+      "subject": "高数",
+      "chapter": "积分",
+      "type": "solution",
+      "stem": "计算不定积分 $\\displaystyle\\int x e^x\\,dx$。",
+      "answer": "$(x-1)e^x+C$",
+      "analysis": "分部积分，令 $u=x$，$dv=e^x dx$，得到 $xe^x-\\int e^x dx=(x-1)e^x+C$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-9",
+      "subject": "高数",
+      "chapter": "积分",
+      "type": "judge",
+      "stem": "若 $f$ 是 $[-a,a]$ 上的连续奇函数（$a>0$），则 $\\int_{-a}^{a}f(x)\\,dx=0$。",
+      "answer": "A",
+      "analysis": "奇函数满足 $f(-x)=-f(x)$，对称区间两侧的积分相消。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-10",
+      "subject": "高数",
+      "chapter": "多元函数",
+      "type": "short",
+      "stem": "设 $f(x,y)=x^2y+\\sin y$，求 $\\frac{\\partial f}{\\partial x}$。",
+      "answer": "$2xy$",
+      "analysis": "对 $x$ 求偏导时把 $y$ 视为常数，故 $\\frac{\\partial f}{\\partial x}=2xy$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-11",
+      "subject": "高数",
+      "chapter": "级数",
+      "type": "single",
+      "stem": "级数 $\\displaystyle\\sum_{n=1}^{\\infty}\\frac1{n^2}$ 的敛散性为？",
+      "answer": "A",
+      "analysis": "这是 $p$ 级数，$p=2>1$，所以收敛。",
+      "options": [
+        "收敛",
+        "发散",
+        "振荡且无界",
+        "仅条件收敛"
+      ],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-calc-12",
+      "subject": "高数",
+      "chapter": "微分方程",
+      "type": "solution",
+      "stem": "解初值问题 $y\\prime=y$，$y(0)=2$。",
+      "answer": "$y=2e^x$",
+      "analysis": "通解 $y=Ce^x$。代入 $y(0)=2$ 得 $C=2$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-1",
+      "subject": "线代",
+      "chapter": "行列式",
+      "type": "single",
+      "stem": "计算 $\\begin{vmatrix}1&2\\\\3&4\\end{vmatrix}$。",
+      "answer": "B",
+      "analysis": "二阶行列式 $ad-bc=1\\times4-2\\times3=-2$。",
+      "options": [
+        "$2$",
+        "$-2$",
+        "$10$",
+        "$-10$"
+      ],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-2",
+      "subject": "线代",
+      "chapter": "行列式",
+      "type": "judge",
+      "stem": "交换行列式中的两行，行列式的值不变。",
+      "answer": "B",
+      "analysis": "交换两行会使行列式变号。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-3",
+      "subject": "线代",
+      "chapter": "矩阵",
+      "type": "solution",
+      "stem": "设 $A=\\begin{pmatrix}1&2\\\\0&1\\end{pmatrix}$，求 $A^{-1}$。",
+      "answer": "$A^{-1}=\\begin{pmatrix}1&-2\\\\0&1\\end{pmatrix}$",
+      "analysis": "二阶逆矩阵公式为 $A^{-1}=\\frac1{ad-bc}\\begin{pmatrix}d&-b\\\\-c&a\\end{pmatrix}$。本题行列式为 $1$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-4",
+      "subject": "线代",
+      "chapter": "矩阵",
+      "type": "multiple",
+      "stem": "对任意同阶实方阵 $A,B$，下列恒等式一定成立的是？",
+      "answer": "AC",
+      "analysis": "转置对加法线性，且 $(AB)^T=B^TA^T$。矩阵乘法一般不交换，因此 B、D 并非恒成立。",
+      "options": [
+        "$(A+B)^T=A^T+B^T$",
+        "$AB=BA$",
+        "$(AB)^T=B^TA^T$",
+        "$(A+B)^2=A^2+2AB+B^2$"
+      ],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-5",
+      "subject": "线代",
+      "chapter": "矩阵",
+      "type": "short",
+      "stem": "矩阵 $\\begin{pmatrix}1&2\\\\2&4\\end{pmatrix}$ 的秩为多少？",
+      "answer": "$1$",
+      "analysis": "第二行是第一行的两倍，且矩阵非零，因此秩为 $1$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-6",
+      "subject": "线代",
+      "chapter": "向量与线性相关",
+      "type": "judge",
+      "stem": "包含零向量的向量组一定线性相关。",
+      "answer": "A",
+      "analysis": "令零向量的系数为 $1$，其余系数为 $0$，得到不全为零的线性组合等于零。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-7",
+      "subject": "线代",
+      "chapter": "向量与线性相关",
+      "type": "short",
+      "stem": "在 $\\mathbb{R}^3$ 中，最多有多少个线性无关的向量？",
+      "answer": "$3$",
+      "analysis": "$\\mathbb{R}^3$ 的维数为 $3$，所以线性无关向量的个数最多为 $3$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-8",
+      "subject": "线代",
+      "chapter": "线性方程组",
+      "type": "solution",
+      "stem": "求解方程组：$$\\begin{cases}x+y=3,\\\\x-y=1.\\end{cases}$$",
+      "answer": "$x=2,\\ y=1$",
+      "analysis": "两式相加得 $2x=4$，故 $x=2$；代回 $x+y=3$ 得 $y=1$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-9",
+      "subject": "线代",
+      "chapter": "线性方程组",
+      "type": "single",
+      "stem": "齐次线性方程组 $Ax=0$（$A$ 为 $m\\times n$ 矩阵）有非零解的充要条件是？",
+      "answer": "C",
+      "analysis": "自由变量个数为 $n-r(A)$；有非零解等价于存在自由变量，即 $r(A)<n$。",
+      "options": [
+        "$r(A)=n$",
+        "$r(A)=m$",
+        "$r(A)<n$",
+        "$m=n$"
+      ],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-10",
+      "subject": "线代",
+      "chapter": "特征值与特征向量",
+      "type": "short",
+      "stem": "求对角矩阵 $\\begin{pmatrix}2&0\\\\0&3\\end{pmatrix}$ 的特征值。",
+      "answer": "$2,\\ 3$",
+      "analysis": "特征多项式为 $(\\lambda-2)(\\lambda-3)$，所以特征值是 $2$ 和 $3$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-11",
+      "subject": "线代",
+      "chapter": "特征值与特征向量",
+      "type": "judge",
+      "stem": "实对称矩阵的不同特征值对应的特征向量正交。",
+      "answer": "A",
+      "analysis": "若 $A^T=A$ 且 $Au=\\lambda u, Av=\\mu v$，则 $\\lambda u^Tv=u^TAv=\\mu u^Tv$。当 $\\lambda\\ne\\mu$ 时 $u^Tv=0$。",
+      "options": [],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    },
+    {
+      "id": "afs-linear-12",
+      "subject": "线代",
+      "chapter": "二次型",
+      "type": "single",
+      "stem": "二次型 $q(x,y)=x^2+y^2$ 是？",
+      "answer": "A",
+      "analysis": "当 $(x,y)\\ne(0,0)$ 时，$x^2+y^2>0$，故为正定二次型。",
+      "options": [
+        "正定",
+        "负定",
+        "不定",
+        "半负定"
+      ],
+      "source": "AwayFromShorts 原创入门示例",
+      "bank": "入门示例"
+    }
+  ]
+}

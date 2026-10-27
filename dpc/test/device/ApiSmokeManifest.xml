@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.smokeqa">
+    <application android:label="AFS API Smoke QA" />
+    <instrumentation android:name="com.afs.guard.ApiSmokeDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true" />
+</manifest>

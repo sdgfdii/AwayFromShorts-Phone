@@ -1,0 +1,8 @@
+/dist/
+dpc/build/
+dpc/keystore/
+*.keystore
+*.jks
+*.idsig
+*.local
+__pycache__/

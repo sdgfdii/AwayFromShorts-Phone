@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.afs.guard">
+
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 需要枚举已安装的可启动应用，让用户勾选要冻结哪些 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- 学习闸门：拉取 PC 推到 secret Gist 的 study-gate.json（secret raw 免鉴权） -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 系统级灰度（今天没学完 → 全部应用变灰）：写色彩校正的两个 Secure 键。
+         签名权限，普通装机拿不到，需要 adb 授权一次（README 有命令）。 -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <!-- 统计页：读应用使用时长。这是 appop 级权限，声明之外还要用户在系统设置里
+         开「使用情况访问」（设备所有者也不能免），StatsActivity 里有引导。 -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions"
+        xmlns:tools="http://schemas.android.com/tools" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Android 13+ 的精确闹钟：SCHEDULE_EXACT_ALARM 要用户手动开，USE_EXACT_ALARM 安装即授予。
+         没有精确闹钟，边界（22:00）会晚最多 1 小时才触发，整个放行时段就白给了。 -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- 常驻前台服务：ColorOS 会把闹钟整体推迟好几天，只能靠前台服务当节拍源 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:name=".GuardClock"
+        android:allowBackup="false"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/NavTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".CardManagementActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="卡管理"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ThemeActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="主题"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".QuizActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="刷题"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".MemoActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="备忘录"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ToolkitActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="离线工具"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ToolboxActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="工具箱"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".MemoryActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="记忆学习"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".CheckinActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="@string/checkin_title"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".AppListActivity"
+            android:exported="false"
+            android:label="@string/list_title" />
+
+        <activity
+            android:name=".FreezeBoardActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="冻结应用" />
+
+        <activity
+            android:name=".StatusActivity"
+            android:exported="false"
+            android:label="运行状态" />
+
+        <activity
+            android:name=".AppPickerActivity"
+            android:exported="false"
+            android:label="@string/pick_title" />
+
+        <activity
+            android:name=".StatsActivity"
+            android:exported="false"
+            android:label="@string/stats_title" />
+
+        <activity
+            android:name=".HistoryActivity"
+            android:exported="false"
+            android:label="@string/history_title" />
+
+        <receiver
+            android:name=".AfsAdmin"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+                <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".GuardJob"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <service
+            android:name=".GuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="enforce_per_app_schedule" />
+        </service>
+
+    </application>
+</manifest>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item type="id" name="afs_font_override" />
+    <item type="id" name="afs_typography_signature" />
+    <item type="id" name="afs_swiss_observer" />
+</resources>

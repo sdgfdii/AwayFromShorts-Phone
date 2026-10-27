@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- 冷启动那一瞬的窗口底色。系统在 onCreate 之前就会先画这块底，
+         用首页的深色（#0B0C10）兜住，才不会先白闪一下再进加载动画。 -->
+    <color name="boot_bg">#FF0B0C10</color>
+
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/boot_bg</item>
+        <item name="android:statusBarColor">@color/boot_bg</item>
+        <item name="android:navigationBarColor">@color/boot_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="NavTheme" parent="AppTheme">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+    <style name="NavThemeDark" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/boot_bg</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+    <style name="LiveNavTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowCloseOnTouchOutside">false</item>
+        <item name="android:windowElevation">0dp</item>
+        <item name="android:windowMinWidthMajor">0dp</item>
+        <item name="android:windowMinWidthMinor">0dp</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

@@ -1,0 +1,36 @@
+{
+  "schema": "afs-memory-cards/v1",
+  "total": 3,
+  "duplicatesSkipped": 0,
+  "warningCount": 0,
+  "warnings": [],
+  "inputs": [
+    "memory-source.json"
+  ],
+  "files": [
+    {
+      "file": "001-英语单词-input-001.tsv",
+      "subject": "英语单词",
+      "type": "input",
+      "typeLabel": "输入答案",
+      "cards": 1,
+      "sha256": "da8fc4a73ed836095822d918b43a80f3738355d14132bdb0f0900eaa70fa19b5"
+    },
+    {
+      "file": "002-医学-qa-001.tsv",
+      "subject": "医学",
+      "type": "qa",
+      "typeLabel": "问答",
+      "cards": 1,
+      "sha256": "d81c4e6c726f8647a0f6cad803cffc80e28e96d0f3ed2068fd9b2a5c1eff01c9"
+    },
+    {
+      "file": "003-工科概念-cloze-001.tsv",
+      "subject": "工科概念",
+      "type": "cloze",
+      "typeLabel": "填空背诵",
+      "cards": 1,
+      "sha256": "a1bf049c2c722b22b17d07ce204d5a12e9938ff08fc662251cc1a0259eca904a"
+    }
+  ]
+}

@@ -75,6 +75,54 @@ public final class MemoChecklist {
         return new Change(body.substring(0,start)+out+body.substring(end),cursor);
     }
     private static Item find(List<Item> items,int lineStart){for(Item item:items)if(item.start==lineStart)return item;return null;}
+    public static List<Item> selected(String body,int anchor,int focus){
+        int low=Math.max(0,Math.min(body.length(),Math.min(anchor,focus))),high=Math.max(low,Math.min(body.length(),Math.max(anchor,focus)));
+        int start=body.lastIndexOf('\n',low-1)+1;
+        if(high>low&&body.charAt(high-1)=='\n')high--;
+        List<Item> result=new ArrayList<>();for(Item item:items(body))if(item.start>=start&&item.start<=high)result.add(item);return result;
+    }
+    public static Change setChecked(String body,int anchor,int focus,boolean checked){
+        StringBuilder out=new StringBuilder(body);for(Item item:selected(body,anchor,focus))out.setCharAt(item.marker+3,checked?'x':' ');
+        return new Change(out.toString(),focus);
+    }
+    public static Change indent(String body,int anchor,int focus,boolean more){
+        List<Item> chosen=selected(body,anchor,focus);StringBuilder out=new StringBuilder(body);int cursor=focus;
+        for(int i=chosen.size()-1;i>=0;i--){Item item=chosen.get(i);String prefix=body.substring(item.start,item.marker);
+            if(more){if(prefix.replace("\t","  ").length()>=12)continue;out.insert(item.start,"  ");if(focus>=item.start)cursor+=2;}
+            else if(!prefix.isEmpty()){int count=prefix.startsWith("  ")?2:1;out.delete(item.start,item.start+count);if(focus>=item.start)cursor-=Math.min(count,focus-item.start);}
+        }return new Change(out.toString(),cursor);
+    }
+    public static Change deleteItems(String body,int anchor,int focus){
+        List<Item> chosen=selected(body,anchor,focus);StringBuilder out=new StringBuilder(body);int cursor=focus;
+        for(int i=chosen.size()-1;i>=0;i--){Item item=chosen.get(i);int end=body.indexOf('\n',item.start);end=end<0?body.length():end+1;
+            out.delete(item.start,end);if(focus>=end)cursor-=end-item.start;else if(focus>=item.start)cursor=item.start;
+        }return new Change(out.toString(),cursor);
+    }
+    public static Change removeMarkers(String body,int anchor,int focus){
+        List<Item> chosen=selected(body,anchor,focus);StringBuilder out=new StringBuilder(body);int cursor=focus;
+        for(int i=chosen.size()-1;i>=0;i--){Item item=chosen.get(i);out.delete(item.marker,item.content);if(focus>=item.content)cursor-=item.content-item.marker;else if(focus>item.marker)cursor-=focus-item.marker;}
+        return new Change(out.toString(),cursor);
+    }
+    public static Change move(String body,int anchor,int focus,boolean down){
+        List<Item> chosen=selected(body,anchor,focus);if(chosen.isEmpty())return new Change(body,focus);
+        int start=chosen.get(0).start,end=chosen.get(chosen.size()-1).end;
+        // Move a complete physical-line block; keep all intervening paragraph contents intact.
+        int lineEnd=body.indexOf('\n',end);int after=lineEnd<0?body.length():lineEnd+1;
+        if(down){
+            if(lineEnd<0||after>=body.length())return new Change(body,focus);
+            int nextEnd=body.indexOf('\n',after),tail=nextEnd<0?body.length():nextEnd;
+            if(tail>after&&body.charAt(tail-1)=='\r')tail--;
+            String block=body.substring(start,end),next=body.substring(after,tail);
+            String newline=body.substring(end,after);
+            return new Change(body.substring(0,start)+next+newline+block+body.substring(tail),focus+next.length()+newline.length());
+        }
+        if(start==0)return new Change(body,focus);
+        int previousEnd=start-1;if(previousEnd>0&&body.charAt(previousEnd-1)=='\r')previousEnd--;
+        int previousStart=body.lastIndexOf('\n',previousEnd-1)+1;
+        String previous=body.substring(previousStart,previousEnd),block=body.substring(start,end);
+        String newline=body.substring(previousEnd,start);
+        return new Change(body.substring(0,previousStart)+block+newline+previous+body.substring(end),focus-(start-previousStart));
+    }
     /** Called only for one user-inserted newline, never for paste/undo/restoration. */
     public static Change enter(String before,int offset,String newline){
         if(!"\n".equals(newline)&&!"\r\n".equals(newline))return null;

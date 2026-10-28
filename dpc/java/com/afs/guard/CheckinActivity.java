@@ -232,6 +232,10 @@ public class CheckinActivity extends ThemedActivity {
             manage();
         } else if ("taboo".equals(open)) {
             tabooManage();
+        } else if ("font".equals(open)) {
+            fontMenu();
+        } else if ("appearance".equals(open)) {
+            backdropMenu();
         } else if ("token".equals(open)) {
             askToken();
         }
@@ -480,7 +484,7 @@ public class CheckinActivity extends ThemedActivity {
         // 这页除了卡片只多这一行 11~12sp 的元信息，不抢卡片的视觉重心。
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        root.addView(head, hlp);
+        // Settings live in Guard / Card Management; keep the card stage clear.
 
         // ---- 卡片舞台：悬浮在更暗的底色上，立体感从这里来 ----
         int pageBg = look.amap?look.bg():(dark ? 0xFF232A34 : 0xFFE2E5EA);
@@ -698,7 +702,7 @@ public class CheckinActivity extends ThemedActivity {
         // 今天全处理完了：台上什么都不留（没有完成卡、没有照片），只有底部一行绿字
         if (pendingCards() == 0 && completionAnimation == null) {
             renderDots();
-            footHint.setText("今天的卡都处理完了 · 已存本机，点右上「上传」推云端");
+            footHint.setText("今天的卡都处理完了 · 已存本机");
             footHint.setTextColor(greenC);
             return;
         }
@@ -777,7 +781,7 @@ public class CheckinActivity extends ThemedActivity {
     }
     private View buildSummaryCard(Entry e,int index){CycleSummary.Period p=e.summary;return specialCard("总结卡","周期总结",p.complete?"已完成":System.currentTimeMillis()>=p.endAt?"待补总结":"待完成",
             p.start+" 至 "+p.through+"\n周期末 20:00 后未完成会延长冻结，跨周期仍需补完。",index,p.complete);}
-    private View buildLoveCard(Entry e,int index){return specialCard("热爱卡",e.love.optString("title"),"+"+e.love.optInt("minutes")+" 分钟",
+    private View buildLoveCard(Entry e,int index){return specialCard("热爱卡",e.love.optString("title"),"抽奖 · 1–60 分钟",
             "上滑完成这项热爱，奖励可累计。\n每天最多一张，单次最多 60 分钟，仅抵扣定时冻结。",index,entryHandled(e));}
 
     private void applyCardFont(View view) {
@@ -1807,7 +1811,9 @@ public class CheckinActivity extends ThemedActivity {
         if(busy)return;
         try{if(!CardStore.claim(this,e.love.optString("id"))){toast("今天已完成一张热爱卡");refreshAsync();return;}}
         catch(RuntimeException error){toast(error.getMessage());spring();return;}
-        busy=true;dropPre();final View completed=card;syncGuard();toast("热爱完成，获得 "+e.love.optInt("minutes")+" 分钟奖励");
+        busy=true;dropPre();final View completed=card;syncGuard();
+        org.json.JSONArray earned=CardStore.snapshot(this).earned();int prize=earned.optJSONObject(earned.length()-1).optInt("minutes");
+        ThemeStore.dialog(this).setTitle("热爱抽奖 · "+prize+" 分钟").setMessage("奖励已存入余额，将自动抵扣后续定时冻结。每天只能抽取一次。").setPositiveButton("收下",null).show();
         Runnable after=()->{busy=false;selected=-1;refreshAsync();enterFromUp();};if(completed!=null)dismissCardUp(completed,after);else after.run();
     }
 
@@ -3648,9 +3654,7 @@ public class CheckinActivity extends ThemedActivity {
      * 后台预热线程一整套；那套视觉已经清掉了，卡面就是卡面，不铺照片。
      */
     private Drawable cardBackground(boolean done) {
-        GradientDrawable bgd = round(cardBg, dp(22));
-        bgd.setStroke(dp(1), done ? greenC : lineC);
-        return bgd;
+        return StudyCardSurface.background(look,cardBg,done?greenC:lineC);
     }
 
     private static void closeQuietly(java.io.Closeable c) {

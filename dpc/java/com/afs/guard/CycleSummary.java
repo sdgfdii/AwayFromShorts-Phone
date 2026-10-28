@@ -22,6 +22,7 @@ public final class CycleSummary {
         if(!Arrays.asList("daily","weekly","monthly","custom").contains(mode())||days()<1||days()>365||data.optJSONObject("records")==null)throw new IllegalArgumentException("总结配置无效");
         parse(anchor());parse(data.optString("cursor"));
     }
+    public JSONObject queued(){return data.optJSONObject("nextConfig");}
     public String mode(){return data.optString("mode","weekly");}
     public int days(){return data.optInt("days",7);}
     public String anchor(){return data.optString("anchor");}
@@ -39,7 +40,8 @@ public final class CycleSummary {
         if(!Arrays.asList("daily","weekly","monthly","custom").contains(mode)||days<1||days>365)throw new IllegalArgumentException("周期天数须为 1–365");
         parse(anchor);
         if(mode.equals(mode())&&days==days()&&anchor.equals(anchor()))return;
-        if(pending(now)!=null)throw new IllegalArgumentException("请先完成待办总结，再修改周期");
+        if(pending(now)!=null){JSONObject queued=new JSONObject();put(queued,"mode",mode);put(queued,"days",days);put(queued,"anchor",anchor);put(data,"nextConfig",queued);return;}
+        data.remove("nextConfig");
         put(data,"mode",mode);put(data,"days",days);put(data,"anchor",anchor);put(data,"cursor",currentStart(now));advanceCompleted();
     }
     public boolean complete(String key,String note,long now) {
@@ -49,7 +51,9 @@ public final class CycleSummary {
         if(note==null||note.length()>20000)throw new IllegalArgumentException("总结内容最多 20000 字");
         JSONObject r=new JSONObject();put(r,"key",key);put(r,"start",pending.start);put(r,"end",pending.end);
         put(r,"note",note);put(r,"at",now);put(data.optJSONObject("records"),key,r);
-        put(data,"cursor",pending.end);advanceCompleted();return true;
+        put(data,"cursor",pending.end);advanceCompleted();
+        JSONObject queued=data.optJSONObject("nextConfig");if(queued!=null&&pending(now)==null)configure(queued.optString("mode"),queued.optInt("days"),queued.optString("anchor"),now);
+        return true;
     }
     void migrateWeek(String monday) {
         Period p=period(data.optString("cursor"));if(!p.start.equals(monday)||p.complete)return;

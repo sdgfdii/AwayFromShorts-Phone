@@ -238,6 +238,13 @@ public class MainActivity extends ThemedActivity {
         secondLp.topMargin = ui.dp(12);
         root.addView(secondRow, secondLp);
 
+        TextView dataAction = new TextView(this);
+        dataAction.setText("数据与备份 · 本地存储 / 云端配置");
+        dataAction.setTextColor(ui.accent());
+        dataAction.setPadding(0,ui.dp(16),0,ui.dp(8));
+        dataAction.setOnClickListener(v -> startActivity(new Intent(this,DataManagementActivity.class)));
+        root.addView(dataAction);
+
         foot = new TextView(this);
         foot.setText("设备所有者由系统保护。启用前请阅读部署包的恢复说明。"
                 + (android.os.Build.VERSION.SDK_INT < 28 ? "\n冻结时段固定使用时区：" + GuardClock.pin(this).getID() : ""));

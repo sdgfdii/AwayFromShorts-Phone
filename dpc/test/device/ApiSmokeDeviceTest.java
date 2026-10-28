@@ -11,7 +11,7 @@ public final class ApiSmokeDeviceTest extends Instrumentation {
     public void onStart() {
         Bundle result = new Bundle(); int count = 0;
         try {
-            for (String page : new String[]{"MainActivity","CheckinActivity","FreezeBoardActivity",
+            for (String page : new String[]{"DataManagementActivity","MainActivity","CheckinActivity","FreezeBoardActivity",
                     "StatsActivity","HistoryActivity","MemoryActivity","QuizActivity",
                     "MemoActivity","ToolkitActivity","CardManagementActivity","ThemeActivity"}) {
                 Intent intent = new Intent().setClassName(getTargetContext(),"com.afs.guard."+page)

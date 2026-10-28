@@ -17,7 +17,7 @@ final class SyncConfig {
             catch (IllegalArgumentException e) { return null; }
         }
     }
-    static boolean configured(Context c) { return target(c) != null; }
+    static boolean configured(Context c) { return target(c) != null && !c.getSharedPreferences("afs_data_status",0).getBoolean("pause_legacy_sync",false); }
     static String cacheName(Context c, String base) {
         return base + "_sync_" + prefs(c).getString("cache_epoch", "none");
     }
@@ -37,6 +37,7 @@ final class SyncConfig {
     }
     static Session acquire(Context c) {
         synchronized (LOCK) {
+            if (!configured(c)) throw new IllegalStateException("尚未启用同步或本地恢复后已暂停同步");
             SyncTarget t = target(c);
             if (t == null) throw new IllegalStateException("尚未配置同步");
             String token = prefs(c).getString("token", "");
@@ -79,6 +80,7 @@ final class SyncConfig {
             if (target != null) e.putString("owner", target.owner).putString("gist", target.gistId)
                     .putString("token", token.trim());
             if (!e.commit()) throw new IllegalStateException("同步配置保存失败");
+            c.getSharedPreferences("afs_data_status",0).edit().putBoolean("pause_legacy_sync",false).commit();
             if (changed) {
                 // Only remote caches are cleared. Local goals, check-ins, cards,
                 // rule schedules and the initial grace timestamp remain intact.

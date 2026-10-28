@@ -42,6 +42,7 @@ public final class MemoStore {
         public String body;
         public long updated;
         public boolean pinned;
+        public long remindAt,remindedAt;
 
         public Note(String id, String title, String body, long updated, boolean pinned) {
             this.id = id;
@@ -52,7 +53,7 @@ public final class MemoStore {
         }
 
         public Note copy() {
-            return new Note(id, title, body, updated, pinned);
+            Note copy=new Note(id,title,body,updated,pinned);copy.remindAt=remindAt;copy.remindedAt=remindedAt;return copy;
         }
     }
 
@@ -188,6 +189,7 @@ public final class MemoStore {
                 object.put("body", note.body == null ? "" : note.body);
                 object.put("updated", note.updated);
                 object.put("pinned", note.pinned);
+                object.put("remindAt",note.remindAt);object.put("remindedAt",note.remindedAt);
                 array.put(object);
             }
         } catch (Exception ignored) {
@@ -223,9 +225,10 @@ public final class MemoStore {
                     continue;
                 }
                 seen.add(id);
-                out.add(new Note(id, title, body,
+                Note note=new Note(id, title, body,
                         object.optLong("updated", 0L),
-                        object.optBoolean("pinned", false)));
+                        object.optBoolean("pinned", false));
+                note.remindAt=Math.max(0,object.optLong("remindAt",0));note.remindedAt=Math.max(0,object.optLong("remindedAt",0));out.add(note);
             }
         } catch (Exception ignored) {
             // 整段坏掉就当没有备忘录，页面还能正常新建
@@ -344,6 +347,23 @@ public final class MemoStore {
         return changed;
     }
 
+    /** Persist content and reminder together before scheduling any side effect. */
+    public static synchronized Note saveDraft(Context context,String id,String title,String body,long remindAt){
+        List<Note> notes=load(context);Note note;
+        if(id==null){note=add(notes,title,body,System.currentTimeMillis());if(note==null)return null;}
+        else{note=find(notes,id);if(note==null)throw new IllegalStateException("这条备忘录已删除，请先复制当前内容");edit(notes,id,title,body,System.currentTimeMillis());}
+        if(note.remindAt!=remindAt){note.remindAt=Math.max(0,remindAt);note.remindedAt=0;}
+        if(!context.getSharedPreferences(SP,0).edit().putString(KEY,toJson(notes)).commit())throw new IllegalStateException("保存失败，请保留当前内容后重试");
+        MemoReminder.schedule(context,note);return note.copy();
+    }
+    public static boolean reminderDue(Note note,long expected,long now){return note!=null&&expected>0&&note.remindAt==expected&&note.remindedAt!=expected&&now>=expected;}
+    public static synchronized Note claimReminder(Context context,String id,long expected,long now){
+        List<Note> notes=load(context);Note note=find(notes,id);if(!reminderDue(note,expected,now))return null;
+        note.remindedAt=expected;
+        if(!context.getSharedPreferences(SP,0).edit().putString(KEY,toJson(notes)).commit())return null;
+        return note.copy();
+    }
+
     /** Move whole records, retaining id, pin and timestamps. Validate before mutating either list. */
     public static boolean move(List<Note> from,List<Note> to,String id) {
         Note note=find(from,id);if(note==null)return false;
@@ -361,6 +381,7 @@ public final class MemoStore {
         boolean changed=restore?move(deleted,active,id):move(active,deleted,id);
         if(changed&&!context.getSharedPreferences(SP,0).edit().putString(KEY,toJson(active)).putString(TRASH,toJson(deleted)).commit())
             throw new IllegalStateException("保存失败，请保留当前内容后重试");
+        if(changed){if(restore){Note note=find(active,id);if(note!=null)MemoReminder.schedule(context,note);}else MemoReminder.cancel(context,id);}
         return changed;
     }
     public static synchronized void erase(Context context,String id) {

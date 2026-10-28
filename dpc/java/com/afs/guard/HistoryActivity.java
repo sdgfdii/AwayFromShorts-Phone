@@ -45,6 +45,23 @@ public class HistoryActivity extends ThemedActivity {
     private Ui look;
     private int BG, SURFACE, TEXT, TEXT2, TEXT3, LINE, TRACK, ACCENT, GREEN, GREEN_DIM, RED;
 
+    private void recentPies(LinearLayout parent,String today,List<StudyStore.Rec> recs,Map<String,java.util.Set<String>> taboo){
+        LinearLayout panel=card(parent);head(panel,"近三天 · 卡片类型");LinearLayout row=new LinearLayout(this);panel.addView(row);
+        org.json.JSONArray logs=null;try{logs=MemoryStore.snapshot(this).db.optJSONArray("logs");}catch(RuntimeException ignored){}
+        CardData data=CardStore.snapshot(this);org.json.JSONArray summary=data.summary(System.currentTimeMillis()).records();
+        for(int offset=-2;offset<=0;offset++){
+            String date=shiftDay(today,offset);int[] counts=new int[6];java.util.Set<String> goals=new java.util.HashSet<>(),memories=new java.util.HashSet<>();
+            for(StudyStore.Rec rec:recs)if(date.equals(rec.date))goals.add(rec.goalId);counts[0]=goals.size();counts[1]=taboo.containsKey(date)?taboo.get(date).size():0;
+            if(logs!=null)for(int i=0;i<logs.length();i++){org.json.JSONObject log=logs.optJSONObject(i);if(log!=null&&(log.optBoolean("credit")||log.optBoolean("flashcard")&&log.optInt("rating")>=2)&&date.equals(CycleSummary.day(log.optLong("ts"))))memories.add(log.optString("card"));}counts[2]=memories.size();
+            try{counts[3]=QuizStore.snapshot(this).stats(date)[0];}catch(RuntimeException ignored){}
+            for(int i=0;i<data.earned().length();i++)if(date.equals(data.earned().optJSONObject(i).optString("day")))counts[4]++;
+            for(int i=0;i<summary.length();i++){org.json.JSONObject record=summary.optJSONObject(i);if(record.optLong("at")>0&&date.equals(CycleSummary.day(record.optLong("at"))))counts[5]++;}
+            LinearLayout column=new LinearLayout(this);column.setOrientation(LinearLayout.VERTICAL);row.addView(column,new LinearLayout.LayoutParams(0,-2,1));column.addView(new DailyCardChart(this,date,counts),new LinearLayout.LayoutParams(-1,dp(138)));
+            for(int i=0;i<counts.length;i++)if(counts[i]>0){TextView label=new TextView(this);label.setText(DailyCardChart.NAMES[i]+" "+counts[i]);label.setTextSize(11);label.setTextColor(i==1?TEXT:DailyCardChart.COLORS[i]);label.setGravity(Gravity.CENTER);column.addView(label);}
+        }
+        TextView note=new TextView(this);note.setText("按记录统计：目标、禁忌和有效记忆卡去重；刷题按作答题次计数。");note.setTextSize(11);note.setTextColor(TEXT3);note.setPadding(0,dp(10),0,0);panel.addView(note);
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
@@ -210,6 +227,7 @@ public class HistoryActivity extends ThemedActivity {
         stat(lifetimeStats, String.valueOf(recs.size()), "累计打卡笔数");
         stat(lifetimeStats, byDay.size() + " 天", "累计打卡天数");
 
+        recentPies(body,today,recs,tabooByDay);
         // ---- 近 30 天：日期和当天笔数直接可见 ----
         LinearLayout gridCard = card(body);
         head(gridCard, "近 30 天");
@@ -338,15 +356,17 @@ public class HistoryActivity extends ThemedActivity {
 
         // ---- 最近流水 ----
         LinearLayout recCard = card(body);
-        head(recCard, "最近流水");
+        TextView flowToggle=new TextView(this);flowToggle.setText("最近流水  ▸");flowToggle.setTextColor(TEXT);flowToggle.setTextSize(14);flowToggle.setPadding(0,dp(8),0,dp(8));recCard.addView(flowToggle);
+        LinearLayout flowBody=new LinearLayout(this);flowBody.setOrientation(LinearLayout.VERTICAL);flowBody.setVisibility(View.GONE);recCard.addView(flowBody);
+        flowToggle.setOnClickListener(v->{boolean open=flowBody.getVisibility()!=View.VISIBLE;flowBody.setVisibility(open?View.VISIBLE:View.GONE);flowToggle.setText(open?"最近流水  ▾":"最近流水  ▸");});
         TextView undoTip = new TextView(this);
         undoTip.setText("当天的打卡可点记录撤回；昨天及更早的记录已锁定。红色是认领禁忌");
         undoTip.setTextColor(TEXT3);
         undoTip.setTextSize(11);
         undoTip.setPadding(0, dp(2), 0, 0);
-        recCard.addView(undoTip);
+        flowBody.addView(undoTip);
         if (flow.isEmpty()) {
-            blank(recCard, "还没有打卡记录");
+            blank(flowBody, "还没有打卡记录");
         } else {
             java.text.SimpleDateFormat md =
                     new java.text.SimpleDateFormat("MM-dd", java.util.Locale.US);
@@ -376,11 +396,11 @@ public class HistoryActivity extends ThemedActivity {
                         }
                     });
                 }
-                recCard.addView(rowT);
+                flowBody.addView(rowT);
                 if (i < flow.size() - 1) {
                     View ln = new View(this);
                     ln.setBackgroundColor(LINE);
-                    recCard.addView(ln, new LinearLayout.LayoutParams(
+                    flowBody.addView(ln, new LinearLayout.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT, dp(1)));
                 }
             }

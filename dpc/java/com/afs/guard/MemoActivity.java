@@ -15,7 +15,7 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.PopupMenu;
+import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import java.util.List;
@@ -25,7 +25,7 @@ import java.util.List;
  * 带 id 进来就是编辑页。数据全在本机 {@link MemoStore}，不联网。
  */
 public final class MemoActivity extends ThemedActivity {
-    private static final int REQ_IMPORT=42, REQ_EXPORT=43;
+    private static final int REQ_IMPORT=42, REQ_EXPORT=43,REQ_ATTACH=45,REQ_VOICE=46,REQ_BACKUP=47,REQ_RESTORE=48,REQ_SKETCH=49;
     private static final int REQ_EDITOR = 41;   // 从编辑页回来要知道「是不是新建了一条」
 
     private Ui ui;
@@ -42,11 +42,14 @@ public final class MemoActivity extends ThemedActivity {
     private TextView undoButton,redoButton,previewButton,editorStatus,previewText;
     private ScrollView previewScroll;
     private String exportText="";
+    private long draftRemindAt;
+    private String notebookFilter="*",draftBook="",draftPaper="default";
     private final android.os.Handler edits=new android.os.Handler();
     private View keyboardRoot;
     private android.view.ViewTreeObserver.OnGlobalLayoutListener legacyKeyboard;
     private final Runnable remember=()->{if(history!=null&&!historyBinding){history.record(snapshot());updateHistory();}};
     @Override protected void onDestroy(){
+        if(cardMenu!=null)cardMenu.dismiss();
         edits.removeCallbacksAndMessages(null);
         if(keyboardRoot!=null&&legacyKeyboard!=null&&keyboardRoot.getViewTreeObserver().isAlive())keyboardRoot.getViewTreeObserver().removeOnGlobalLayoutListener(legacyKeyboard);
         super.onDestroy();
@@ -64,16 +67,22 @@ public final class MemoActivity extends ThemedActivity {
     private EditText search;
     private ScrollView listScroll;
     private LinearLayout listBody;
+    private PopupWindow cardMenu;
+    private MemoNotebookTabs notebookTabs;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         ui = new Ui(this);
+        if(state!=null)notebookFilter=state.getString("bookFilter","*");
         if(state!=null)exportText=state.getString("exportText","");
         String id = getIntent().getStringExtra("id");
         boolean creating = getIntent().getBooleanExtra("new", false);
         MemoStore.Note found = id == null || id.isEmpty() ? null : find(id);
         entry = found == null ? null : shown(found);
         entryId = entry == null ? null : entry.id;
+        draftBook=entryId==null?getIntent().getStringExtra("book"):MemoLibrary.notebookOf(this,entryId);if(draftBook==null)draftBook="";
+        draftPaper=entryId==null?"default":MemoLibrary.paperOf(this,entryId);
+        if(state!=null){draftBook=state.getString("draftBook",draftBook);draftPaper=state.getString("draftPaper",draftPaper);}
         editor = entry != null || creating;   // 带 new=true 也是编辑页（新建形态）
         if (editor) editorPage(state); else listPage(state);
     }
@@ -96,6 +105,28 @@ public final class MemoActivity extends ThemedActivity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if(result==RESULT_OK&&request==REQ_SKETCH&&data!=null&&data.hasExtra("link")){insertText("\n"+data.getStringExtra("link")+"\n");return;}
+        if(result==RESULT_OK&&data!=null&&data.getData()!=null&&(request==REQ_BACKUP||request==REQ_RESTORE)){
+            final android.net.Uri uri=data.getData();new Thread(()->{
+                try{if(request==REQ_BACKUP){String json=MemoBackup.encode(MemoStore.all(this),MemoStore.trash(this),MemoLibrary.exportJson(this));try(java.io.OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new java.io.IOException("无法写入备份");MemoArchive.write(this,out,json);}runOnUiThread(()->message("完整备份已导出"));}
+                    else{final MemoArchive.Data archive;try(java.io.InputStream in=getContentResolver().openInputStream(uri)){archive=MemoArchive.read(this,in);}MemoLibrary.validate(archive.backup.library);
+                        runOnUiThread(()->{if(isFinishing()||isDestroyed()){try{archive.close();}catch(Exception ignored){}return;}
+                            final boolean[] restoring={false};android.app.AlertDialog dialog=ThemeStore.dialog(this).setTitle("合并恢复备忘录？").setMessage("备份有 "+archive.backup.notes.size()+" 条笔记和 "+archive.backup.trash.size()+" 条回收站记录。现有内容保留，冲突记录另存副本。")
+                                .setNegativeButton("取消",null).setPositiveButton("合并恢复",(d,w)->{restoring[0]=true;new Thread(()->{try{
+                                    synchronized(MemoStore.class){MemoBackup.Data merged=MemoBackup.merge(MemoStore.all(this),MemoStore.trash(this),archive.backup);
+                                        org.json.JSONObject library=remapLibrary(archive.backup.library,merged.idMap);MemoLibrary.merge(MemoLibrary.load(this),MemoLibrary.validate(library));
+                                        MemoArchive.applyAttachments(this,archive);MemoBackup.Data restored=MemoBackup.restore(this,archive.backup);MemoLibrary.mergeJson(this,remapLibrary(archive.backup.library,restored.idMap));}
+                                    runOnUiThread(()->{if(!isDestroyed()){notebookFilter="*";refreshList(true);message("备份已合并恢复");}});
+                                }catch(Exception e){runOnUiThread(()->message("恢复失败："+e.getMessage()));}finally{try{archive.close();}catch(Exception ignored){}}},"memo-restore").start();}).create();
+                            dialog.setOnDismissListener(d->{if(!restoring[0])try{archive.close();}catch(Exception ignored){}});dialog.show();});
+                    }
+                }catch(Exception e){runOnUiThread(()->message("备份操作失败："+e.getMessage()));}
+            },"memo-backup").start();return;
+        }
+        if(result==RESULT_OK&&request==REQ_VOICE&&data!=null){java.util.ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);if(words!=null&&!words.isEmpty())insertText(words.get(0));return;}
+        if(result==RESULT_OK&&request==REQ_ATTACH&&data!=null&&data.getData()!=null){final android.net.Uri uri=data.getData();new Thread(()->{
+            try{String link=MemoFiles.add(this,uri);runOnUiThread(()->{if(!isFinishing())insertText("\n"+link+"\n");});}catch(Exception e){runOnUiThread(()->message(e.getMessage()));}
+        },"memo-attachment").start();return;}
         if(result==RESULT_OK&&data!=null&&data.getData()!=null&&request==REQ_IMPORT){
             final android.net.Uri uri=data.getData();
             new Thread(()->{
@@ -131,8 +162,10 @@ public final class MemoActivity extends ThemedActivity {
     }
 
     @Override protected void onSaveInstanceState(Bundle out) {
+        out.putString("bookFilter",notebookFilter);out.putString("draftBook",draftBook);out.putString("draftPaper",draftPaper);
         out.putString("exportText",exportText);
         if (editor) {
+            out.putLong("draftRemindAt",draftRemindAt);
             if (titleInput != null) out.putString("draftTitle", titleInput.getText().toString());
             if (bodyInput != null) out.putString("draftBody", bodyInput.getText().toString());
         } else {
@@ -166,7 +199,13 @@ public final class MemoActivity extends ThemedActivity {
         bar.addView(glyphButton("搜索", "搜索备忘录", this::toggleSearch), slp);
 
         LinearLayout options=row();options.setPadding(ui.dp(20),0,ui.dp(20),ui.dp(8));
-        root.addView(options);tool(options,"导入文件",this::importFile);tool(options,"回收站",this::showTrash);tool(options,"开源说明",this::sources);
+        android.widget.HorizontalScrollView optionScroll=new android.widget.HorizontalScrollView(this);optionScroll.setHorizontalScrollBarEnabled(true);optionScroll.setScrollbarFadingEnabled(false);optionScroll.setScrollBarSize(ui.dp(3));
+        if(android.os.Build.VERSION.SDK_INT>=29){optionScroll.setHorizontalScrollbarThumbDrawable(ui.round((ui.accent()&0xffffff)|0x66000000,3));optionScroll.setHorizontalScrollbarTrackDrawable(ui.round(ui.line(),3));}
+        optionScroll.addView(options);root.addView(optionScroll);
+        optionChip(options,"笔记本",()->chooseBook(false));optionChip(options,"列表/网格",()->{MemoLibrary.setGrid(this,!MemoLibrary.grid(this));refreshList();});
+        optionChip(options,"备份与恢复",this::backupMenu);optionChip(options,"导入文件",this::importFile);optionChip(options,"回收站",this::showTrash);optionChip(options,"开源说明",this::sources);
+        notebookTabs=new MemoNotebookTabs(this,id->{notebookFilter=id;refreshList(true);});
+        LinearLayout.LayoutParams tabsLp=new LinearLayout.LayoutParams(-1,ui.dp(48));tabsLp.setMargins(ui.dp(20),ui.dp(8),ui.dp(20),ui.dp(12));root.addView(notebookTabs,tabsLp);
 
         countLabel = text("共 0 条", 12, ui.text2());
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-1, -2);
@@ -235,13 +274,19 @@ public final class MemoActivity extends ThemedActivity {
         if (listBody == null || countLabel == null) return;
         int keep = listScroll == null ? 0 : listScroll.getScrollY();
         boolean searching = !query.trim().isEmpty();
+        MemoLibrary.Model library=MemoLibrary.load(this);
+        boolean validBook="*".equals(notebookFilter)||"".equals(notebookFilter);for(MemoLibrary.Book book:library.notebooks)if(book.id.equals(notebookFilter))validBook=true;
+        if(!validBook)notebookFilter="*";
+        if(notebookTabs!=null)notebookTabs.bind(library,notebookFilter);
         notes = searching ? MemoStore.search(this, query) : MemoStore.all(this);
+        if(!"*".equals(notebookFilter)){java.util.List<MemoStore.Note> filtered=new java.util.ArrayList<>();for(MemoStore.Note note:notes)if(notebookFilter.equals(MemoLibrary.notebookOf(this,note.id)))filtered.add(note);notes=filtered;}
         listBody.removeAllViews();
         // 空列表时不再单写一行「还没有备忘录」：空状态卡已经说了，重复一遍只是噪音
         countLabel.setText("共 " + notes.size() + " 条");
         countLabel.setVisibility(notes.isEmpty() ? View.GONE : View.VISIBLE);
         if (notes.isEmpty()) emptyCard(searching);
-        else for (MemoStore.Note note : notes) listBody.addView(card(note), ui.gap(10));
+        else if(!MemoLibrary.grid(this))for (MemoStore.Note note : notes) listBody.addView(card(note), ui.gap(10));
+        else for(int i=0;i<notes.size();i+=2){LinearLayout line=row();line.setGravity(Gravity.TOP);for(int j=i;j<Math.min(i+2,notes.size());j++){LinearLayout.LayoutParams cell=new LinearLayout.LayoutParams(0,-2,1);if(j>i)cell.leftMargin=ui.dp(10);line.addView(card(notes.get(j)),cell);}if(i+1==notes.size())line.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));listBody.addView(line,ui.gap(10));}
         // 新加的卡片立刻套上主题字体/行距，不等下一轮全局布局（否则会先闪一帧默认字体）
         ThemeStore.typography(listBody);
         // 重建后子布局还没测量：post 一帧再滚，删除让列表变短时不会被旧的 y 卡在半空。
@@ -274,7 +319,7 @@ public final class MemoActivity extends ThemedActivity {
         final MemoStore.Note note = shown(raw);   // 兜一次 null：展示层不做空判断
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(ui.round(ui.surface(), 18));
+        box.setBackground(ui.round(paperColor(MemoLibrary.paperOf(this,note.id)), 18));
         box.setPadding(ui.dp(16), ui.dp(16), ui.dp(16), ui.dp(16));
 
         LinearLayout titleRow = row();
@@ -314,13 +359,7 @@ public final class MemoActivity extends ThemedActivity {
             TextView progress=text("待办 "+doneCount+"/"+tasks.size(),11,ui.text2());
             progress.setPadding(0,0,ui.dp(8),0);foot.addView(progress);
         }
-        // 删除用图标而不是文字：卡片右下角一个垃圾桶，点它才弹确认（长按菜单里也保留删除）
-        View trash = new ThemeGlyphView(this, "删除", ui.text3());
-        trash.setPadding(ui.dp(6), ui.dp(6), ui.dp(6), ui.dp(6));
-        trash.setContentDescription("删除这条备忘录");
-        trash.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
-        trash.setOnClickListener(v -> confirmDelete(id, label, this::refreshList));
-        foot.addView(trash, new LinearLayout.LayoutParams(ui.dp(36), ui.dp(36)));
+        if(note.remindAt>0){TextView reminder=text("提醒 "+reminderTime(note.remindAt),11,ui.text3());box.addView(reminder);}
         LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(-1, -2);
         flp.topMargin = ui.dp(4);
         box.addView(foot, flp);
@@ -332,17 +371,23 @@ public final class MemoActivity extends ThemedActivity {
     }
 
     private void menu(View anchor, final String id, final boolean pinned, final String label) {
-        PopupMenu menu = new PopupMenu(this, anchor);
-        menu.getMenu().add(pinned ? "取消置顶" : "置顶").setOnMenuItemClickListener(item -> {
-            MemoStore.setPinned(this, id, !pinned);
-            refreshList(true);   // 置顶/取消置顶都会挪位置，回顶才看得到结果
-            return true;
-        });
-        menu.getMenu().add("删除").setOnMenuItemClickListener(item -> {
-            confirmDelete(id, label, this::refreshList);
-            return true;
-        });
-        menu.show();
+        if(cardMenu!=null)cardMenu.dismiss();
+        LinearLayout panel=row();panel.setPadding(ui.dp(8),ui.dp(8),ui.dp(8),ui.dp(8));panel.setBackground(ui.round(ui.surface(),26));panel.setClipToOutline(true);
+        PopupWindow popup=new PopupWindow(panel,ui.dp(136),ui.dp(72),true);cardMenu=popup;
+        popup.setBackgroundDrawable(ui.round(ui.surface(),26));popup.setElevation(ui.dp(8));popup.setOutsideTouchable(true);
+        popup.setOnDismissListener(()->{if(cardMenu==popup)cardMenu=null;});
+        MemoToolButton pin=new MemoToolButton(this,pinned?"取消置顶":"置顶");pin.setIconSize(24);pin.setIconColor(pinned?ui.accent():ui.text());
+        MemoToolButton remove=new MemoToolButton(this,"删除");remove.setIconSize(24);remove.setIconColor(Ui.RED);
+        for(MemoToolButton button:new MemoToolButton[]{pin,remove}){button.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(ui.line()),ui.round(ui.surface2(),20),ui.round(0xffffffff,20)));button.setClipToOutline(true);panel.addView(button,new LinearLayout.LayoutParams(ui.dp(56),ui.dp(56)));}
+        ((LinearLayout.LayoutParams)remove.getLayoutParams()).leftMargin=ui.dp(8);
+        pin.setOnClickListener(v->{try{MemoStore.setPinned(this,id,!pinned);popup.dismiss();refreshList(true);}catch(RuntimeException e){message(e.getMessage());}});
+        remove.setOnClickListener(v->{popup.dismiss();confirmDelete(id,label,this::refreshList);});
+        int[] location=new int[2];anchor.getLocationOnScreen(location);android.graphics.Rect visible=new android.graphics.Rect();anchor.getWindowVisibleDisplayFrame(visible);
+        int margin=ui.dp(12),width=ui.dp(136),height=ui.dp(72);
+        int x=Math.max(visible.left+margin,Math.min(location[0]+(anchor.getWidth()-width)/2,visible.right-margin-width));
+        int y=location[1]-height-ui.dp(8);if(y<visible.top+margin)y=location[1]+anchor.getHeight()+ui.dp(8);
+        y=Math.max(visible.top+margin,Math.min(y,visible.bottom-margin-height));
+        popup.showAtLocation(anchor,Gravity.TOP|Gravity.LEFT,x,y);
     }
 
     private void confirmDelete(final String id, String label, final Runnable after) {
@@ -397,15 +442,10 @@ public final class MemoActivity extends ThemedActivity {
         bar.setPadding(ui.dp(20), 0, ui.dp(20), ui.dp(12));
         root.addView(bar);
         bar.addView(glyphButton("返回", "返回", this::saveAndFinish), new LinearLayout.LayoutParams(ui.dp(44), ui.dp(44)));
-        TextView heading = SwissTypography.role(text(creating ? "新建备忘录" : "编辑备忘录", 28, ui.text()), SwissTypography.Role.TITLE);
-        heading.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(0, -2, 1);
-        hlp.leftMargin = ui.dp(12);
-        bar.addView(heading, hlp);
-        // 已有条目：顶栏一个垃圾桶图标，和列表卡片上的删除图标是同一件事
+        bar.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
+        // Top actions use equal touch targets and compact vector icons.
         if (entry != null) {
-            View trash = new ThemeGlyphView(this, "删除", ui.text3());
-            trash.setPadding(ui.dp(10), ui.dp(10), ui.dp(10), ui.dp(10));
+            MemoToolButton trash = new MemoToolButton(this,"删除");trash.setIconSize(22);trash.setIconColor(ui.text3());trash.setMinHeight(ui.dp(44));
             trash.setContentDescription("删除这条备忘录");
             trash.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
             trash.setOnClickListener(v -> confirmDelete(entryId, currentLabel(), () -> {
@@ -417,12 +457,10 @@ public final class MemoActivity extends ThemedActivity {
             trashLp.rightMargin = ui.dp(4);
             bar.addView(trash, trashLp);
         }
-        TextView done = SwissTypography.role(text("完成", 15, ui.accent()), SwissTypography.Role.BODY);
-        done.setGravity(Gravity.CENTER);
-        done.setPadding(ui.dp(12), ui.dp(10), ui.dp(4), ui.dp(10));
+        MemoToolButton done = new MemoToolButton(this,"完成");done.setIconSize(22);done.setMinHeight(ui.dp(44));
         done.setContentDescription("保存");
         done.setOnClickListener(v -> saveAndFinish());
-        bar.addView(done, new LinearLayout.LayoutParams(-2, -2));
+        bar.addView(done, new LinearLayout.LayoutParams(ui.dp(44),ui.dp(44)));
 
         titleInput = new EditText(this);
         titleInput.setSingleLine(true);
@@ -450,6 +488,18 @@ public final class MemoActivity extends ThemedActivity {
         bodyInput.setPadding(ui.dp(20), ui.dp(8), ui.dp(20), ui.dp(20));
         bodyInput.setVerticalScrollBarEnabled(true);
         bodyInput.setFilters(new InputFilter[]{new InputFilter.LengthFilter(MemoStore.MAX_BODY)});
+        bodyInput.setCustomSelectionActionModeCallback(new android.view.ActionMode.Callback(){
+            public boolean onCreateActionMode(android.view.ActionMode mode,android.view.Menu menu){
+                menu.add(0,0xAF01,20,"高亮 / 取消高亮");menu.add(0,0xAF02,21,"块编辑");return true;
+            }
+            public boolean onPrepareActionMode(android.view.ActionMode mode,android.view.Menu menu){return false;}
+            public boolean onActionItemClicked(android.view.ActionMode mode,android.view.MenuItem item){
+                int a=bodyInput.getSelectionStart(),b=bodyInput.getSelectionEnd();
+                if(item.getItemId()==0xAF01){mode.finish();highlight(a,b);return true;}
+                if(item.getItemId()==0xAF02){mode.finish();bodyInput.setSelection(Math.max(0,a));blockMenu();return true;}return false;
+            }
+            public void onDestroyActionMode(android.view.ActionMode mode){}
+        });
         SwissTypography.role(bodyInput, SwissTypography.Role.KEEP);
         root.addView(bodyInput, new LinearLayout.LayoutParams(-1, 0, 1));
         previewScroll=new ScrollView(this);previewText=text("",16,ui.text());
@@ -458,12 +508,12 @@ public final class MemoActivity extends ThemedActivity {
         previewScroll.addView(previewText);previewScroll.setVisibility(View.GONE);
         root.addView(previewScroll,new LinearLayout.LayoutParams(-1,0,1));
         editorStatus=text("",12,ui.text3());editorStatus.setPadding(ui.dp(20),0,ui.dp(20),ui.dp(4));root.addView(editorStatus);
-        android.widget.HorizontalScrollView tools=new android.widget.HorizontalScrollView(this);tools.setHorizontalScrollBarEnabled(false);
-        LinearLayout actions=row();actions.setPadding(ui.dp(12),ui.dp(4),ui.dp(12),ui.dp(12));tools.addView(actions);root.addView(tools);
-        undoButton=tool(actions,"撤销",()->travel(false));redoButton=tool(actions,"重做",()->travel(true));
-        tool(actions,"待办",()->{if(previewing)togglePreview();bodyInput.checklist();bodyInput.requestFocus();showKeyboard(bodyInput);});
-        tool(actions,"标题",()->format("# ",false));tool(actions,"粗体",()->format("**",true));
-        previewButton=tool(actions,"预览",this::togglePreview);tool(actions,"导出",this::exportFile);
+        LinearLayout actions=row();actions.setPadding(ui.dp(12),ui.dp(4),ui.dp(12),ui.dp(12));root.addView(actions);
+        undoButton=iconTool(actions,"撤销",()->travel(false));redoButton=iconTool(actions,"重做",()->travel(true));
+        iconTool(actions,"待办",()->{if(previewing)togglePreview();bodyInput.checklist();bodyInput.requestFocus();showKeyboard(bodyInput);});
+        iconTool(actions,"管理",this::taskManager);
+        previewButton=iconTool(actions,"预览",this::togglePreview);iconTool(actions,"更多",this::editorMore);
+        applyPaper();
 
         String title = entry == null ? "" : entry.title;
         String body = entry == null ? getIntent().getStringExtra("importBody") : entry.body;
@@ -472,6 +522,7 @@ public final class MemoActivity extends ThemedActivity {
             title = state.getString("draftTitle", title);
             body = state.getString("draftBody", body);
         }
+        draftRemindAt=state!=null?state.getLong("draftRemindAt",entry==null?0:entry.remindAt):(entry==null?0:entry.remindAt);
         titleInput.setText(title);
         bodyInput.setText(body);
         history=new MemoEditor.History(snapshot());
@@ -530,9 +581,15 @@ public final class MemoActivity extends ThemedActivity {
         boolean created = false;
         boolean changed = false;
         // 全空（含全角空格）：新建不落盘，已有条目不覆盖原数据。
-        try { if (!MemoStore.blank(title, body)) {
-            if (entry == null) created = MemoStore.create(this, title, body) != null;
-            else changed = MemoStore.update(this, entryId, title, body);
+        if(draftRemindAt>0&&MemoStore.blank(title,body)){message("先写下备忘录内容，再保存提醒");return;}
+        if(draftRemindAt>0&&(entry==null||entry.remindAt!=draftRemindAt)&&draftRemindAt<=System.currentTimeMillis()){
+            message("提醒时间已过，请重新设置或取消提醒");return;
+        }
+        try { if (entry!=null||!MemoStore.blank(title, body)) {
+            MemoStore.Note saved=MemoStore.saveDraft(this,entryId,title,body,draftRemindAt);
+            if(saved!=null){entryId=saved.id;MemoLibrary.setNotebook(this,saved.id,draftBook);MemoLibrary.setPaper(this,saved.id,draftPaper);}
+            created=entry==null&&saved!=null;
+            changed=entry!=null&&saved!=null&&(!entry.title.equals(saved.title)||!entry.body.equals(saved.body)||entry.remindAt!=saved.remindAt);
         }
         }catch(RuntimeException e){message(e.getMessage());return;}
         savedOnce=true;
@@ -548,6 +605,12 @@ public final class MemoActivity extends ThemedActivity {
         t.setPadding(ui.dp(12),ui.dp(8),ui.dp(12),ui.dp(8));SwissTypography.role(t,SwissTypography.Role.BUTTON);
         row.addView(t,new LinearLayout.LayoutParams(-2,-2));t.setOnClickListener(v->action.run());return t;
     }
+    private void optionChip(LinearLayout row,String label,Runnable action){
+        TextView chip=text(label,13,ui.text2());chip.setGravity(Gravity.CENTER);chip.setPadding(ui.dp(16),0,ui.dp(16),0);
+        chip.setBackground(ui.round(ui.surface(),16));chip.setOnClickListener(v->action.run());chip.setFocusable(true);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,ui.dp(44));lp.rightMargin=ui.dp(8);row.addView(chip,lp);
+    }
+    private TextView iconTool(LinearLayout row,String label,Runnable action){MemoToolButton button=new MemoToolButton(this,label);row.addView(button,new LinearLayout.LayoutParams(0,ui.dp(48),1));button.setOnClickListener(v->action.run());return button;}
     private void message(String text){android.widget.Toast.makeText(this,text==null?"操作未完成":text,android.widget.Toast.LENGTH_LONG).show();}
     private MemoEditor.State snapshot(){return new MemoEditor.State(titleInput.getText().toString(),bodyInput.getText().toString());}
     private void updateHistory(){
@@ -555,7 +618,8 @@ public final class MemoActivity extends ThemedActivity {
         undoButton.setAlpha(history.canUndo()?1f:.35f);redoButton.setAlpha(history.canRedo()?1f:.35f);
         List<MemoChecklist.Item> tasks=MemoChecklist.items(bodyInput.getText().toString());int completed=0;
         for(MemoChecklist.Item item:tasks)if(item.checked)completed++;
-        editorStatus.setText((tasks.isEmpty()?"":("待办 "+completed+"/"+tasks.size()+" · "))+bodyInput.length()+" 字 · 返回或完成时保存");
+        editorStatus.setText((tasks.isEmpty()?"":("待办 "+completed+"/"+tasks.size()+" · "))+bodyInput.length()+" 字 · 返回或完成时保存"
+                +(draftRemindAt>0?"\n提醒 "+reminderTime(draftRemindAt)+(MemoReminder.allowed(this)?"":" · 尚未允许通知"):""));
     }
     private void travel(boolean redo){
         edits.removeCallbacks(remember);history.record(snapshot());
@@ -578,11 +642,14 @@ public final class MemoActivity extends ThemedActivity {
     private void renderPreview(){
         String source=bodyInput.getText().toString();
         String prefix="afs-task:"+java.util.UUID.randomUUID()+":";
-        android.text.SpannableStringBuilder styled=new android.text.SpannableStringBuilder(android.text.Html.fromHtml(
-                MemoEditor.preview(source,ui.text(),prefix),android.text.Html.FROM_HTML_MODE_COMPACT));
+        android.text.SpannableStringBuilder styled=new android.text.SpannableStringBuilder(MemoTextFormat.previewRich(
+                MemoEditor.preview(source,ui.text(),prefix)));
         List<MemoChecklist.Item> tasks=MemoChecklist.items(source);
         for(android.text.style.URLSpan link:styled.getSpans(0,styled.length(),android.text.style.URLSpan.class)){
             int position=styled.getSpanStart(link),spanEnd=styled.getSpanEnd(link);styled.removeSpan(link);
+            if(link.getURL().startsWith("afs-file:")){
+                final String id=link.getURL().substring(9);if(MemoFiles.validId(id))styled.setSpan(new android.text.style.ClickableSpan(){@Override public void onClick(View view){MemoFiles.open(MemoActivity.this,id);}},position,spanEnd,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);continue;
+            }
             if(!link.getURL().startsWith(prefix))continue;
             int index;try{index=Integer.parseInt(link.getURL().substring(prefix.length()));}catch(NumberFormatException e){continue;}
             if(index<0||index>=tasks.size())continue;MemoChecklist.Item task=tasks.get(index);
@@ -601,11 +668,202 @@ public final class MemoActivity extends ThemedActivity {
         previewing=!previewing;if(previewing){hideKeyboard(bodyInput);renderPreview();}
         bodyInput.setVisibility(previewing?View.GONE:View.VISIBLE);previewScroll.setVisibility(previewing?View.VISIBLE:View.GONE);
         previewButton.setText(previewing?"编辑":"预览");
+        previewButton.setContentDescription(previewing?"编辑":"预览");
     }
     private void importFile(){
         Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/*");
         try{startActivityForResult(intent,REQ_IMPORT);}catch(android.content.ActivityNotFoundException e){message("没有可用的文件选择器");}
     }
+    private String reminderTime(long time){return new java.text.SimpleDateFormat("MM/dd HH:mm",java.util.Locale.CHINA).format(new java.util.Date(time));}
+    private void editorMore(){
+        String[] labels={"待办管理","文内查找","设置提醒","分享文本","导出文件","标题","粗体","斜体","删除线","通知设置","插入图片或附件","语音输入","移动到笔记本","纸张背景","格式面板","AI 写作","表格","涂鸦","高亮 / 取消高亮","块编辑"};
+        ThemeStore.dialog(this).setTitle("备忘录工具").setItems(labels,(d,i)->{
+            switch(i){case 0:taskManager();break;case 1:findText();break;case 2:reminder();break;case 3:shareText();break;case 4:exportFile();break;
+                case 5:format("# ",false);break;case 6:format("**",true);break;case 7:format("*",true);break;case 8:format("~~",true);break;
+                case 9:try{
+                    Intent settings=android.os.Build.VERSION.SDK_INT>=26?new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName())
+                            :new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:"+getPackageName()));startActivity(settings);
+                }catch(android.content.ActivityNotFoundException e){message("请在系统设置中打开本应用的通知权限");}break;
+                case 10:try{startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),REQ_ATTACH);}catch(android.content.ActivityNotFoundException e){message("没有可用的文件选择器");}break;
+                case 11:try{startActivityForResult(new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE,"zh-CN"),REQ_VOICE);}catch(android.content.ActivityNotFoundException e){message("当前系统未提供语音识别服务");}break;
+                case 12:chooseBook(true);break;case 13:paperMenu();break;case 14:formatMenu();break;case 15:aiMenu();break;case 16:tableEditor();break;case 17:startActivityForResult(new Intent(this,MemoSketchActivity.class),REQ_SKETCH);break;
+                case 18:highlight(bodyInput.getSelectionStart(),bodyInput.getSelectionEnd());break;case 19:blockMenu();break;}
+        }).setNegativeButton("关闭",null).show();
+    }
+    private void insertText(String value){
+        if(bodyInput==null)return;if(previewing)togglePreview();int start=Math.max(0,bodyInput.getSelectionStart()),end=Math.max(start,bodyInput.getSelectionEnd());
+        bodyInput.apply(new MemoChecklist.Change(bodyInput.getText().toString().substring(0,start)+value+bodyInput.getText().toString().substring(end),start+value.length()));
+    }
+    private void tableEditor(){
+        final String original=bodyInput.getText().toString();final int start=Math.max(0,bodyInput.getSelectionStart()),end=Math.max(start,bodyInput.getSelectionEnd());
+        MemoTable.Model initial;try{initial=end>start?MemoTable.parse(original.substring(start,end)):MemoTable.create(2,2);}catch(IllegalArgumentException e){message("选中完整表格可编辑；取消选区可新建表格");return;}
+        final MemoTable.Model[] model={initial};final java.util.List<EditText> fields=new java.util.ArrayList<>();LinearLayout outer=column();outer.setPadding(ui.dp(12),0,ui.dp(12),0);LinearLayout controls=row();outer.addView(controls);
+        android.widget.HorizontalScrollView horizontal=new android.widget.HorizontalScrollView(this);LinearLayout grid=column();horizontal.addView(grid);ScrollView vertical=new ScrollView(this);vertical.addView(horizontal);outer.addView(vertical,new LinearLayout.LayoutParams(-1,ui.dp(260)));
+        Runnable render=()->{grid.removeAllViews();fields.clear();for(java.util.List<String> cells:model[0].cells){LinearLayout line=row();grid.addView(line);for(String value:cells){EditText field=new EditText(this);field.setText(value);field.setTextColor(ui.text());field.setSingleLine();field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(1000)});line.addView(field,new LinearLayout.LayoutParams(ui.dp(120),ui.dp(48)));fields.add(field);}}};
+        Runnable read=()->{MemoTable.Model candidate=MemoTable.create(model[0].cells.size(),model[0].cells.get(0).size());int n=0;for(int r=0;r<candidate.cells.size();r++)for(int c=0;c<candidate.cells.get(0).size();c++)MemoTable.setCell(candidate,r,c,fields.get(n++).getText().toString());MemoTable.encode(candidate);model[0]=candidate;};
+        for(int i=0;i<4;i++){final int op=i;tool(controls,new String[]{"＋行","－行","＋列","－列"}[i],()->{try{read.run();if(op==0)MemoTable.addRow(model[0]);else if(op==1)MemoTable.removeRow(model[0],model[0].cells.size()-1);else if(op==2)MemoTable.addColumn(model[0]);else MemoTable.removeColumn(model[0],model[0].cells.get(0).size()-1);render.run();}catch(RuntimeException e){message(e.getMessage());}});}render.run();
+        android.app.AlertDialog dialog=ThemeStore.dialog(this).setTitle("表格 · 首行为表头").setView(outer).setNegativeButton("取消",null).setPositiveButton("插入/更新",null).create();
+        dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{try{read.run();String table=MemoTable.encode(model[0]);if(!original.equals(bodyInput.getText().toString())){message("正文已变化，请重新打开表格");return;}String value=original.substring(0,start)+"\n"+table+"\n"+original.substring(end);if(value.length()>MemoStore.MAX_BODY)throw new IllegalArgumentException("正文超过2万字");bodyInput.apply(new MemoChecklist.Change(value,start+table.length()+2));dialog.dismiss();}catch(RuntimeException e){message(e.getMessage());}}));dialog.show();
+    }
+    private void aiMenu(){String[] actions={"润色","扩写","精简","总结","翻译成中文","翻译成英文","API 设置"};ThemeStore.dialog(this).setTitle("AI 写作").setItems(actions,(d,i)->{if(i==6){aiSettings();return;}
+        String original=bodyInput.getText().toString();int a=Math.max(0,bodyInput.getSelectionStart()),b=Math.max(a,bodyInput.getSelectionEnd());final int start=a==b?0:a,end=a==b?original.length():b;String source=original.substring(start,end);
+        if(source.trim().isEmpty()){message("先写下或选中要处理的内容");return;}if(MemoAi.endpoint(this).isEmpty()){aiSettings();return;}
+        ThemeStore.dialog(this).setTitle("发送至你的 AI 服务？").setMessage(actions[i]+"将发送 "+source.length()+" 字到：\n"+MemoAi.endpoint(this)+"\n结果先预览，不会自动改写笔记。")
+            .setNegativeButton("取消",null).setPositiveButton("发送",(confirm,w)->{
+                final boolean[] cancelled={false};android.app.ProgressDialog progress=new android.app.ProgressDialog(this);progress.setMessage("正在生成…");progress.setCancelable(true);progress.setOnCancelListener(x->cancelled[0]=true);progress.show();
+                new Thread(()->{try{String output=MemoAi.request(this,actions[i],source);runOnUiThread(()->{if(isDestroyed()||cancelled[0])return;progress.dismiss();TextView preview=text(output,16,ui.text());preview.setPadding(ui.dp(20),ui.dp(12),ui.dp(20),ui.dp(12));preview.setTextIsSelectable(true);ScrollView scroll=new ScrollView(this);scroll.addView(preview);
+                    ThemeStore.dialog(this).setTitle("AI 结果").setView(scroll).setNegativeButton("放弃",null).setNeutralButton("插入末尾",(x,y)->{String current=bodyInput.getText().toString();bodyInput.apply(new MemoChecklist.Change(current+"\n"+output,current.length()+1+output.length()));})
+                        .setPositiveButton("替换原文",(x,y)->{if(!original.equals(bodyInput.getText().toString())){message("正文已变化，请重新生成后再替换");return;}bodyInput.apply(new MemoChecklist.Change(original.substring(0,start)+output+original.substring(end),start+output.length()));}).show();});
+                }catch(Exception e){runOnUiThread(()->{if(!isDestroyed()){progress.dismiss();if(!cancelled[0])message(e.getMessage());}});}},"memo-ai").start();
+            }).show();}).setNegativeButton("关闭",null).show();}
+    private void aiSettings(){LinearLayout form=column();form.setPadding(ui.dp(20),ui.dp(8),ui.dp(20),0);EditText endpoint=new EditText(this),model=new EditText(this),key=new EditText(this);
+        endpoint.setSingleLine();endpoint.setHint("HTTPS API 地址，例如 https://…/v1");endpoint.setText(MemoAi.endpoint(this));model.setSingleLine();model.setHint("模型名称");model.setText(MemoAi.model(this));
+        key.setSingleLine();key.setHint("API 密钥，留空沿用已保存的密钥");key.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        for(EditText field:new EditText[]{endpoint,model,key}){field.setTextColor(ui.text());field.setHintTextColor(ui.text3());form.addView(field);}
+        android.app.AlertDialog dialog=ThemeStore.dialog(this).setTitle("AI API 设置").setView(form).setNegativeButton("取消",null).setPositiveButton("保存",null).setNeutralButton("清除设置",(d,w)->ThemeStore.dialog(this).setTitle("清除 AI 设置？").setMessage("已保存的 API 密钥也会删除。").setNegativeButton("取消",null).setPositiveButton("清除",(x,y)->MemoAi.clear(this)).show()).create();
+        dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{try{MemoAi.save(this,endpoint.getText().toString(),model.getText().toString(),key.getText().toString());dialog.dismiss();message("AI 设置已保存，密钥不包含在备份中");}catch(Exception e){message(e.getMessage());}}));dialog.show();}
+    private int paperColor(String paper){if(ThemeStore.dark(this))return ui.surface();if("cream".equals(paper))return 0xfffff4da;if("blue".equals(paper))return 0xffe9f3ff;if("green".equals(paper))return 0xffeaf5ec;return ui.surface();}
+    private void applyPaper(){if(bodyInput!=null)bodyInput.setBackgroundColor(paperColor(draftPaper));if(previewScroll!=null)previewScroll.setBackgroundColor(paperColor(draftPaper));}
+    private void paperMenu(){String[] ids={"default","cream","blue","green"};ThemeStore.dialog(this).setTitle("纸张背景").setItems(new String[]{"跟随主题","暖纸","浅蓝","浅绿"},(d,i)->{draftPaper=ids[i];applyPaper();}).setNegativeButton("关闭",null).show();}
+    private void chooseBook(boolean moving){
+        MemoLibrary.Model model=MemoLibrary.load(this);java.util.List<String> ids=new java.util.ArrayList<>(),labels=new java.util.ArrayList<>();
+        if(!moving){ids.add("*");labels.add("全部笔记");}ids.add("");labels.add("默认笔记本");
+        for(MemoLibrary.Book book:model.notebooks){ids.add(book.id);labels.add(book.name);}
+        android.app.AlertDialog.Builder builder=ThemeStore.dialog(this).setTitle(moving?"移动到笔记本":"笔记本").setItems(labels.toArray(new String[0]),(d,i)->{
+            if(moving){draftBook=ids.get(i);message("保存后移动");}else{notebookFilter=ids.get(i);refreshList(true);}
+        }).setNegativeButton("关闭",null);
+        if(!moving){builder.setPositiveButton("新建",(d,w)->bookName(null));builder.setNeutralButton("管理",(d,w)->manageBooks());}builder.show();
+    }
+    private void bookName(MemoLibrary.Book book){EditText name=new EditText(this);name.setSingleLine();name.setTextColor(ui.text());name.setFilters(new InputFilter[]{new InputFilter.LengthFilter(60)});if(book!=null)name.setText(book.name);
+        android.app.AlertDialog dialog=ThemeStore.dialog(this).setTitle(book==null?"新建笔记本":"重命名笔记本").setView(name).setPositiveButton("保存",null).setNegativeButton("取消",null).create();
+        dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{try{if(book==null)MemoLibrary.createNotebook(this,name.getText().toString());else MemoLibrary.renameNotebook(this,book.id,name.getText().toString());dialog.dismiss();chooseBook(false);}catch(RuntimeException e){message(e.getMessage());}}));dialog.show();
+    }
+    private void manageBooks(){final MemoLibrary.Model model=MemoLibrary.load(this);String[] labels=new String[model.notebooks.size()];for(int i=0;i<labels.length;i++)labels[i]=model.notebooks.get(i).name;
+        if(labels.length==0){message("暂无自建笔记本");return;}ThemeStore.dialog(this).setTitle("管理笔记本").setItems(labels,(d,i)->{MemoLibrary.Book book=model.notebooks.get(i);
+            ThemeStore.dialog(this).setTitle(book.name).setItems(new String[]{"重命名","删除笔记本"},(x,j)->{if(j==0)bookName(book);else ThemeStore.dialog(this).setTitle("删除笔记本？").setMessage("笔记会移回默认笔记本，不会删除笔记。").setNegativeButton("取消",null).setPositiveButton("删除",(q,w)->{MemoLibrary.deleteNotebook(this,book.id);notebookFilter="*";refreshList();}).show();}).show();}).show();
+    }
+    private void highlight(int anchor,int focus){
+        if(previewing)togglePreview();int a=Math.max(0,Math.min(anchor,focus)),b=Math.max(0,Math.max(anchor,focus));
+        if(a==b){message("先选中需要高亮的文字");return;}
+        MemoTextFormat.Change change=MemoTextFormat.inline(bodyInput.getText().toString(),a,b,"highlight");
+        bodyInput.apply(new MemoChecklist.Change(change.body,change.cursor));
+    }
+    private void blockMenu(){
+        if(previewing)togglePreview();String body=bodyInput.getText().toString();List<MemoBlocks.Block> blocks=MemoBlocks.split(body);
+        if(blocks.isEmpty()){message("先写下段落，再进行块编辑");return;}
+        final int selected=MemoBlocks.at(blocks,Math.max(0,bodyInput.getSelectionStart()));
+        String[] labels=new String[blocks.size()];
+        for(int i=0;i<blocks.size();i++){MemoBlocks.Block block=blocks.get(i);String value=body.substring(block.start,block.end).trim().replace('\n',' ');
+            labels[i]=(i+1)+" · "+(value.isEmpty()?"空行":value.substring(0,Math.min(55,value.length())));}
+        android.app.AlertDialog dialog=ThemeStore.dialog(this).setTitle("块编辑 · 选择段落").setSingleChoiceItems(labels,selected,(d,i)->{
+            d.dismiss();blockActions(body,i);
+        }).setNegativeButton("关闭",null).create();dialog.show();dialog.getListView().setSelection(selected);
+    }
+    private void blockActions(String original,int index){
+        List<MemoBlocks.Block> blocks=MemoBlocks.split(original);MemoBlocks.Block block=blocks.get(index);
+        String preview=original.substring(block.start,block.end);if(preview.length()>180)preview=preview.substring(0,180)+"…";
+        final String summary=preview;
+        ThemeStore.dialog(this).setTitle("段落 "+(index+1)).setItems(new String[]{"定位编辑","上移","下移","复制段落","删除段落"},(d,i)->{
+            if(!original.equals(bodyInput.getText().toString())){message("内容已变化，请重新选择段落");return;}
+            if(i==0){bodyInput.requestFocus();bodyInput.setSelection(block.start,block.end);showKeyboard(bodyInput);return;}
+            if(i==4){ThemeStore.dialog(this).setTitle("删除这段内容？").setMessage(summary).setNegativeButton("取消",null)
+                .setPositiveButton("删除",(confirm,which)->applyBlock(original,index,"delete")).show();return;}
+            if(i==1&&index==0||i==2&&index==blocks.size()-1){message("已在段落边界");return;}
+            applyBlock(original,index,new String[]{"","up","down","copy"}[i]);blockMenu();
+        }).setNegativeButton("返回",(d,w)->blockMenu()).show();
+    }
+    private void applyBlock(String original,int index,String operation){
+        if(!original.equals(bodyInput.getText().toString())){message("内容已变化，请重新选择段落");return;}
+        MemoTextFormat.Change change=MemoBlocks.edit(original,index,operation);
+        if(change.body.equals(original)){message("内容未改变，或已达到 2 万字上限");return;}
+        bodyInput.apply(new MemoChecklist.Change(change.body,change.cursor));
+        if("delete".equals(operation))message("已删除段落，可用底部撤销恢复");
+    }
+    private void formatMenu(){String[] labels={"标题","副标题","小标题","正文","粗体","斜体","删除线","下划线","高亮","无序列表","有序列表","增加缩进","减少缩进"};
+        ThemeStore.dialog(this).setTitle("格式").setItems(labels,(d,i)->{if(previewing)togglePreview();String body=bodyInput.getText().toString();int a=Math.max(0,bodyInput.getSelectionStart()),b=Math.max(0,bodyInput.getSelectionEnd());MemoTextFormat.Change change;
+            if(i<4)change=MemoTextFormat.heading(body,a,b,i==3?0:i+1);else if(i<9)change=MemoTextFormat.inline(body,a,b,new String[]{"bold","italic","strike","underline","highlight"}[i-4]);else if(i<11)change=MemoTextFormat.list(body,a,b,i==10);else change=MemoTextFormat.indent(body,a,b,i==11);
+            bodyInput.apply(new MemoChecklist.Change(change.body,change.cursor));}).setNegativeButton("关闭",null).show();
+    }
+    private void backupMenu(){ThemeStore.dialog(this).setTitle("本机备份").setMessage("备份包含笔记、回收站、分类和附件，不包含同步密钥。恢复会合并并保留现有内容。").setItems(new String[]{"导出完整备份","恢复备份"},(d,i)->{
+        Intent intent=i==0?new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip").putExtra(Intent.EXTRA_TITLE,"AwayFromShorts-memos.zip")
+                :new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+        try{startActivityForResult(intent,i==0?REQ_BACKUP:REQ_RESTORE);}catch(android.content.ActivityNotFoundException e){message("没有可用的文件选择器");}
+    }).setNegativeButton("关闭",null).show();}
+    private org.json.JSONObject remapLibrary(org.json.JSONObject source,java.util.Map<String,String> ids)throws org.json.JSONException{
+        org.json.JSONObject result=new org.json.JSONObject(source.toString());for(String key:new String[]{"assignments","papers"}){
+            org.json.JSONObject old=result.getJSONObject(key),mapped=new org.json.JSONObject();java.util.Iterator<String> names=old.keys();while(names.hasNext()){String name=names.next();mapped.put(ids.containsKey(name)?ids.get(name):name,old.get(name));}result.put(key,mapped);
+        }return result;
+    }
+    private void taskManager(){
+        if(previewing)togglePreview();
+        final String body=bodyInput.getText().toString();final int a=Math.max(0,bodyInput.getSelectionStart()),b=Math.max(0,bodyInput.getSelectionEnd());
+        int count=MemoChecklist.selected(body,a,b).size();
+        String[] labels={"完成所选待办","恢复所选待办","增加缩进","减少缩进","上移","下移","移除勾选框","删除所选待办","全部完成","全部恢复"};
+        android.widget.ArrayAdapter<String> adapter=new android.widget.ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,labels){
+            @Override public boolean areAllItemsEnabled(){return false;}
+            @Override public boolean isEnabled(int position){return position<8?count>0:!MemoChecklist.items(body).isEmpty();}
+            @Override public View getView(int position,View old,android.view.ViewGroup parent){TextView view=(TextView)super.getView(position,old,parent);view.setTextColor(isEnabled(position)?ui.text():ui.text3());return view;}
+        };
+        android.app.AlertDialog dialog=ThemeStore.dialog(this).setTitle("待办管理 · 所选 "+count+" 项").setAdapter(adapter,(d,i)->{
+            if(i<8&&count==0){message("先把光标放到待办上，或选中多行待办");return;}
+            MemoChecklist.Change change=null;
+            switch(i){case 0:change=MemoChecklist.setChecked(body,a,b,true);break;case 1:change=MemoChecklist.setChecked(body,a,b,false);break;
+                case 2:change=MemoChecklist.indent(body,a,b,true);break;case 3:change=MemoChecklist.indent(body,a,b,false);break;
+                case 4:change=MemoChecklist.move(body,a,b,false);break;case 5:change=MemoChecklist.move(body,a,b,true);break;
+                case 6:change=MemoChecklist.removeMarkers(body,a,b);break;
+                case 7:ThemeStore.dialog(this).setTitle("删除所选的 "+count+" 项待办？").setMessage("删除后可通过撤销恢复。")
+                        .setNegativeButton("取消",null).setPositiveButton("删除",(confirm,w)->bodyInput.apply(MemoChecklist.deleteItems(body,a,b))).show();return;
+                case 8:change=MemoChecklist.setChecked(body,0,body.length(),true);break;
+                case 9:change=MemoChecklist.setChecked(body,0,body.length(),false);break;}
+            if(change!=null)bodyInput.apply(change);
+        }).setNegativeButton("关闭",null).create();
+        dialog.show();
+    }
+    private void findText(){
+        LinearLayout panel=column();panel.setPadding(ui.dp(20),ui.dp(8),ui.dp(20),ui.dp(12));
+        EditText queryInput=new EditText(this);queryInput.setSingleLine();queryInput.setHint("查找标题和正文");queryInput.setTextColor(ui.text());queryInput.setHintTextColor(ui.text3());panel.addView(queryInput);
+        TextView result=text("输入要查找的文字",13,ui.text2());result.setPadding(0,ui.dp(8),0,ui.dp(8));panel.addView(result);
+        final java.util.List<MemoEditor.Match>[] matches=new java.util.List[]{new java.util.ArrayList<MemoEditor.Match>()};final int[] index={-1};
+        Runnable locate=()->{
+            if(matches[0].isEmpty()){result.setText(queryInput.length()==0?"输入要查找的文字":"未找到匹配");return;}
+            MemoEditor.Match match=matches[0].get(index[0]);EditText target=match.title?titleInput:bodyInput;
+            if(previewing)togglePreview();target.setSelection(Math.min(match.start,target.length()),Math.min(match.end,target.length()));
+            result.setText((index[0]+1)+" / "+matches[0].size()+" · "+(match.title?"标题":"正文"));
+        };
+        queryInput.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int af){}public void onTextChanged(CharSequence s,int st,int before,int count){
+            matches[0]=MemoEditor.find(titleInput.getText().toString(),bodyInput.getText().toString(),s.toString());index[0]=matches[0].isEmpty()?-1:0;locate.run();
+        }public void afterTextChanged(Editable e){}});
+        android.app.AlertDialog dialog=ThemeStore.dialog(this).setTitle("文内查找").setView(panel).setNegativeButton("关闭",null)
+                .setNeutralButton("上一处",null).setPositiveButton("下一处",null).create();
+        dialog.setOnShowListener(d->{dialog.getButton(-3).setOnClickListener(v->{if(!matches[0].isEmpty()){index[0]=(index[0]+matches[0].size()-1)%matches[0].size();locate.run();}});
+            dialog.getButton(-1).setOnClickListener(v->{if(!matches[0].isEmpty()){index[0]=(index[0]+1)%matches[0].size();locate.run();}});});
+        dialog.setOnDismissListener(d->{if(!matches[0].isEmpty()){MemoEditor.Match match=matches[0].get(index[0]);(match.title?titleInput:bodyInput).requestFocus();}});dialog.show();
+    }
+    private void shareText(){
+        String title=titleInput.getText().toString(),body=bodyInput.getText().toString();
+        Intent send=new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT,title).putExtra(Intent.EXTRA_TEXT,title+(title.isEmpty()?"":"\n\n")+body);
+        try{startActivity(Intent.createChooser(send,"分享备忘录"));}catch(android.content.ActivityNotFoundException e){message("没有可用的分享应用");}
+    }
+    private void reminder(){
+        ThemeStore.dialog(this).setTitle("提醒").setMessage((draftRemindAt>0?"当前："+reminderTime(draftRemindAt)+"\n":"")+"保存备忘录后生效。系统省电可能让提醒稍有延迟。")
+                .setPositiveButton("设置时间",(d,w)->pickReminder()).setNeutralButton("取消提醒",(d,w)->{draftRemindAt=0;updateHistory();})
+                .setNegativeButton("关闭",null).show();
+    }
+    private void pickReminder(){
+        java.util.Calendar date=java.util.Calendar.getInstance();date.setTimeInMillis(draftRemindAt>System.currentTimeMillis()?draftRemindAt:System.currentTimeMillis()+3600000L);
+        android.app.DatePickerDialog picker=new android.app.DatePickerDialog(this,(view,y,m,day)->{
+            date.set(y,m,day);android.app.TimePickerDialog timePicker=new android.app.TimePickerDialog(this,(clock,hour,minute)->{
+                date.set(java.util.Calendar.HOUR_OF_DAY,hour);date.set(java.util.Calendar.MINUTE,minute);date.set(java.util.Calendar.SECOND,0);date.set(java.util.Calendar.MILLISECOND,0);
+                if(date.getTimeInMillis()<=System.currentTimeMillis()){message("请选择未来的提醒时间");return;}
+                draftRemindAt=date.getTimeInMillis();updateHistory();
+                if(android.os.Build.VERSION.SDK_INT>=33&&checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS},44);
+            },date.get(java.util.Calendar.HOUR_OF_DAY),date.get(java.util.Calendar.MINUTE),true);
+            timePicker.setButton(-2,"取消",timePicker);timePicker.setButton(-1,"确定",timePicker);timePicker.show();
+        },date.get(java.util.Calendar.YEAR),date.get(java.util.Calendar.MONTH),date.get(java.util.Calendar.DAY_OF_MONTH));
+        picker.getDatePicker().setMinDate(System.currentTimeMillis());picker.setButton(-2,"取消",picker);picker.setButton(-1,"确定",picker);picker.show();
+    }
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants){super.onRequestPermissionsResult(request,permissions,grants);if(request==44){updateHistory();if(!MemoReminder.allowed(this))message("尚未允许通知，提醒不会弹出；可在系统设置中开启");}}
     private void exportFile(){
         exportText=titleInput.getText().toString()+"\n\n"+bodyInput.getText().toString();
         Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/markdown")
@@ -638,8 +896,7 @@ public final class MemoActivity extends ThemedActivity {
     }
 
     private static MemoStore.Note shown(MemoStore.Note note) {
-        return new MemoStore.Note(note.id, note.title == null ? "" : note.title,
-                note.body == null ? "" : note.body, note.updated, note.pinned);
+        MemoStore.Note copy=note.copy();if(copy.title==null)copy.title="";if(copy.body==null)copy.body="";return copy;
     }
 
     private LinearLayout column() {
@@ -687,7 +944,7 @@ public final class MemoActivity extends ThemedActivity {
         view.setBackground(ui.round(ui.accent(), 99));
         view.setContentDescription("新建备忘录");
         view.setOnClickListener(v -> startActivityForResult(
-                new Intent(this, MemoActivity.class).putExtra("new", true), REQ_EDITOR));
+                new Intent(this, MemoActivity.class).putExtra("new", true).putExtra("book","*".equals(notebookFilter)?"":notebookFilter), REQ_EDITOR));
         return view;
     }
 

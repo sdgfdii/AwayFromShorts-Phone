@@ -9,7 +9,7 @@ import java.util.TimeZone;
 
 /** Android 7/8 cannot prohibit timezone edits. Their schedules use a pinned zone. */
 public final class GuardClock extends Application {
-    @Override public void onCreate() { super.onCreate(); pin(this); }
+    @Override public void onCreate() { super.onCreate(); LocalBackup.startup(this); pin(this); }
 
     static synchronized TimeZone pin(Context c) {
         if (Build.VERSION.SDK_INT >= 28) return TimeZone.getDefault();

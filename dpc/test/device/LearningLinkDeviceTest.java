@@ -74,6 +74,9 @@ public final class LearningLinkDeviceTest extends Instrumentation {
         if(v instanceof ViewGroup)for(int i=0;i<((ViewGroup)v).getChildCount();i++)if(text(((ViewGroup)v).getChildAt(i),value))return true;
         return false;
     }
+    private android.widget.Spinner findSpinner(View root){if(root instanceof android.widget.Spinner)return (android.widget.Spinner)root;if(root instanceof ViewGroup)for(int i=0;i<((ViewGroup)root).getChildCount();i++){android.widget.Spinner found=findSpinner(((ViewGroup)root).getChildAt(i));if(found!=null)return found;}return null;}
+    private TextView label(View root,String value){if(root instanceof TextView&&value.contentEquals(((TextView)root).getText()))return (TextView)root;if(root instanceof ViewGroup)for(int i=0;i<((ViewGroup)root).getChildCount();i++){TextView found=label(((ViewGroup)root).getChildAt(i),value);if(found!=null)return found;}return null;}
+    private void capture(String name)throws Exception{Thread.sleep(1100);android.graphics.Bitmap bitmap=getUiAutomation().takeScreenshot();check(bitmap!=null,"capture "+name);try(OutputStream image=new FileOutputStream(new File(getTargetContext().getExternalFilesDir(null),name+".png"))){bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,image);}finally{bitmap.recycle();}}
     private boolean selected(Activity checkin,int type)throws Exception {
         List<?> entries=(List<?>)field(checkin,"cards");int selected=(Integer)field(checkin,"selected");
         return selected>=0&&selected<entries.size()&&(Integer)field(entries.get(selected),"type")==type;
@@ -148,6 +151,7 @@ public final class LearningLinkDeviceTest extends Instrumentation {
             runMain(()->checkin.finish());settle();
 
             Activity memoryActivity=open("MemoryActivity");
+            check(!text(memoryActivity.getWindow().getDecorView(),"本日记忆闪卡"),"memory root header removed");capture("cards-memory");
             runMain(()->{
                 try {set(memoryActivity,"deck",deck);set(memoryActivity,"flashMode",false);
                     call(memoryActivity,"review",new Class<?>[0]);set(memoryActivity,"revealed",true);
@@ -193,7 +197,8 @@ public final class LearningLinkDeviceTest extends Instrumentation {
             check(QuizStore.snapshot(c).stats(StudyStore.today())[0]==1,"completion animation never creates extra answers");
             Object quizDone=link("quiz",new Class<?>[]{Context.class},c);
             check((Boolean)call(quizDone,"complete",new Class<?>[0]),"quiz threshold uses saved daily attempts");
-            Activity history=open("HistoryActivity");
+            Activity history=open("HistoryActivity");Thread.sleep(1200);runMain(()->history.startActivity(new Intent(history,HistoryActivity.class).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)));Thread.sleep(800);
+            check(text(history.getWindow().getDecorView(),"近三天 · 卡片类型"),"recent pie charts present");check(text(history.getWindow().getDecorView(),"最近流水  ▸"),"recent flow initially collapsed");capture("cards-history");
             runMain(()->check(text(history.getWindow().getDecorView(),"周期总结"),"cycle summary lives in check-in history"));
             runMain(()->{try{call(history,"showWeekly",new Class<?>[]{int.class},0);}catch(Exception e){throw new RuntimeException(e);}});
             settle();
@@ -210,6 +215,11 @@ public final class LearningLinkDeviceTest extends Instrumentation {
                 check(text(manager.getWindow().getDecorView(),label),"central card setting: "+label);
             android.graphics.Bitmap preview=getUiAutomation().takeScreenshot();
             if(preview!=null){try(OutputStream image=new FileOutputStream(new File(c.getExternalFilesDir(null),"card-management-1530.png"))){preview.compress(android.graphics.Bitmap.CompressFormat.PNG,100,image);}preview.recycle();}
+            check(text(manager.getWindow().getDecorView(),"学习联动罚时"),"linkage penalty displayed in manager");
+            runMain(()->{try{set(manager,"category","summary");call(manager,"render",new Class<?>[0]);View root=manager.getWindow().getDecorView();android.widget.Spinner spinner=findSpinner(root);spinner.setSelection(3);}catch(Exception error){throw new RuntimeException(error);}});settle();
+            check(text(manager.getWindow().getDecorView(),"保存总结周期"),"custom summary save available");capture("cards-cycle");
+            runMain(()->{TextView save=label(manager.getWindow().getDecorView(),"保存总结周期");save.performClick();});
+            CycleSummary savedCycle=CardStore.snapshot(c).summary(System.currentTimeMillis());check(savedCycle.mode().equals("custom")||savedCycle.queued()!=null,"custom cycle saves from UI");
             long baseline=CardStore.snapshot(c).balanceMillis();CardStore.saveLove(c,null,"QA 热爱",60);
             String loveId=CardStore.snapshot(c).love().optJSONObject(0).optString("id");
             runMain(()->completed.startActivity(new Intent(completed,CheckinActivity.class).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)));settle();
@@ -222,12 +232,13 @@ public final class LearningLinkDeviceTest extends Instrumentation {
             });
             check(CardStore.snapshot(c).earnedToday(System.currentTimeMillis()),"up-swipe persists the love reward");
             Thread.sleep(600);settle();check(!(Boolean)field(completed,"busy"),"love completion animation releases gesture lock");
-            check(!CardStore.claim(c,loveId)&&CardStore.snapshot(c).balanceMillis()==baseline+3600000L,"daily reward cannot be claimed twice");
+            long credited=CardStore.snapshot(c).balanceMillis()-baseline;check(credited>=60000L&&credited<=3600000L,"lottery result is 1 to 60 minutes");
+            check(!CardStore.claim(c,loveId)&&CardStore.snapshot(c).balanceMillis()==baseline+credited,"daily reward cannot be claimed twice");
             try{CardStore.saveLove(c,null,"too much",61);throw new AssertionError("hard cap missing");}catch(IllegalArgumentException expected){check(true,"60-minute cap enforced in storage");}
             long stamp=System.currentTimeMillis();CardStore.reconcile(c,stamp,true,stamp+20*60000L);
             check(CardStore.rewardUntil(c,stamp)>stamp,"reward reservation persisted");
             CardStore.reconcile(c,stamp+5*60000L,false,stamp+20*60000L);
-            check(CardStore.snapshot(c).balanceMillis()==55*60000L,"unused reward refunded on device");
+            check(CardStore.snapshot(c).balanceMillis()==baseline+Math.max(0,credited-5*60000L),"unused reward refunded on device");
             phase("reward ledger");
             Calendar begin=Calendar.getInstance();begin.add(Calendar.DAY_OF_MONTH,-((begin.get(Calendar.DAY_OF_WEEK)+5)%7)-7);
             CardData missed=new CardData(begin.getTimeInMillis());missed.summary(begin.getTimeInMillis()).configure("daily",1,CycleSummary.day(begin.getTimeInMillis()),begin.getTimeInMillis());

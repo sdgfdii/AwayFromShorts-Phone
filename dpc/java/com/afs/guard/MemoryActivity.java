@@ -117,12 +117,12 @@ public class MemoryActivity extends ThemedActivity {
         back.setTextColor(ui.accent()); back.setPadding(0, ui.dp(8), 0, ui.dp(18));
         back.setOnClickListener(v -> onBackPressed()); body.addView(back);
         }
-        if ("home".equals(page)) {
+        if ("home".equals(page) && managementMode) {
             LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL);
             TextView heading = ui.title(title);
             row.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
             body.addView(row);
-        } else body.addView(ui.title(title));
+        } else if (!"home".equals(page)) body.addView(ui.title(title));
         if (!subtitle.isEmpty()) hint(body, subtitle);
     }
     private TextView hint(LinearLayout parent, String text) {
@@ -180,7 +180,7 @@ public class MemoryActivity extends ThemedActivity {
             return;
         }
         deck = next.optString("deck"); JSONObject d = m.deck(deck);
-        hint(body, (p.done + 1) + "/" + p.total);
+
         drawCard(m, d, next);
     }
     private void flashSettings() {
@@ -470,8 +470,10 @@ public class MemoryActivity extends ThemedActivity {
     }
     private void drawCard(MemoryData m, JSONObject d, JSONObject next) {
         final String id = next.optString("id"); final boolean isInput = "input".equals(next.optString("type"));
-        final LinearLayout card = ui.card();
+        final LinearLayout card = new StudyCardSurface(this);
+        if(flashMode){MemoryFlashcards.Progress progress=MemoryFlashcards.progress(m,System.currentTimeMillis());hint(card,(progress.done+1)+"/"+progress.total);}
         final SwipeCardView swipe = new SwipeCardView(this);
+        swipe.setClipChildren(false);swipe.setClipToPadding(false);body.setClipChildren(false);
         swipe.addView(card, new FrameLayout.LayoutParams(-1, -2));
         body.addView(swipe, ui.gap(16));
         TextView question = text(card, MemoryData.question(next), 25);

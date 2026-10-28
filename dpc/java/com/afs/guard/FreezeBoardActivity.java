@@ -144,9 +144,9 @@ public class FreezeBoardActivity extends ThemedActivity {
         TextView title = text("冻结应用", 27, look.text()); title.setTypeface(Typeface.DEFAULT_BOLD);
         SwissTypography.role(title,SwissTypography.Role.TITLE);
         top.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        top.addView(action("设置", v -> settings())); screen.addView(top);
+        top.addView(action("设置", v -> settings()));
         TextView hint = text("蓝色表示定时冻结 · 学习联动另计", 12, look.text2());
-        hint.setPadding(0, dp(5), 0, dp(4)); screen.addView(hint);
+        hint.setPadding(0, dp(5), 0, dp(4));
         // 只写「学习联动冻结」太含糊：这里直接写清是记忆闪卡还是打卡没完成，并且可点过去
         gateNote = text("", 12, look.red());
         gateNote.setPadding(dp(12), dp(9), dp(12), dp(9));
@@ -155,7 +155,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         gateNote.setOnClickListener(v -> openGateSource());
         LinearLayout.LayoutParams gateLp = new LinearLayout.LayoutParams(-1, -2);
         gateLp.topMargin = dp(4);
-        screen.addView(gateNote, gateLp);
+
         scroll = new ScrollView(this); scroll.setClipToPadding(false);
         scroll.setPadding(0, dp(14), 0, dp(8));
         slotsView = new LinearLayout(this); slotsView.setOrientation(LinearLayout.VERTICAL);
@@ -166,6 +166,8 @@ public class FreezeBoardActivity extends ThemedActivity {
             empty.setPadding(dp(18), dp(30), dp(18), dp(30)); slotsView.addView(empty);
         }
         for (FreezeSlotStore.Slot slot : slots) slotsView.addView(slotCard(slot), gap(16));
+        slotsView.addView(gateNote,gateLp);
+        slotsView.addView(action("冻结设置",v->settings()));
         buildLibrary(); setContentView(FloatingNav.wrap(this,screen,2)); immersive();
         updateGateNote();
         scroll.setOnDragListener((view, event) -> {

@@ -1,0 +1,1 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.memowholeqa"><application android:label="Memo Whole QA"/><instrumentation android:name="com.afs.guard.MemoWholeDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true"/></manifest>

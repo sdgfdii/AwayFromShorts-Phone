@@ -38,11 +38,12 @@ public final class MemoEditor {
         // Only TextView consumes this output. Escape raw HTML; never load images or run scripts.
         String safe=source.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
                 .replace("\"","&quot;").replace("'","&#39;");
+        safe=MemoTextFormat.previewExtras(safe);
         java.util.List<MemoChecklist.Item> tasks=MemoChecklist.items(safe);
         for(int i=tasks.size()-1;i>=0;i--){MemoChecklist.Item item=tasks.get(i);String symbol=item.checked?"☑":"☐";
             if(taskLinkPrefix!=null)symbol="<a href='"+taskLinkPrefix+i+"'>"+symbol+"</a>";
             safe=safe.substring(0,item.marker)+symbol+(taskLinkPrefix==null?" ":"")+safe.substring(item.content);}
-        String html=GsSimpleMarkdownParser.FILTER_ANDROID_TEXTVIEW.filter(safe);
+        String html=GsSimpleMarkdownParser.FILTER_ANDROID_TEXTVIEW.filter(safe).replaceAll("~~([^\\n]+?)~~","<s>$1</s>");
         return html.replace("#000000",String.format(java.util.Locale.ROOT,"#%06X",color&0xffffff)).replace("\n","<br/>");
     }
     public static String readText(InputStream input) throws java.io.IOException {
@@ -58,5 +59,17 @@ public final class MemoEditor {
     public static String filename(String title) {
         String clean=title.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]","_").trim();
         return (clean.isEmpty()?"备忘录":clean.substring(0,Math.min(clean.length(),60)))+".md";
+    }
+    public static final class Match {
+        public final boolean title;
+        public final int start,end;
+        Match(boolean title,int start,int end){this.title=title;this.start=start;this.end=end;}
+    }
+    public static java.util.List<Match> find(String title,String body,String query){
+        java.util.List<Match> result=new ArrayList<>();if(query==null||query.isEmpty())return result;
+        String[] fields={title,body};
+        for(int f=0;f<fields.length;f++)for(int i=0;i+query.length()<=fields[f].length();i++){
+            if(fields[f].regionMatches(true,i,query,0,query.length())){result.add(new Match(f==0,i,i+query.length()));i+=query.length()-1;}
+        }return result;
     }
 }

@@ -55,10 +55,13 @@ public final class MemoChecklistInput extends EditText {
     public void checklist(){apply(MemoChecklist.convert(getText().toString(),getSelectionStart(),getSelectionEnd()));}
     public void toggle(int offset){
         int a=getSelectionStart(),b=getSelectionEnd();
-        apply(MemoChecklist.toggle(getText().toString(),offset));
-        if(a>=0&&b>=0)setSelection(Math.min(a,length()),Math.min(b,length()));
+        MemoChecklist.Change change=MemoChecklist.toggle(getText().toString(),offset);
+        beginBatchEdit();try{
+            apply(new MemoChecklist.Change(change.body,Math.max(0,a)));
+            if(a>=0&&b>=0)setSelection(Math.min(a,length()),Math.min(b,length()));
+        }finally{endBatchEdit();}
     }
-    private void apply(MemoChecklist.Change change){
+    public void apply(MemoChecklist.Change change){
         if(change.body.equals(getText().toString()))return;
         if(change.body.length()>MemoStore.MAX_BODY){android.widget.Toast.makeText(getContext(),"正文已达到 2 万字上限",0).show();return;}
         if(beforeAction!=null)beforeAction.run();
@@ -94,10 +97,12 @@ public final class MemoChecklistInput extends EditText {
             text.setSpan(new Box(item.checked),item.marker,item.content,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             int paragraphEnd=item.end<text.length()&&text.charAt(item.end)=='\r'?item.end+1:item.end;
             if(paragraphEnd<text.length()&&text.charAt(paragraphEnd)=='\n')paragraphEnd++;
-            text.setSpan(new Indent(ui.dp(32)),item.start,paragraphEnd,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            int indent=Math.round(getPaint().measureText(text,item.start,item.marker));
+            text.setSpan(new Indent(ui.dp(32)+indent),item.start,paragraphEnd,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             if(item.checked&&item.content<item.end)text.setSpan(new Muted(ui.text3()),item.content,item.end,Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         invalidate();
+        MemoTextFormat.decorate(text,ui.text(),ui.text3());
     }
     private int checkboxAt(float eventX,float eventY){
         Layout layout=getLayout();if(layout==null)return -1;

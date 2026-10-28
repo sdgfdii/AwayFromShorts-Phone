@@ -29,8 +29,9 @@ public final class CardData {
     public void archive(String id,boolean archived){JSONObject card=find(id);if(card==null)throw new IllegalArgumentException("热爱卡不存在");put(card,"archived",archived);}
     public boolean earnedToday(long now){String day=CycleSummary.day(now);JSONArray a=db.optJSONArray("earned");for(int i=0;i<a.length();i++)if(day.equals(a.optJSONObject(i).optString("day")))return true;return false;}
     public boolean claimed(String id,long now){String day=CycleSummary.day(now);JSONArray a=earned();for(int i=0;i<a.length();i++){JSONObject e=a.optJSONObject(i);if(day.equals(e.optString("day"))&&id.equals(e.optString("card")))return true;}return false;}
-    public boolean claim(String id,long now){JSONObject card=find(id);if(card==null||card.optBoolean("archived"))throw new IllegalArgumentException("热爱卡不存在");if(earnedToday(now))return false;
-        int minutes=card.optInt("minutes");if(minutes<1||minutes>60)throw new IllegalArgumentException("奖励分钟数无效");
+    public boolean claim(String id,long now){return claim(id,now,new java.security.SecureRandom().nextInt(60)+1);}
+    boolean claim(String id,long now,int draw){JSONObject card=find(id);if(card==null||card.optBoolean("archived"))throw new IllegalArgumentException("热爱卡不存在");if(earnedToday(now))return false;
+        int minutes=draw;if(minutes<1||minutes>60)throw new IllegalArgumentException("奖励分钟数无效");
         JSONObject entry=new JSONObject();put(entry,"id",UUID.randomUUID().toString());put(entry,"card",id);put(entry,"title",card.optString("title"));put(entry,"day",CycleSummary.day(now));put(entry,"at",now);put(entry,"minutes",minutes);db.optJSONArray("earned").put(entry);return true;}
     public long balanceMillis(){long balance=0;JSONArray earned=db.optJSONArray("earned"),uses=db.optJSONArray("uses");for(int i=0;i<earned.length();i++)balance+=earned.optJSONObject(i).optInt("minutes")*60000L;for(int i=0;i<uses.length();i++){JSONObject u=uses.optJSONObject(i);balance-=u.optLong("end")-u.optLong("start")-u.optLong("refund");}return Math.max(0,balance);}
     private JSONObject lastUse(){JSONArray uses=db.optJSONArray("uses");return uses.length()==0?null:uses.optJSONObject(uses.length()-1);}

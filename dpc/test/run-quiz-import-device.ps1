@@ -15,9 +15,18 @@ Checked "$taskBt/aapt2.exe" @('link','-o',"$taskOut/base.apk",'-I',$taskAndroid,
 Checked (Get-Command javac).Source @('--release','8','-encoding','UTF-8','-cp',"$taskAndroid;$taskClasses;$taskPdf",'-d',"$taskOut/classes","$PSScriptRoot/device/QuizImportDeviceTest.java")
 Checked (Get-Command jar).Source @('cf',"$taskOut/classes.jar",'-C',"$taskOut/classes",'.')
 Checked "$taskBt/d8.bat" @('--lib',$taskAndroid,'--classpath',$taskClasses,'--classpath',$taskPdf,'--min-api','24','--output',"$taskOut/dex","$taskOut/classes.jar")
-Checked $Python @('-c','import sys,zipfile; z=zipfile.ZipFile(sys.argv[1],"a",zipfile.ZIP_DEFLATED); z.write(sys.argv[2],"classes.dex"); z.close()',"$taskOut/base.apk","$taskOut/dex/classes.dex")
+$taskAddDex=Join-Path $taskOut 'add-dex.py'
+$taskAddDexPy=@'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1], "a", zipfile.ZIP_DEFLATED) as z:
+    z.write(sys.argv[2], "classes.dex")
+'@
+Set-Content -Path $taskAddDex -Value $taskAddDexPy -Encoding ASCII
+Checked $Python @($taskAddDex,"$taskOut/base.apk","$taskOut/dex/classes.dex")
 Checked "$taskBt/zipalign.exe" @('-f','-p','4',"$taskOut/base.apk","$taskOut/aligned.apk")
-Checked "$taskBt/apksigner.bat" @('sign','--ks',"$taskRoot/keystore/afs.keystore",'--ks-pass','pass:afsguard','--key-pass','pass:afsguard','--out',"$taskOut/qa.apk","$taskOut/aligned.apk")
+$signArgs=@('sign','--ks',"$taskRoot/keystore/afs.keystore",'--ks-pass','pass:afsguard','--key-pass','pass:afsguard')
+if($env:AFS_KEYSTORE){$signArgs=@('sign','--ks',$env:AFS_KEYSTORE,'--ks-key-alias',$env:AFS_KEY_ALIAS,'--ks-pass','env:AFS_STORE_PASS','--key-pass','env:AFS_STORE_PASS')}
+Checked "$taskBt/apksigner.bat" ($signArgs+@('--out',"$taskOut/qa.apk","$taskOut/aligned.apk"))
 Checked $taskAdb @('-s',$Serial,'install','--no-incremental','-r',"$taskOut/qa.apk")
 try {
     $taskResult=& $taskAdb -s $Serial shell am instrument -w com.afs.guard.quizimportqa/com.afs.guard.QuizImportDeviceTest 2>&1

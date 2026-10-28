@@ -11,12 +11,14 @@ public final class CardDataTest {
     private static void rewards(){
         long now=at(2026,10,27,10,0);CardData d=new CardData(now);
         rejects(()->d.saveLove(null,"练琴",0),"zero reward rejected");rejects(()->d.saveLove(null,"练琴",61),"hard maximum enforced");
+        for(int draw=1;draw<=60;draw++){CardData sample=new CardData(now);String sampleId=sample.saveLove(null,"抽奖",30);sample.claim(sampleId,now,draw);check(sample.balanceMillis()==draw*60000L,"draw range persisted "+draw);check(!sample.claim(sampleId,now,61),"claimed day cannot redraw");}
+        CardData random=new CardData(now);String randomId=random.saveLove(null,"随机",30);random.claim(randomId,now);check(random.balanceMillis()>=60000&&random.balanceMillis()<=3600000,"production random bounded");
         String a=d.saveLove(null,"练琴",30),b=d.saveLove(null,"绘画",60);
-        check(d.claim(a,now),"first hobby earns reward");check(!d.claim(a,now+1),"repeated swipe never earns twice");
+        check(d.claim(a,now,30),"first hobby earns reward");check(!d.claim(a,now+1),"repeated swipe never earns twice");
         check(!d.claim(b,now+2),"global one-card daily cap across different cards");check(d.balanceMillis()==30*60000L,"credit earned once");
         d.archive(a,true);check(d.balanceMillis()==30*60000L,"deleting card preserves credit");d.archive(a,false);
         check(!d.claim(b,now+3),"deleting and restoring cannot bypass daily cap");
-        long tomorrow=at(2026,10,28,10,0);check(d.claim(b,tomorrow),"new day permits another card");
+        long tomorrow=at(2026,10,28,10,0);check(d.claim(b,tomorrow,60),"new day permits another card");
         check(d.balanceMillis()==90*60000L,"credits accumulate without expiring");
         CardData restored=new CardData(d.db.toString());check(restored.balanceMillis()==d.balanceMillis()&&restored.earnedToday(tomorrow),"restart preserves ledger and daily cap");
         check(!d.reconcile(tomorrow,false,tomorrow+3600000),"no spend without eligible scheduled freeze");check(d.balanceMillis()==90*60000L,"study or taboo exclusion preserves wallet");
@@ -30,7 +32,7 @@ public final class CardDataTest {
         d.reconcile(tomorrow+11*60000L,true,tomorrow+200*60000L);
         check(d.rewardUntil(tomorrow+11*60000L)==tomorrow+71*60000L,"one automatic reservation cannot exceed an hour");
         check(d.balanceMillis()==20*60000L,"remaining banked credit remains available later");
-        CardData shorted=new CardData(now);String id=shorted.saveLove(null,"运动",60);shorted.claim(id,now);shorted.reconcile(now,true,now+3600000);
+        CardData shorted=new CardData(now);String id=shorted.saveLove(null,"运动",60);shorted.claim(id,now,60);shorted.reconcile(now,true,now+3600000);
         shorted.reconcile(now+10*60000,true,now+20*60000);check(shorted.balanceMillis()==40*60000L,"shortened freeze boundary releases excess reservation");
         shorted.reconcile(now+15*60000,false,now+20*60000);check(shorted.balanceMillis()==45*60000L,"partial refund cannot create extra credit");
         check(!shorted.reconcile(now+20*60000,true,now+20*60000),"zero-length boundary never charges");
@@ -53,10 +55,11 @@ public final class CardDataTest {
         check(p.holds(at(2026,11,1,23,59)),"23:59 never auto-completes");
         long mon=at(2026,11,2,9,0);CycleSummary.Period overdue=s.pending(mon);
         check(overdue!=null&&overdue.key.equals(p.key)&&overdue.holds(mon),"unfinished summary carries into next cycle and remains holding");
-        rejects(()->s.configure("daily",1,"2026-11-02",mon),"cycle edits cannot erase a pending summary");
+        s.configure("custom",3,"2026-11-02",mon);check(s.queued()!=null&&s.pending(mon).key.equals(p.key),"cycle edits queued without erasing debt");
         check(s.complete(p.key,"本周收获",mon),"overdue summary can be completed on Monday");
         check(!s.complete(p.key,"repeat",mon),"repeat confirmation has no effect");
         check(s.pending(mon)==null,"completion releases summary hold");
+        check(s.mode().equals("custom")&&s.days()==3&&s.queued()==null,"queued custom configuration applies after debt completion");
         check(s.recorded(p.key).note.equals("本周收获"),"summary text retained");
         CardData loaded=new CardData(d.db.toString());check(loaded.summary(mon).pending(mon)==null,"restart preserves completed period and cursor");
         check(s.pending(at(2026,11,8,20,0))!=null,"next week requires another summary");

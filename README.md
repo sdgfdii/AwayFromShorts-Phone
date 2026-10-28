@@ -1,8 +1,14 @@
-# AwayFromShorts Android 1.54.0
+# AwayFromShorts Android 1.56.0
 
 Android 7.0（API 24）及以上的离线学习与应用冻结工具。冻结使用 Android **设备所有者（Device Owner）** 的系统暂停能力；不需要 Root、Shizuku 或无障碍服务。项目以 MIT 许可证开放，第三方组件保留各自许可证。
 
-[下载完整部署包](https://github.com/sdgfdii/AwayFromShorts-Phone/releases/tag/v1.54.0) · [本版本源码](https://github.com/sdgfdii/AwayFromShorts-Phone/tree/release/android7-1.54.0) · [验证记录](dpc/release/VERIFICATION.md)
+[下载完整部署包](https://github.com/sdgfdii/AwayFromShorts-Phone/releases/tag/v1.56.0) · [本版本源码](https://github.com/sdgfdii/AwayFromShorts-Phone/tree/release/android7-1.56.0) · [验证记录](https://github.com/sdgfdii/AwayFromShorts-Phone/blob/release/android7-1.56.0/dpc/release/VERIFICATION.md)
+
+## 本版更新
+
+- 新增本地完整备份、校验恢复和模块导入导出入口，见 [数据与备份](docs/LOCAL-DATA-BACKUP.md)。
+- WebDAV、GitHub 私有仓库、Git 目前只保存配置；云端传输后续实现。
+- 纳入当前笔记编辑、笔记本、附件、备份与学习页面、卡片日历的最新修改，见 [笔记](docs/MEMO.md) 与 [卡管理](docs/CARD-MANAGEMENT.md)。
 
 ## Windows 安装
 
@@ -33,9 +39,9 @@ Android 7.0（API 24）及以上的离线学习与应用冻结工具。冻结使
 
 同步是可选功能；离线目标、打卡、记忆、题库和冻结无需 GitHub 账号。
 
-需要与电脑同步时，在自己的 GitHub 账号创建一个 Gist，先放一个 README 文件即可。打卡页点“同步”，填写用户名、Gist ID 和具有 `gist` 权限的 token。电脑端使用同一个 Gist。应用会验证 token 所属账号与 Gist 所有者一致，再启用同步。
+需要与电脑同步时，在自己的 GitHub 账号创建一个 Gist，先放一个 README 文件即可。在“数据与备份”进入“旧版 Gist 同步”，填写用户名、Gist ID 和具有 `gist` 权限的 token。电脑端使用同一个 Gist。应用会验证 token 所属账号与 Gist 所有者一致，再启用同步。
 
-启用后会同步本机目标、打卡台账、冻结配置及使用统计。Gist 的 secret 链接不是端到端加密，请按个人需要决定是否启用。公开包不包含任何人的同步目标或凭据。切换目标会隔离同步缓存和合并基线，保留本机学习记录和冻结规则；同步运行中或冻结期间不允许修改同步配置。
+启用后会同步本机目标、打卡台账、冻结配置及使用统计。Gist 的 secret 链接不是端到端加密，请按个人需要决定是否启用。公开包不包含任何人的同步目标或凭据。切换目标会隔离同步缓存和合并基线，保留本机学习记录和冻结规则；同步运行中不能修改；冻结期间仅允许首次绑定或为原目标更新令牌，不能切换或移除已绑定目标。
 
 旧版写死的同步地址已移除。已有用户升级后需在此入口重新绑定自己的空间；旧学习数据与规则不清空。
 

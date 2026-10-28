@@ -68,8 +68,8 @@ public final class BuildConfig {
     public static final String PREFILL_TOKEN = "";
 }
 EOF
-VERSION_CODE="${AFS_VERSION_CODE:-2170}"
-VERSION_NAME="${AFS_VERSION_NAME:-1.54.0}"
+VERSION_CODE="${AFS_VERSION_CODE:-2177}"
+VERSION_NAME="${AFS_VERSION_NAME:-1.56.0}"
 if [ "${AFS_RELEASE:-0}" = "1" ]; then
   : "${AFS_KEYSTORE:?Release requires an external signing keystore}"
   : "${AFS_STORE_PASS:?Release requires a private signing password}"

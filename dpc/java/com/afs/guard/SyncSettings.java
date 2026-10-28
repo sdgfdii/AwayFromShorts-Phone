@@ -21,7 +21,8 @@ final class SyncSettings {
         form.addView(field);
         return field;
     }
-    static void show(Activity a) {
+    static void show(Activity a) { a.startActivity(new android.content.Intent(a,DataManagementActivity.class)); }
+    static void showGist(Activity a) {
         LinearLayout form = new LinearLayout(a);
         form.setOrientation(LinearLayout.VERTICAL);
         int pad = Math.round(20 * a.getResources().getDisplayMetrics().density);

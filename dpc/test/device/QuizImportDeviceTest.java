@@ -22,7 +22,14 @@ public class QuizImportDeviceTest extends Instrumentation {
     private boolean waitText(String text,boolean click)throws Exception{
         long end=System.currentTimeMillis()+12000;while(System.currentTimeMillis()<end){AccessibilityNodeInfo root=getUiAutomation().getRootInActiveWindow();
             if(root!=null){List<AccessibilityNodeInfo> nodes=root.findAccessibilityNodeInfosByText(text);for(AccessibilityNodeInfo node:nodes)if(text.equals(node.getText()==null?"":node.getText().toString())){
-                if(!click)return true;while(node!=null&&!node.isClickable())node=node.getParent();if(node!=null)return node.performAction(AccessibilityNodeInfo.ACTION_CLICK);}}
+                if(!click)return true;
+                android.graphics.Rect bounds=new android.graphics.Rect();node.getBoundsInScreen(bounds);
+                if(node.isVisibleToUser()&&!bounds.isEmpty()){
+                    long now=android.os.SystemClock.uptimeMillis();MotionEvent down=MotionEvent.obtain(now,now,MotionEvent.ACTION_DOWN,bounds.centerX(),bounds.centerY(),0),up=MotionEvent.obtain(now,now+80,MotionEvent.ACTION_UP,bounds.centerX(),bounds.centerY(),0);
+                    down.setSource(InputDevice.SOURCE_TOUCHSCREEN);up.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+                    try{return getUiAutomation().injectInputEvent(down,true)&&getUiAutomation().injectInputEvent(up,true);}finally{down.recycle();up.recycle();}
+                }
+                while(node!=null&&!node.isClickable())node=node.getParent();if(node!=null)return node.performAction(AccessibilityNodeInfo.ACTION_CLICK);}}
             Thread.sleep(150);
         }return false;
     }
@@ -42,12 +49,16 @@ public class QuizImportDeviceTest extends Instrumentation {
         check(new JSONObject(converted).getJSONArray("questions").length()==1,"Android SAX XLSX conversion");
         String csv="题干,答案\nQA 中文 CSV "+System.nanoTime()+",1";
         check(new JSONObject(QuizImport.read(new ByteArrayInputStream(csv.getBytes("GB18030")),"test.csv",subject)).getJSONArray("questions").length()==1,"Android GB18030 conversion");
-        activity=(QuizActivity)startActivitySync(new Intent(c,QuizActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));waitForIdleSync();
-        final Intent[] picker={null};ActivityMonitor monitor=new ActivityMonitor(){@Override public ActivityResult onStartActivity(Intent intent){if(Intent.ACTION_OPEN_DOCUMENT.equals(intent.getAction())){picker[0]=intent;return new ActivityResult(Activity.RESULT_CANCELED,null);}return null;}};addMonitor(monitor);
+        activity=(QuizActivity)startActivitySync(new Intent(c,QuizActivity.class).putExtra(CardManagementActivity.EXTRA_MANAGE,true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_MULTIPLE_TASK));waitForIdleSync();
+        IntentFilter pickerFilter=new IntentFilter(Intent.ACTION_OPEN_DOCUMENT);pickerFilter.addCategory(Intent.CATEGORY_OPENABLE);pickerFilter.addDataType("*/*");
+        final Intent[] picker={null};ActivityMonitor monitor=android.os.Build.VERSION.SDK_INT<26
+            ?new ActivityMonitor(pickerFilter,new ActivityResult(Activity.RESULT_CANCELED,null),true)
+            :new ActivityMonitor(){@Override public ActivityResult onStartActivity(Intent intent){if(Intent.ACTION_OPEN_DOCUMENT.equals(intent.getAction())){picker[0]=intent;return new ActivityResult(Activity.RESULT_CANCELED,null);}return null;}};addMonitor(monitor);
         main(()->{TextView button=find(activity.getWindow().getDecorView(),"导入题库");check(button!=null,"import entry exists");button.performClick();});
         check(waitText("选择题库文件（可多选）",true),"native file import menu");
         check(waitText(subject,true),"fallback subject selection");waitForIdleSync();Thread.sleep(300);removeMonitor(monitor);
-        check(picker[0]!=null&&picker[0].getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE,false),"SAF multi-file intent");
+        if(android.os.Build.VERSION.SDK_INT<26)check(monitor.getHits()>0,"SAF picker intercepted");
+        else check(picker[0]!=null&&picker[0].getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE,false),"SAF multi-file intent");
         File xlsx=file(c,".xlsx",book),text=file(c,".csv",csv.getBytes("GB18030"));
         Intent multi=new Intent();ClipData clip=ClipData.newRawUri("题库",Uri.fromFile(xlsx));clip.addItem(new ClipData.Item(Uri.fromFile(text)));multi.setClipData(clip);submit(multi);
         check(waitText("确认导入预览",false),"XLSX plus CSV preview");check(waitText("导入 2 题",false),"merged count preview");

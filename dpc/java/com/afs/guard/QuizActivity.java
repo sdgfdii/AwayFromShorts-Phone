@@ -86,7 +86,7 @@ public class QuizActivity extends ThemedActivity {
         TextView back=text(managementMode&&"home".equals(page)?"‹  卡管理":"‹  刷题",14,ui.accent());
         back.setPadding(0,ui.dp(10),0,ui.dp(18));back.setOnClickListener(v->onBackPressed());body.addView(back);
         }
-        body.addView(ui.title(title));hint(body,subtitle);
+        if(managementMode||!"home".equals(page)){body.addView(ui.title(title));hint(body,subtitle);}
     }
     private TextView text(String s,int size,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);t.setLineSpacing(ui.dp(3),1);return t;}
     private void hint(LinearLayout parent,String s){TextView t=text(s,13,ui.text2());t.setPadding(0,ui.dp(8),0,ui.dp(14));parent.addView(t);}

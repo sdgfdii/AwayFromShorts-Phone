@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.linkqa">
+    <application android:label="AFS Learning Link QA" />
+    <instrumentation android:name="com.afs.guard.LearningLinkDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true" />
+</manifest>

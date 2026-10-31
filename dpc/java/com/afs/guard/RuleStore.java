@@ -93,6 +93,40 @@ public final class RuleStore {
                 prefs.edit().putBoolean("align_pdd_v1321", true).apply();
             }
         }
+        // 抖音 / 哔哩哔哩所在的那一格：冻结时间改成 00:00-21:00 与 23:00-00:00
+        // （放行 21:00-23:00）。整格应用一起改，成员一个都不挪出去。
+        // 同一格里混着两种存盘格式：新的 freeze=true（冻结段），老的 freeze=false（放行段 22:00-23:00）。
+        if (!prefs.getBoolean("align_group_v1534", false)) {
+            Rule target = new Rule(Rule.ALL_DAYS, new int[][] { {0, 21 * 60}, {23 * 60, 0} }, true, true);
+            Rule legacy = new Rule(Rule.ALL_DAYS, new int[][] { {0, 22 * 60}, {23 * 60, 0} }, true, true);
+            for (Map.Entry<String, Rule> e : rules.entrySet()) {
+                Rule r = e.getValue();
+                if (r.days != Rule.ALL_DAYS) continue;
+                boolean inGroup;
+                if (r.freeze) {
+                    inGroup = r.windowCount() == 2
+                            && r.startAt(0) == legacy.startAt(0) && r.endAt(0) == legacy.endAt(0)
+                            && r.startAt(1) == legacy.startAt(1) && r.endAt(1) == legacy.endAt(1);
+                } else {
+                    // 老格式：单段放行 22:00-23:00
+                    inGroup = r.windowCount() == 1 && r.startAt(0) == 22 * 60 && r.endAt(0) == 23 * 60;
+                }
+                if (!inGroup) continue;
+                Rule aligned = target.withGate(r.gate);
+                if (!r.same(aligned)) {
+                    e.setValue(aligned);
+                    changed = true;
+                }
+            }
+            prefs.edit().putBoolean("align_group_v1534", true).apply();
+        }
+        // 整格改完时段后，旧时段会剩一个 0 个应用的空壳，一并清掉。
+        if (!prefs.getBoolean("align_slot_prune_v1535", false)) {
+            if (changed) save(c, rules);
+            FreezeSlotStore.pruneEmpty(c, new Rule(Rule.ALL_DAYS,
+                    new int[][] { {0, 22 * 60}, {23 * 60, 0} }, true, true));
+            prefs.edit().putBoolean("align_slot_prune_v1535", true).apply();
+        }
         if (changed) save(c, rules);
         return changed;
     }
@@ -240,7 +274,11 @@ public final class RuleStore {
         save(c, m);
     }
 
-    private static void save(Context c, Map<String, Rule> m) {        JSONObject old = raw(c);
+    private static void save(Context c, Map<String, Rule> m) {
+        // Settle elapsed foreground time under the old scope before moving any app.
+        // First-install migration has no prior scope and must not recurse via all().
+        if(sp(c).contains(K_RULES))DailyQuotaStore.beforeScheduleChange(c);
+        JSONObject old = raw(c);
         JSONObject o = new JSONObject();
         try {
             for (Map.Entry<String, Rule> e : m.entrySet()) {
@@ -282,6 +320,7 @@ public final class RuleStore {
     public static void importRules(Context c, String json) {
         try {
             JSONObject o = new JSONObject(json);
+            DailyQuotaStore.beforeScheduleChange(c);
             sp(c).edit().putString(K_RULES, o.toString()).apply();
             alignRequestedRules(c);
         } catch (Throwable t) {

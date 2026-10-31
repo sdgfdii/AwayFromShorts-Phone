@@ -22,13 +22,6 @@ import java.nio.charset.Charset;
  */
 final class Gist {
 
-    /**
-     * 写入凭据 = 一个 GitHub token，存在老 CheckinStore 用过的同一个
-     * prefs/key 里（afs_checkin / token）—— 升级后不用重新填。
-     */
-    private static final String SP_TOKEN = "afs_checkin";
-    private static final String K_TOKEN = "token";
-
     private static final Charset UTF8 = Charset.forName("UTF-8");
     private static final int CONNECT_MS = 8000;
     private static final int READ_MS = 12000;
@@ -36,18 +29,48 @@ final class Gist {
     private Gist() {
     }
 
-    /** Authenticated API read avoids stale raw CDN snapshots during a merge. */
-    static org.json.JSONObject readLedger(android.content.Context context) throws Exception {
-        HttpURLConnection c = (HttpURLConnection)new URL("https://api.github.com/gists/" + StudyGate.GIST_ID).openConnection();
+    /** Verify the authenticated account owns the destination before enabling sync. */
+    static void verify(SyncTarget target, String token) throws Exception {
+        if (token == null || !token.matches("[A-Za-z0-9_]+"))
+            throw new IllegalArgumentException(T.s("GitHub token 格式无效"));
+        org.json.JSONObject user = getApi("https://api.github.com/user", token);
+        if (!target.owner.equalsIgnoreCase(user.getString("login")))
+            throw new IllegalArgumentException(T.s("token 所属账号与 GitHub 用户名不一致"));
+        org.json.JSONObject gist = getApi(target.apiUrl(), token);
+        if (!target.gistId.equalsIgnoreCase(gist.getString("id"))
+                || !target.owner.equalsIgnoreCase(gist.getJSONObject("owner").getString("login")))
+            throw new IllegalArgumentException(T.s("这个 Gist 不属于所填写的账号"));
+    }
+
+    private static org.json.JSONObject getApi(String url, String token) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {
+            c.setInstanceFollowRedirects(false);
             c.setConnectTimeout(CONNECT_MS);
             c.setReadTimeout(READ_MS);
-            c.setRequestProperty("Authorization", "token " + token(context));
+            c.setRequestProperty("Authorization", "token " + token);
             c.setRequestProperty("User-Agent", "AFS-Guard");
             c.setRequestProperty("Accept", "application/vnd.github+json");
-            if (c.getResponseCode() / 100 != 2) throw new IllegalStateException("读取学习台账失败 HTTP " + c.getResponseCode());
+            int status = c.getResponseCode();
+            if (status != 200) throw new IllegalStateException(T.s("GitHub 验证失败 HTTP ") + status);
+            return new org.json.JSONObject(read(c.getInputStream()));
+        } finally { c.disconnect(); }
+    }
+
+    /** Authenticated API read avoids stale raw CDN snapshots during a merge. */
+    static org.json.JSONObject readLedger(SyncConfig.Session session) throws Exception {
+        HttpURLConnection c = (HttpURLConnection)new URL(session.target.apiUrl()).openConnection();
+        try {
+            c.setInstanceFollowRedirects(false);
+            c.setConnectTimeout(CONNECT_MS);
+            c.setReadTimeout(READ_MS);
+            c.setRequestProperty("Authorization", "token " + session.token);
+            c.setRequestProperty("User-Agent", "AFS-Guard");
+            c.setRequestProperty("Accept", "application/vnd.github+json");
+            if (c.getResponseCode() / 100 != 2) throw new IllegalStateException(T.s("读取学习台账失败 HTTP ") + c.getResponseCode());
             org.json.JSONObject gist = new org.json.JSONObject(read(c.getInputStream()));
-            org.json.JSONObject entry = gist.getJSONObject("files").getJSONObject("checkin-ledger.json");
+            org.json.JSONObject entry = gist.getJSONObject("files").optJSONObject("checkin-ledger.json");
+            if (entry == null) return new org.json.JSONObject("{\"goals\":[],\"recs\":[],\"rev\":0}");
             String content = entry.optBoolean("truncated") ? StudyGate.fetchRaw(entry.getString("raw_url")) : entry.getString("content");
             org.json.JSONObject ledger = new org.json.JSONObject(content);
             ledger.getJSONArray("goals");
@@ -56,44 +79,12 @@ final class Gist {
         } finally { c.disconnect(); }
     }
 
-    private static android.content.SharedPreferences sp(android.content.Context c) {
-        return c.getSharedPreferences(SP_TOKEN, android.content.Context.MODE_PRIVATE);
-    }
-
-    /* ---------- 写入凭据 ---------- */
-
-    static String token(android.content.Context c) {
-        String t = sp(c).getString(K_TOKEN, "");
-        if (t != null && !t.trim().isEmpty()) {
-            return t.trim();
-        }
-        return BuildConfig.PREFILL_TOKEN == null ? "" : BuildConfig.PREFILL_TOKEN.trim();
-    }
-
-    /**
-     * 把构建期注入的 token 落到 prefs。
-     *
-     * 预填构建（PREFILL 非空）的 token 是权威 —— 覆盖安装即迁移（换 GitHub 账号靠它）。
-     * 公开构建（PREFILL 空）不碰 prefs，装了不影响已有 token。
-     */
-    static void seedToken(android.content.Context c) {
-        String pre = BuildConfig.PREFILL_TOKEN == null ? "" : BuildConfig.PREFILL_TOKEN.trim();
-        if (pre.isEmpty()) {
-            return;
-        }
-        String cur = sp(c).getString(K_TOKEN, "");
-        if (pre.equals(cur == null ? "" : cur.trim())) {
-            return;
-        }
-        sp(c).edit().putString(K_TOKEN, pre).apply();
-    }
-
-    static void setToken(android.content.Context c, String t) {
-        sp(c).edit().putString(K_TOKEN, t == null ? "" : t.trim()).apply();
-    }
-
-    static boolean hasToken(android.content.Context c) {
-        return !token(c).isEmpty();
+    static org.json.JSONObject readConfig(SyncConfig.Session session) throws Exception {
+        org.json.JSONObject gist = getApi(session.target.apiUrl(), session.token);
+        org.json.JSONObject entry = gist.getJSONObject("files").optJSONObject("hub-config.json");
+        if (entry == null) return new org.json.JSONObject();
+        String raw = entry.optBoolean("truncated") ? StudyGate.fetchRaw(entry.getString("raw_url")) : entry.getString("content");
+        return new org.json.JSONObject(raw);
     }
 
     /**
@@ -101,12 +92,13 @@ final class Gist {
      * 调用方自己保证"读-改-写"只动自己权威的文件：study-gate.json / pc-activity.json
      * 是 PC 的，hub-config.json 只换自己的分节 —— 两边乱写会互相覆盖。
      */
-    static String patchFiles(String token, java.util.Map<String, String> files) {
+    static String patchFiles(SyncConfig.Session session, java.util.Map<String, String> files) {
+        String token = session.token;
         if (token == null || token.trim().isEmpty()) {
-            return "没有 token";
+            return T.s("没有 token");
         }
         if (files == null || files.isEmpty()) {
-            return "没有要写的内容";
+            return T.s("没有要写的内容");
         }
         HttpURLConnection c = null;
         try {
@@ -122,8 +114,8 @@ final class Gist {
             }
             sb.append("}}");   // 收口 content 外层的 files 对象 + 根对象
             String body = sb.toString();
-            c = (HttpURLConnection) new URL("https://api.github.com/gists/"
-                    + StudyGate.GIST_ID).openConnection();
+            c = (HttpURLConnection) new URL(session.target.apiUrl()).openConnection();
+            c.setInstanceFollowRedirects(false);
             c.setConnectTimeout(CONNECT_MS);
             c.setReadTimeout(READ_MS);
             c.setRequestMethod("PATCH");

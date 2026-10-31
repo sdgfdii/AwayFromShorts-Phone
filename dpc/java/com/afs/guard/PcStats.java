@@ -30,7 +30,6 @@ public final class PcStats {
     private static final String TAG = "afs.pcstats";
 
     /** 与 StudyGate 同一个同步 Gist（secret：raw URL 能读就行）。 */
-    private static final String GIST_ID = "455b0ef2f1e04db50dcd0b67aa9e51ec";
 
     private static final String FILE = "pc_stats";
 
@@ -61,13 +60,17 @@ public final class PcStats {
     private PcStats() { }
 
     private static SharedPreferences sp(Context c) {
-        return c.getApplicationContext().getSharedPreferences(FILE, Context.MODE_PRIVATE);
+        return c.getApplicationContext().getSharedPreferences(SyncConfig.cacheName(c, FILE), Context.MODE_PRIVATE);
     }
 
-    /** 带时间戳绕开 gist raw 的 CDN 缓存。 */
-    static String rawUrl() {
-        return "https://gist.githubusercontent.com/gptdds/" + GIST_ID
-                + "/raw/pc-activity.json?t=" + System.currentTimeMillis();
+    static void resetRemote(Context c) {
+        synchronized (LOCK) {
+            days = new LinkedHashMap<>();
+            updated = "";
+            rawSnapshot = "";
+            lastTryMs = 0L;
+            fetching = false;
+        }
     }
 
     /** 首次访问时从盘里恢复上次快照（重启后不空窗）。 */
@@ -99,6 +102,7 @@ public final class PcStats {
      * 阻塞式（最长 8s 连接 + 8s 读），调用方必须不在主线程。
      */
     public static void ensureFresh(Context c) {
+        if (!SyncConfig.configured(c)) return;
         long now = System.currentTimeMillis();
         boolean stuck = fetching && now - fetchStartedAt > FETCH_LIVENESS_MS;
         if ((fetching && !stuck) || now - lastTryMs < REFRESH_MS) {
@@ -107,8 +111,8 @@ public final class PcStats {
         lastTryMs = now;
         fetchStartedAt = now;
         fetching = true;
-        try {
-            String raw = StudyGate.fetchRaw(rawUrl());
+        try (SyncConfig.Session session = SyncConfig.acquire(c)) {
+            String raw = StudyGate.fetchRaw(session.target.rawUrl("pc-activity.json") + "?t=" + System.currentTimeMillis());
             if (raw != null && raw.trim().startsWith("{")) {
                 LinkedHashMap<String, List<Entry>> parsed = parse(raw);
                 if (parsed != null && !parsed.isEmpty()) {
@@ -311,15 +315,15 @@ public final class PcStats {
         if (k.startsWith("chrome")) return "Chrome";
         if (k.startsWith("firefox")) return "Firefox";
         if (k.startsWith("qq")) return "QQ";
-        if (k.startsWith("wechat") || k.startsWith("weixin")) return "微信";
+        if (k.startsWith("wechat") || k.startsWith("weixin")) return T.s("微信");
         if (k.startsWith("steam")) return "Steam";
         if (k.startsWith("valorant")) return "VALORANT";
-        if (k.equals("explorer")) return "资源管理器";
-        if (k.equals("lockapp")) return "锁屏";
-        if (k.equals("searchhost") || k.equals("searchapp")) return "搜索";
-        if (k.equals("applicationframehost")) return "UWP 应用";
-        if (k.equals("systemsettings")) return "系统设置";
-        if (k.equals("cmd") || k.equals("conhost") || k.equals("windowsterminal")) return "终端";
+        if (k.equals("explorer")) return T.s("资源管理器");
+        if (k.equals("lockapp")) return T.s("锁屏");
+        if (k.equals("searchhost") || k.equals("searchapp")) return T.s("搜索");
+        if (k.equals("applicationframehost")) return T.s("UWP 应用");
+        if (k.equals("systemsettings")) return T.s("系统设置");
+        if (k.equals("cmd") || k.equals("conhost") || k.equals("windowsterminal")) return T.s("终端");
         if (k.equals("code")) return "VS Code";
         if (k.equals("node")) return "Node";
         if (k.startsWith("python")) return "Python";

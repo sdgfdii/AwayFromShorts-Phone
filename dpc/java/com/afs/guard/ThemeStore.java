@@ -74,14 +74,15 @@ final class ThemeStore {
     }
     static void excludeFont(View view){ids(view.getContext());view.setTag(overrideId,Boolean.TRUE);}
     static boolean fontExcluded(View view){ids(view.getContext());return Boolean.TRUE.equals(view.getTag(overrideId));}
-    static void typography(View root){String family=load(root.getContext()).font;ids(root.getContext());applyFont(root,family.isEmpty()?"sans-serif":family);SwissTypography.apply(root);}
-    private static void applyFont(View view,String family){
-        if(Boolean.TRUE.equals(view.getTag(overrideId)))return;
-        if(view instanceof TextView){
+    static void typography(View root){String family=load(root.getContext()).font;ids(root.getContext());applyFont(root,family.isEmpty()?"sans-serif":family,false);}
+    private static void applyFont(View view,String family,boolean excluded){
+        excluded|=Boolean.TRUE.equals(view.getTag(overrideId));
+        if(!excluded&&view instanceof TextView){
             TextView text=(TextView)view;int style=text.getTypeface()==null?0:text.getTypeface().getStyle();String key=family+":"+style;
             if(!key.equals(view.getTag(signatureId))){text.setTypeface(font(view.getContext(),family,style));view.setTag(signatureId,key);}
         }
-        if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)applyFont(group.getChildAt(i),family);}
+        SwissTypography.applyNode(view,excluded);
+        if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;for(int i=0;i<group.getChildCount();i++)applyFont(group.getChildAt(i),family,excluded);}
     }
     static List<String> installedFonts(){
         TreeSet<String> names=new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
@@ -95,14 +96,20 @@ final class ThemeStore {
         return new ArrayList<>(names);
     }
     static AlertDialog.Builder dialog(Context c){return new AlertDialog.Builder(c){
-        @Override public AlertDialog create(){AlertDialog d=super.create();d.setOnShowListener(ignored->styleDialog(d));return d;}
-        @Override public AlertDialog show(){AlertDialog d=super.show();styleDialog(d);return d;}
+        @Override public AlertDialog create(){
+            AlertDialog d=super.create();
+            if(d.getWindow()!=null)d.getWindow().getDecorView().addOnAttachStateChangeListener(new View.OnAttachStateChangeListener(){
+                public void onViewAttachedToWindow(View view){styleDialog(d);}
+                public void onViewDetachedFromWindow(View view){}
+            });
+            return d;
+        }
     };}
     static void styleDialog(AlertDialog dialog){
         Ui ui=new Ui(dialog.getContext());
         if(dialog.getWindow()!=null){View root=dialog.getWindow().getDecorView();typography(root);SwissTypography.observe(root);tintChoices(root,ui);}
         for(int button:new int[]{AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE,AlertDialog.BUTTON_NEUTRAL}){
-            android.widget.Button b=dialog.getButton(button);if(b!=null){String label=b.getText().toString();b.setTextColor(button==AlertDialog.BUTTON_POSITIVE&&(label.contains("删除")||label.contains("重置")||label.contains("移入回收站"))?ui.red():ui.accent());}
+            android.widget.Button b=dialog.getButton(button);if(b!=null){String label=b.getText().toString();b.setTextColor(ActionFeedback.textColors(button==AlertDialog.BUTTON_POSITIVE&&(label.contains("删除")||label.contains("重置")||label.contains("移入回收站"))?ui.red():ui.accent()));}
         }
     }
     private static void tintChoices(View view,Ui ui){

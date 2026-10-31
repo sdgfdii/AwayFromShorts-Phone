@@ -22,7 +22,105 @@ public final class MemoryTest {
     public static void main(String[] args) {
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
         upstreamVectors(); learning(); quotas(); queues(); backupValidation(); text(); gate();customSubjects();subjectDeletion();
+        planSettings();presets();
         System.out.println("Memory: " + count + " assertions passed");
+    }
+    private static void planSettings() {
+        // The default retention must reproduce the legacy interval formula bit for bit.
+        double[] stabilities = {0.001, 0.2, 0.5, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 10000};
+        for (double s : stabilities) {
+            long legacy = Math.max(1, Math.min(36500, Math.round(s))) * MemoryScheduler.DAY;
+            check(MemoryScheduler.intervalDays(s, 0.90, 36500) == legacy, "default retention equals legacy interval");
+        }
+        check(MemoryScheduler.intervalDays(100, 0.90, 36500) == 100 * MemoryScheduler.DAY, "90% retention interval");
+        check(MemoryScheduler.intervalDays(100, 0.95, 36500) == 42 * MemoryScheduler.DAY, "95% retention interval");
+        check(MemoryScheduler.intervalDays(100, 0.85, 36500) == 181 * MemoryScheduler.DAY, "85% retention interval");
+        check(MemoryScheduler.intervalDays(100, 0.90, 30) == 30 * MemoryScheduler.DAY, "max interval cap");
+        check(MemoryScheduler.intervalDays(0.2, 0.90, 36500) == MemoryScheduler.DAY, "minimum interval");
+        check(MemoryScheduler.intervalDays(100, 0.5, 36500) == 100 * MemoryScheduler.DAY, "illegal retention falls back");
+        check(MemoryScheduler.intervalDays(100, 0.90, 0) == 100 * MemoryScheduler.DAY, "illegal cap falls back");
+
+        long now = 1750000000000L;
+        MemoryData m = new MemoryData(); String d = deck(m, 0);
+        m.settings(d, "标准", 10, 50, 20, false);
+        check(!m.deck(d).has("requestRetention") && !m.deck(d).has("maxInterval"), "old settings writes no new keys");
+        check(Math.abs(MemoryData.retention(m.deck(d)) - 0.90) < 1e-12, "retention default");
+        check(MemoryData.maxInterval(m.deck(d)) == 36500, "interval default");
+        m.settings(d, "标准", 10, 50, 20, false, 0.95, 30);
+        check(Math.abs(MemoryData.retention(m.deck(d)) - 0.95) < 1e-12, "retention stored");
+        check(MemoryData.maxInterval(m.deck(d)) == 30, "max interval stored");
+        check(new MemoryData(m.db.toString()).deck(d).has("requestRetention"), "new keys survive restart");
+        JSONObject optional = new JSONObject(); MemoryData.put(optional, "requestRetention", 0.5);
+        check(Math.abs(MemoryData.retention(optional) - 0.90) < 1e-12, "invalid retention reads default");
+        MemoryData.put(optional, "maxInterval", 0);
+        check(MemoryData.maxInterval(optional) == 36500, "invalid interval reads default");
+
+        // Higher retention schedules the same card earlier, all else equal.
+        MemoryData normal = new MemoryData(), strict = new MemoryData();
+        String dn = deck(normal, 0), dsx = deck(strict, 0);
+        JSONObject cn = add(normal, dn, "same card"), cs = add(strict, dsx, "same card");
+        prepareReview(normal, cn.optString("id"), now);
+        prepareReview(strict, cs.optString("id"), now);
+        normal.settings(dn, "标准", 10, 50, 20, false, 0.90, 36500);
+        strict.settings(dsx, "强化", 10, 50, 20, false, 0.95, 36500);
+        normal.rate(cn.optString("id"), 3, now);
+        strict.rate(cs.optString("id"), 3, now);
+        check(normal.card(cn.optString("id")).optLong("due") > now, "review stays in the future");
+        check(strict.card(cs.optString("id")).optLong("due") < normal.card(cn.optString("id")).optLong("due"),
+                "higher retention schedules earlier");
+        final MemoryData fm = normal; final String fd = dn;
+        reject(() -> fm.settings(fd, "x", 10, 50, 20, false, 0.99, 36500), "retention out of range rejected");
+        reject(() -> fm.settings(fd, "x", 10, 50, 20, false, 0.90, 0), "max interval out of range rejected");
+
+        JSONObject bad = MemoryData.copy(new MemoryData().db);
+        MemoryData.put(bad.optJSONArray("decks").optJSONObject(0), "requestRetention", 0.5);
+        final String badRetention = bad.toString();
+        reject(() -> new MemoryData(badRetention), "persisted retention out of range rejected");
+        bad = MemoryData.copy(new MemoryData().db);
+        MemoryData.put(bad.optJSONArray("decks").optJSONObject(0), "maxInterval", 0);
+        final String badInterval = bad.toString();
+        reject(() -> new MemoryData(badInterval), "persisted max interval out of range rejected");
+        JSONObject good = MemoryData.copy(new MemoryData().db);
+        MemoryData.put(good.optJSONArray("decks").optJSONObject(0), "requestRetention", 0.95);
+        MemoryData.put(good.optJSONArray("decks").optJSONObject(0), "maxInterval", 30);
+        check(new MemoryData(good.toString()).decks().length() == 3, "optional tuning keys accepted");
+    }
+    private static void prepareReview(MemoryData m, String id, long now) {
+        JSONObject live = m.card(id);
+        MemoryData.put(live, "reps", 5); MemoryData.put(live, "state", 1);
+        MemoryData.put(live, "stability", 100); MemoryData.put(live, "difficulty", 5);
+        MemoryData.put(live, "last", now - MemoryScheduler.DAY); MemoryData.put(live, "due", now - 1000);
+    }
+    private static void presets() {
+        MemoryPlan.Preset[] list = MemoryPlan.presets();
+        check(list.length == 4, "four presets");
+        String[] ids = {"light", "standard", "intense", "exam"};
+        for (int i = 0; i < ids.length; i++) check(ids[i].equals(list[i].id), "stable preset order " + ids[i]);
+        for (MemoryPlan.Preset p : list) {
+            check(p.newLimit >= 0 && p.newLimit <= 200, "newLimit range " + p.id);
+            check(p.reviewLimit >= 1 && p.reviewLimit <= 1000, "reviewLimit range " + p.id);
+            check(p.target >= 1 && p.target <= 1000, "target range " + p.id);
+            check(p.retention >= 0.70 && p.retention <= 0.97, "retention range " + p.id);
+            check(p.maxInterval >= 1 && p.maxInterval <= 36500, "maxInterval range " + p.id);
+        }
+        MemoryPlan.Preset standard = MemoryPlan.preset("standard");
+        check(standard.newLimit == 10 && standard.reviewLimit == 50 && standard.target == 20
+                && Math.abs(standard.retention - 0.90) < 1e-12 && standard.maxInterval == 36500, "standard equals defaults");
+        check(MemoryPlan.preset("standard") != null && MemoryPlan.presets()[1] == standard, "preset lookup is stable");
+        check("standard".equals(MemoryPlan.match(10, 50, 20, 0.90, 36500)), "exact match");
+        check(MemoryPlan.CUSTOM.equals(MemoryPlan.match(11, 50, 20, 0.90, 36500)), "differing value is custom");
+        check("standard".equals(MemoryPlan.match(10, 50, 20, 0.9 + 1e-12, 36500)), "retention epsilon");
+        check("intense".equals(MemoryPlan.match(15, 80, 30, 0.93, 3650)), "intense preset match");
+        check(MemoryPlan.CUSTOM.equals(MemoryPlan.match(10, 50, 20, 0.90, 3650)), "interval differences are custom");
+        check("自定义".equals(MemoryPlan.label(MemoryPlan.CUSTOM)) && "自定义".equals(MemoryPlan.label("nope")), "unknown label");
+        check("轻量".equals(MemoryPlan.label("light")), "preset label");
+        check(MemoryPlan.preset("nope") == null && MemoryPlan.preset("") == null, "unknown preset is null");
+        MemoryData fresh = new MemoryData();
+        for (int i = 0; i < 3; i++) {
+            JSONObject deck = fresh.decks().optJSONObject(i);
+            check("standard".equals(MemoryPlan.match(deck.optInt("newLimit"), deck.optInt("reviewLimit"), deck.optInt("target"),
+                    MemoryData.retention(deck), MemoryData.maxInterval(deck))), "default deck reads as standard");
+        }
     }
     private static void subjectDeletion() {
         long now=1729500000000L;MemoryData m=new MemoryData();String id=deck(m,0);

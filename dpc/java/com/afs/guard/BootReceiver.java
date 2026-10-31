@@ -16,6 +16,7 @@ public class BootReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context ctx, Intent intent) {
+        GuardClock.pin(ctx);
         String action = intent == null ? "null" : intent.getAction();
         Log.i(Guard.TAG, "BootReceiver: " + action);
         Guard.apply(ctx);

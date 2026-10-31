@@ -6,4 +6,7 @@
     <string name="checkin_title">打卡</string>
     <string name="stats_title">统计</string>
     <string name="history_title">打卡历史</string>
+    <!-- 系统「无障碍」列表里显示的服务说明。这段文字由系统界面渲染，
+         语言跟系统走，所以固定写中文（应用内的英文表管不到系统设置页）。 -->
+    <string name="afs_accessibility_desc">在选定的应用里检测关键词，命中就遮住并退出。只在本机比对文字，不上传屏幕内容。</string>
 </resources>

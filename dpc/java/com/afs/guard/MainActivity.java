@@ -48,6 +48,24 @@ public class MainActivity extends ThemedActivity {
     private TextView greet;
     private TextView dateLine;
     private TextView statusText;
+    private MainDisplayCount.Counter displayCounter=Guard::blockedCount;
+    private long displayGeneration,displaySequence,displayPublished;
+    private boolean displayActive,displayCountFailed,statusOwner;
+    private Integer displayBlockedCount;
+    private int statusTotal,statusKeys;
+    void displayCountResult(long token,long sequence,Integer count){
+        if(!displayActive||token!=displayGeneration||sequence<=displayPublished||isFinishing()||isDestroyed())return;
+        displayPublished=sequence;displayCountFailed=count==null;if(count!=null)displayBlockedCount=count;
+        updateStatusText();
+    }
+    private void updateStatusText(){
+        if(statusText==null)return;
+        String count=displayBlockedCount==null?(displayCountFailed?T.s("统计失败，稍后重试"):T.s("统计中")):displayBlockedCount+T.s(" 个")+(displayCountFailed?T.s("（更新失败）"):"");
+        statusText.setText(T.s("应用 ")+statusTotal+T.s(" 个 · 冻结 ")+count+T.s("\n关键应用 ")+statusKeys+T.s(" 个 · ")+(statusOwner?T.s("加固已开启"):T.s("未取得设备所有者权限"))+T.s("\n下次切换 ")+nextSwitchText);
+        statusText.setTextColor(statusOwner?ui.text2():ui.red());
+    }
+    private void stopDisplayCount(){displayActive=false;displayGeneration++;MainDisplayCount.cancel(this);}
+    @Override protected void onDestroy(){stopDisplayCount();super.onDestroy();}
     private TextView statusChip;
     private long nextSwitchMinute = -1L;
     private String nextSwitchText = "—";
@@ -72,6 +90,8 @@ public class MainActivity extends ThemedActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         ui = new Ui(this);
+        // 打开 App 时补一次：守卫进程万一没在跑，20:00 这笔打卡罚时也不能漏
+        try { CheckinPenalty.tick(this); } catch (RuntimeException ignored) { }
 
         scroll = new ScrollView(this);
         ui.page(scroll);
@@ -82,7 +102,7 @@ public class MainActivity extends ThemedActivity {
         scroll.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        /* ---------- 顶栏：品牌 + 主题开关 ---------- */
+        /* ---------- 顶栏：品牌 + 设置 ---------- */
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
@@ -97,17 +117,16 @@ public class MainActivity extends ThemedActivity {
         bar.addView(subLine, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        String themeMode = Ui.themeName(this);
-        View themeBtn = ui.amap?new AmapStyle.Icon(this,"主题",ui.text()):ui.iconButton("auto".equals(themeMode) ? "◐"
-                : (ui.dark ? "☀" : "☾"), ui.text2(), ui.surface());
-        if(ui.amap){themeBtn.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(34),ui.dp(34)));themeBtn.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);}
-        themeBtn.setContentDescription("主题设置");
-        themeBtn.setOnClickListener(v -> startActivity(new Intent(this, ThemeActivity.class)));
-        bar.addView(themeBtn);
+        View settingsBtn = ui.amap?new AmapStyle.Icon(this,T.s("设置"),ui.text()):ui.settingsButton(ui.text2(), ui.surface());
+        if(ui.amap){settingsBtn.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(34),ui.dp(34)));settingsBtn.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);}
+        else settingsBtn.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(34), ui.dp(34)));
+        settingsBtn.setContentDescription(T.s("设置"));
+        settingsBtn.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
+        bar.addView(settingsBtn);
         root.addView(bar);
 
         /* ---------- 问候 + 日期 ---------- */
-        greet = ui.title(ui.amap?"守卫":"设置");
+        greet = ui.title(ui.amap||ui.ripple?T.s("守卫"):T.s("设置"));
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         glp.topMargin = ui.dp(24);
@@ -139,7 +158,7 @@ public class MainActivity extends ThemedActivity {
         statusHead.addView(dot, new LinearLayout.LayoutParams(ui.dp(26), ui.dp(26)));
 
         TextView st = new TextView(this);
-        st.setText("运行状态");
+        st.setText(T.s("运行状态"));
         st.setTextSize(15);
         st.setTypeface(Typeface.DEFAULT_BOLD);
         st.setTextColor(ui.text());
@@ -179,7 +198,7 @@ public class MainActivity extends ThemedActivity {
         });
 
         /* ---------- 快捷：三格彩色图标 ---------- */
-        LinearLayout sec = ui.section("▦", ui.accent(), "功能", null, null);
+        LinearLayout sec = ui.section("▦", ui.accent(), T.s("功能"), null, null);
         LinearLayout.LayoutParams seclp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         seclp.topMargin = ui.dp(24);
@@ -192,29 +211,27 @@ public class MainActivity extends ThemedActivity {
         LinearLayout secondRow = new LinearLayout(this);
         secondRow.setOrientation(LinearLayout.HORIZONTAL);
 
-        LinearLayout tManage = ui.tile("◎", Ui.TILE_TEAL, "目标管理", "增删 · 改默认量",
+        LinearLayout tManage = ui.tile("◎", Ui.TILE_TEAL, T.s("卡管理"), T.s("卡片 · 奖励 · 周期"),
                 new View.OnClickListener() {
                     public void onClick(View v) {
-                        Intent it = new Intent(MainActivity.this, CheckinActivity.class);
-                        it.putExtra(CheckinActivity.EXTRA_OPEN, "manage");
-                        startActivity(it);
+                        startActivity(new Intent(MainActivity.this, CardManagementActivity.class));
                     }
                 });
-        LinearLayout tHist = ui.tile("▤", Ui.TILE_PURPLE, "打卡历史", "连续天数 · 统计",
+        LinearLayout tHist = ui.tile("▤", Ui.TILE_PURPLE, T.s("打卡历史"), T.s("连续天数 · 统计"),
                 new View.OnClickListener() {
                     public void onClick(View v) {
                         startActivity(new Intent(MainActivity.this, HistoryActivity.class));
                     }
                 });
         // 备忘录是纯本机的速记，不参与冻结/打卡，所以只给一个入口，不占底栏
-        LinearLayout tMemo = ui.tile("✎", Ui.TILE_RUST, "备忘录", "速记 · 置顶",
+        LinearLayout tMemo = ui.tile("✎", Ui.TILE_RUST, T.s("备忘录"), T.s("速记 · 置顶"),
                 new View.OnClickListener() {
                     public void onClick(View v) {
                         startActivity(new Intent(MainActivity.this, MemoActivity.class));
                     }
                 });
-        // 工具箱同样纯本机：计时、抽签、文本整理，不联网
-        LinearLayout tToolbox = ui.tile("▦", Ui.TILE_BLUE, "工具箱", "计时 · 抽签 · 文本",
+        // 工具箱同样纯本机：专注、呼吸、倒计时，不联网
+        LinearLayout tToolbox = ui.tile("▦", Ui.TILE_BLUE, T.s("工具箱"), T.s("番茄钟 · 正念 · 倒计时"),
                 new View.OnClickListener() {
                     public void onClick(View v) {
                         startActivity(new Intent(MainActivity.this, ToolboxActivity.class));
@@ -240,9 +257,16 @@ public class MainActivity extends ThemedActivity {
         secondLp.topMargin = ui.dp(12);
         root.addView(secondRow, secondLp);
 
+        TextView dataAction = new TextView(this);
+        dataAction.setText(T.s("数据与备份 · 本地存储 / 云端配置"));
+        dataAction.setTextColor(ui.accent());
+        dataAction.setPadding(0,ui.dp(16),0,ui.dp(8));
+        dataAction.setOnClickListener(v -> startActivity(new Intent(this,DataManagementActivity.class)));
+        root.addView(dataAction);
+
         foot = new TextView(this);
-        foot.setText("移除守卫只有一条路：\n"
-                + "adb shell dpm remove-active-admin com.afs.guard/.AfsAdmin");
+        foot.setText(T.s("设备所有者由系统保护。启用前请阅读部署包的恢复说明。")
+                + (android.os.Build.VERSION.SDK_INT < 28 ? T.s("\n冻结时段固定使用时区：") + GuardClock.pin(this).getID() : ""));
         foot.setTextSize(11);
         foot.setTextColor(ui.text3());
         foot.setLineSpacing(ui.dp(3), 1f);
@@ -265,7 +289,6 @@ public class MainActivity extends ThemedActivity {
         setContentView(FloatingNav.wrap(this, host, 4));
         immersive();
         Guard.ensureService(this);   // 每次打开 App 顺手保证常驻守护在跑
-        Gist.seedToken(this); // 带 token 的构建第一次打开就落盘
         if (RuleStore.alignRequestedRules(this)) {
             new Thread(new Runnable() {
                 public void run() { Guard.apply(MainActivity.this); }
@@ -274,33 +297,12 @@ public class MainActivity extends ThemedActivity {
         Hub.kick(this);              // Gist 中心仓库同步（节流，脏标记优先）
         render();
 
-        // 只有冷启动才播加载动画：转屏、从后台切回来都不该再挡一次
-        android.util.Log.i(Guard.TAG, "main: savedInstanceState="
-                + (savedInstanceState == null ? "null(冷启动)" : "非空"));
-        if (savedInstanceState == null && !getIntent().getBooleanExtra("from_bottom_nav", false)) {
-            shell.setAlpha(0f);
-            splash = new SplashView(this);
-            host.addView(splash, new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT));
-            splash.play(new SplashView.Done() {
-                public void onDone() {
-                    handOver(shell);
-                }
-            });
-        } else {
-            contentIn(shell);
-        }
+        contentIn(shell);
     }
 
     /** 首页入场：从下方一点升起来 + 淡入（原来是整页从顶上滑进来，太"抽屉"了）。 */
     private void contentIn(View shell) {
-        shell.setTranslationY(ui.dp(26));
-        shell.setAlpha(0f);
-        shell.animate().translationY(0f).alpha(1f)
-                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f))
-                .setDuration(230)
-                .start();
+        shell.animate().cancel();shell.setTranslationY(0);shell.setAlpha(1);shell.setScaleX(1);shell.setScaleY(1);
     }
 
     /**
@@ -332,18 +334,18 @@ public class MainActivity extends ThemedActivity {
     private String greeting() {
         int h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
         if (h < 6) {
-            return "夜深了";
+            return T.s("夜深了");
         }
         if (h < 11) {
-            return "早上好";
+            return T.s("早上好");
         }
         if (h < 14) {
-            return "中午好";
+            return T.s("中午好");
         }
         if (h < 18) {
-            return "下午好";
+            return T.s("下午好");
         }
-        return "晚上好";
+        return T.s("晚上好");
     }
 
     /**
@@ -359,10 +361,12 @@ public class MainActivity extends ThemedActivity {
         // 经典窗口级全屏：窗口本体涨进状态栏原来占的位置，不留黑带
         getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
         // 顶部黑带真凶是刘海/挖孔：默认布局不进 cutout 区，放行 SHORT_EDGES 才贴到顶
-        android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
-        lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams
-                .LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        getWindow().setAttributes(lp);
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            android.view.WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams
+                    .LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            getWindow().setAttributes(lp);
+        }
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN
                         | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -373,12 +377,16 @@ public class MainActivity extends ThemedActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        getWindow().getDecorView().post(() -> SetupGuide.showIfNeeded(this));
+        // 成就解锁提示：放在首帧之后再弹，别和首页绘制抢同一帧
+        getWindow().getDecorView().post(() -> AchievementCenter.announce(this));
         homeVisible = true;
         GrayMode.apply(this, false);
         if (ui.dark != Ui.isDark(this)) {
             recreate();
             return;
         }
+        displayActive=true;
         immersive();      // 从别的页面/别的 App 回来时状态栏可能又冒出来，重新藏
         nextSwitchMinute = -1L;
         handler.removeCallbacks(tick);
@@ -393,6 +401,7 @@ public class MainActivity extends ThemedActivity {
 
     @Override
     protected void onPause() {
+        stopDisplayCount();
         super.onPause();
         homeVisible = false;
         int state = StudyGate.cardState(this, Calendar.getInstance());
@@ -424,19 +433,19 @@ public class MainActivity extends ThemedActivity {
 
         Calendar now = Calendar.getInstance();
         // 每秒都跑 render，但日期一天只变一次：不判一下就等于每秒触发一次布局
-        String day = new java.text.SimpleDateFormat("M月d日 EEEE",
-                java.util.Locale.CHINA).format(now.getTime());
+        String day = new java.text.SimpleDateFormat(T.s("M月d日 EEEE"),
+                T.locale()).format(now.getTime());
         if (!day.equals(lastDay)) {
             lastDay = day;
             dateLine.setText(day);
         }
 
         if (owner) {
-            statusChip.setText("运行中");
+            statusChip.setText(T.s("运行中"));
             statusChip.setTextColor(ui.dark ? 0xFF66D9A0 : 0xFF0E8A50);
             statusChip.setBackground(ui.round(ui.dark ? 0xFF16302A : 0xFFE3F7EC, 99f));
         } else {
-            statusChip.setText("未启用");
+            statusChip.setText(T.s("未启用"));
             statusChip.setTextColor(ui.dark ? 0xFFFF9A94 : 0xFFC0392B);
             statusChip.setBackground(ui.round(ui.dark ? 0xFF37212A : 0xFFFCE9E8, 99f));
         }
@@ -449,18 +458,16 @@ public class MainActivity extends ThemedActivity {
                     new java.text.SimpleDateFormat("M/d HH:mm", java.util.Locale.CHINA)
                             .format(new java.util.Date(flip));
         }
-        statusText.setText("应用 " + total + " 个 · 冻结 " + Guard.blockedCount(this) + " 个\n"
-                + "关键应用 " + RuleStore.keyApps(this).size() + " 个 · "
-                + (owner ? "加固已开启" : "未取得设备所有者权限") + "\n"
-                + "下次切换 " + nextSwitchText);
-        statusText.setTextColor(owner ? ui.text2() : ui.red());
+        statusOwner=owner;statusTotal=total;statusKeys=RuleStore.keyApps(this).size();
+        updateStatusText();
+        if(displayActive)MainDisplayCount.request(this,displayGeneration,++displaySequence,displayCounter);
 
         if (dark && !grace) {
             lockNote.setVisibility(View.VISIBLE);
-            lockNote.setText("全部应用都在屏蔽中：现在改不了，到点自动解锁。没有解除按钮。");
+            lockNote.setText(T.s("全部应用都在屏蔽中：现在改不了，到点自动解锁。没有解除按钮。"));
         } else if (grace) {
             lockNote.setVisibility(View.VISIBLE);
-            lockNote.setText("首次使用：现在可以配置，在冻结应用的设置里点「立即应用」后按锁定规则执行。");
+            lockNote.setText(T.s("首次使用：现在可以配置，在冻结应用的设置里点「立即应用」后按锁定规则执行。"));
         } else {
             lockNote.setVisibility(View.GONE);
         }
@@ -492,6 +499,12 @@ public class MainActivity extends ThemedActivity {
         }
         // 手机自己就是学习台：数字直接从本机 study.json 算，没有远端这回事
         int pend = StudyStore.pendingToday(this);
+        LearningLink.Progress memory = LearningLink.memory(this);
+        LearningLink.Progress quiz = LearningLink.quiz(this);
+        if (memory.available && memory.selected && !memory.complete()) pend++;
+        if (quiz.available && quiz.selected && !quiz.complete()) pend++;
+        boolean weeklyDue = CardStore.summaryPending(this,System.currentTimeMillis())!=null;
+        if (weeklyDue) pend++;
         // 禁忌卡已经在打卡队列里了（每天第一张），它没答完就不能说"今天已经打完"
         int tp = StudyGate.tabooPendingToday(this);
 
@@ -502,14 +515,14 @@ public class MainActivity extends ThemedActivity {
         String label = StudyGate.checkinLabel(pend, tp, st, hold);
         if (label.startsWith("打卡 · ")) {
             label = label.substring(5);
-        } else if ("打卡".equals(label)) {
-            label = "上滑卡片记一笔，今天还什么都没记";
+        } else if (T.s("打卡").equals(label)) {
+            label = T.s("上滑卡片记一笔，今天还什么都没记");
         }
         if (!label.equals(lastCheckinLabel)) {
             lastCheckinLabel = label;
             checkinSub.setText(label);
         }
-        boolean complete = StudyStore.hasGoals(this) && pend == 0 && tp == 0;
+        boolean complete = (StudyStore.hasGoals(this) || memory.selected || quiz.selected || weeklyDue) && pend == 0 && tp == 0;
         if (lastCheckinComplete == null || complete != lastCheckinComplete.booleanValue()) {
             lastCheckinComplete = complete;
             checkinCard.setBackground(ui.round(complete ? 0xFF16824B : 0xFFC83542, 18f));

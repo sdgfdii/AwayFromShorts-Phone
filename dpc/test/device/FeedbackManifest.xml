@@ -1,0 +1,2 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.feedbackqa"><application android:label="AFS Feedback QA"><provider android:name="com.afs.guard.FeedbackSlowProvider" android:authorities="com.afs.guard.feedbackqa.slow" android:exported="true"/></application><instrumentation android:name="com.afs.guard.FeedbackDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true"/></manifest>
+

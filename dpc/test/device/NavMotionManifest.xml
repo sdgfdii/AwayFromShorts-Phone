@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.navmotionqa">
+    <application android:label="AFS Navigation Motion QA" />
+    <instrumentation android:name="com.afs.guard.NavMotionDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true" />
+</manifest>

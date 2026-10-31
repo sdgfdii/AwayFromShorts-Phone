@@ -78,7 +78,7 @@ final class Backdrop {
             o.inJustDecodeBounds = true;
             InputStream in = cr.openInputStream(uri);
             if (in == null) {
-                return "读不到这张图";
+                return T.s("读不到这张图");
             }
             try {
                 BitmapFactory.decodeStream(in, null, o);
@@ -87,13 +87,13 @@ final class Backdrop {
             }
             int side = Math.max(o.outWidth, o.outHeight);
             if (side <= 0) {
-                return "这不是一张图片";
+                return T.s("这不是一张图片");
             }
             o = new BitmapFactory.Options();
             o.inSampleSize = sample(side, 2048);   // 存一份够用的，别把原图塞进私有目录
             in = cr.openInputStream(uri);
             if (in == null) {
-                return "读不到这张图";
+                return T.s("读不到这张图");
             }
             Bitmap bmp;
             try {
@@ -102,7 +102,7 @@ final class Backdrop {
                 close(in);
             }
             if (bmp == null) {
-                return "解不开这张图";
+                return T.s("解不开这张图");
             }
             OutputStream out = new FileOutputStream(file(c));
             try {
@@ -115,7 +115,7 @@ final class Backdrop {
             return null;
         } catch (Throwable t) {
             String m = t.getMessage();
-            return m == null ? "导入失败" : m;
+            return m == null ? T.s("导入失败") : m;
         }
     }
 

@@ -195,24 +195,29 @@ public final class MemoTest {
             MemoStore.add(bounded, "n" + index, "", index);
         }
         check(bounded.size() == MemoStore.MAX_NOTES, "the store fills up to the cap");
-        MemoStore.Note overflow = MemoStore.add(bounded, "overflow", "", MemoStore.MAX_NOTES + 1);
-        check(overflow != null && bounded.size() == MemoStore.MAX_NOTES, "the cap evicts before adding");
-        boolean oldestGone = true;
-        for (MemoStore.Note note : bounded) {
-            if (note.title.equals("n0")) {
-                oldestGone = false;
-            }
-        }
-        check(oldestGone, "the lowest-priority note is the one evicted");
+        boolean capacity=false;
+        try{MemoStore.add(bounded,"overflow","",9999);}catch(IllegalStateException expected){capacity=true;}
+        check(capacity&&bounded.size()==MemoStore.MAX_NOTES,"capacity rejects new data without evicting old notes");
+        check(bounded.get(0).title.equals("n0"),"oldest note remains intact at capacity");
 
         List<MemoStore.Note> pinnedOnly = new ArrayList<MemoStore.Note>();
         for (int index = 0; index < MemoStore.MAX_NOTES; index++) {
             MemoStore.Note pinned = MemoStore.add(pinnedOnly, "p" + index, "", index);
             MemoStore.pin(pinnedOnly, pinned.id, true);
         }
-        check(MemoStore.add(pinnedOnly, "one more", "", MemoStore.MAX_NOTES + 5) != null
-                        && pinnedOnly.size() == MemoStore.MAX_NOTES,
-                "an all-pinned store still stays bounded");
+        capacity=false;try{MemoStore.add(pinnedOnly,"one more","",9999);}catch(IllegalStateException expected){capacity=true;}
+        check(capacity&&pinnedOnly.size()==MemoStore.MAX_NOTES,"pinned records are never evicted");
+        List<MemoStore.Note> active=new ArrayList<>(),trash=new ArrayList<>();
+        MemoStore.Note original=MemoStore.add(active,"旧记录","保留正文",1234);original.pinned=true;
+        check(MemoStore.move(active,trash,original.id)&&active.isEmpty(),"delete moves into trash");
+        check(trash.get(0).id.equals(original.id)&&trash.get(0).pinned&&trash.get(0).updated==1234,"trash retains all metadata");
+        List<MemoStore.Note> restoredJson=MemoStore.fromJson(MemoStore.toJson(trash));
+        check(MemoStore.move(restoredJson,active,original.id)&&active.get(0).body.equals("保留正文"),"restore survives serialization");
+        check(!MemoStore.move(restoredJson,active,original.id),"repeated restore is harmless");
+        capacity=false;try{MemoStore.move(trash,bounded,original.id);}catch(IllegalStateException expected){capacity=true;}
+        check(capacity&&trash.size()==1,"failed restore leaves trash intact");
+        boolean duplicate=false;try{MemoStore.move(trash,active,original.id);}catch(IllegalStateException expected){duplicate=true;}
+        check(duplicate&&trash.size()==1&&active.size()==1,"duplicate ids never overwrite existing notes");
 
         System.out.println("Memo: " + count + " assertions passed");
     }

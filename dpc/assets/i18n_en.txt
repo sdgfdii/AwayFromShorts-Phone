@@ -1,0 +1,2385 @@
+# 英文文案表：`中文原文<TAB>英文`，中文原文就是代码里的 msgid。
+# 没列出的句子在英文模式下原样显示中文（原文兜底），不会留空。
+# 带占位符的句子（%s %d）必须保留同样的占位符，check 会校验。
+# 译成空串写 \e（中文虚词在英文里该整个消失时用）。
+\n\n个人同步可在打卡页点“同步”设置；离线学习和冻结不需要同步账号。	\n\nSet up personal sync via “Sync” on the check-in page; offline study and freezing need no account.
+\n\n删掉后进度和冻结闸门立刻重算。	\n\nProgress and the freeze gate are recalculated immediately.
+\n\n在家长手机的验证器里选「手动输入密钥」，账号名随便填，密钥就是上面这串，选「基于时间」。	\n\nIn the parent's authenticator choose "Enter a setup key", any account name, the secret above, and time-based codes.
+\n\n将覆盖本机对应数据。确认后应用会重启；写入失败会回滚，现有云端凭据和管理授权不变。建议先导出当前备份。	\n\nThis overwrites the matching data on this device. The app restarts after you confirm; a failed write rolls back, and existing cloud credentials and admin grants are untouched. Export a backup first.
+\n\n当前页面和输入已保留。请检查存储空间后，再按返回重试。	\n\nThis page and your input are kept. Free up storage, then press back again.
+\n\n打卡：	\n\nCheck-ins: 
+\n\n本机冻结时段固定使用时区：	\n\nFreeze windows on this device use the pinned timezone: 
+\n\n现在统一设置冻结时间？之后也可以单独改。	\n\nSet freeze hours for them now? You can change them one by one later.
+\n\n长按应用可拖到其他冻结时段。	\n\nLong-press an app to drag it to another window.
+\n    目标打卡 123 · 今天继续	\n    Goal check-in 123 · continue today
+\n20:00 后学习打卡未完成，学习闸门正在延长冻结；完成后恢复原时段。	\nStudy goals are unmet after 20:00, so the study gate is extending freezes. Finish them to return to the normal windows.
+\n20:00 后打卡没完成，学习联动会一直冻到打完；打完还要走完那 30 分钟的打卡罚时。	\nAfter 20:00 an unfinished check-in keeps the study gate holding until it is done, and the 30-minute check-in penalty still has to run out.
+\n下次切换 	\nNext switch 
+\n今日队列：复习 	\nToday's queue: review 
+\n先回忆再揭晓。每张闪卡复习后进入下一张；选择“忘了”会进入错题与重学计划。	\nRecall first, then reveal. Each card moves to the next; “forgot” adds it to mistakes and relearning.
+\n关键应用 	\nKey apps 
+\n冻结时段固定使用时区：	\nFreeze windows use a pinned timezone: 
+\n刷题：	\nQuiz: 
+\n周期末 20:00 后未完成会延长冻结，跨周期仍需补完。	\nUnfinished after 20:00 on the last day extends the freeze; it carries into the next cycle.
+\n填新数字保存；清空＝恢复自动建议。	\nEnter a new number to save; clear it to return to the suggestion.
+\n学习联动：	\nStudy gate: 
+\n提醒 	\nReminder 
+\n数据大小：	\nData size: 
+\n数量不足时按剩余可用卡片抽取。	\nIf there are fewer, it draws from what is left.
+\n未授予使用情况访问权限时只保存额度，不计时、不冻结。	\nWithout usage access only the quota is saved; nothing is timed or frozen.
+\n此后每	\nThen every 
+\n禁忌卡认领后的延长冻结尚未结束。	\nA taboo penalty is still extending the freeze.
+\n结果先预览，不会自动改写笔记。	\nYou preview the result first; the note is never rewritten automatically.
+\n罚时延长冻结还没结束（禁忌卡认领或 20:00 打卡没完成）。	\nA penalty extension is still running (a taboo card was claimed, or check-in was missed at 20:00).
+\n自身时段：	\nOwn window: 
+\n记忆率 	\nretention 
+\n记忆：	\nMemory: 
+\n设置新的冻结星期和时间后保存，才会替换原规则。未修改时间则保留原规则。	\nSave new freeze days and times to replace the old rule. Leave the times untouched to keep it.
+  ·已锁定	  · locked
+  ·点撤回	  · tap to undo
+  认领禁忌：	  taboo claimed: 
+ KB\n包含本机学习数据、附件与所选设置；不包含云端凭据。	 KB\nIncludes local study data, attachments and selected settings; never cloud credentials.
+ · 30 天	 · 30 days
+ · ★ 已收藏	 · ★ starred
+ · 不受学习闸门影响	 · not affected by the study gate
+ · 云端 rev 	 · cloud rev 
+ · 今日累计 	 · today's total 
+ · 使用额度	 · usage quota
+ · 全天额度	 · all-day quota
+ · 共 	 · 
+ · 关键	 · key
+ · 关键应用	 · key app
+ · 卡片	 · cards
+ · 参与学习闸门	 · study gate
+ · 周期末必须完成	 · required at cycle end
+ · 完成后解除	 · clears when done
+ · 尚未允许通知	 · notifications not allowed
+ · 已完成	 · finished
+ · 已自定义	 · customised
+ · 已重新检测	 · re-checked
+ · 待完成	 · pending
+ · 总量 	 · total 
+ · 收藏 	 · saved 
+ · 新学 	 · new 
+ · 未到期	 · not due
+ · 每天 %d 分钟	 · %d min per day
+ · 每日限额 · 参与学习闸门	 · daily quota · study gate
+ · 每次默认完成量	 · default amount
+ · 点此切换	 · tap to switch
+ · 点此选择或导入	 · tap to pick or import
+ · 点这一行切换	 · tap this row to switch
+ · 热爱奖励减免中	 · passion reward applying
+ · 目标 	 · goal 
+ · 第 	 · #
+ · 认领再加 	 · claiming adds 
+ · 错题	 · wrong answers
+ · 队列 	 · queue 
+ 不能为负数	 cannot be negative
+ 个	\e
+ 个 · 	 · 
+ 个 · 共 	 selected · 
+ 个 · 冻结 	 · Frozen: 
+ 个。	. 
+ 个。屏蔽时段内这些 App 会被系统冻结，点不开。	 apps. During block hours the system freezes them and they cannot be opened.
+ 个冻结	 frozen
+ 个冻结中	 frozen
+ 个学习目标 · 点目标卡可修改	 goals · tap a goal card to edit
+ 个屏蔽中，跳过）	 in block windows, skipped)
+ 个应用	 apps
+ 个应用 · 	 apps · 
+ 个应用共用	 apps share it
+ 个应用加入已超过 10 分钟，按「只进不出」不能移出冻结应用	 apps have been here over 10 minutes, so “add-only” keeps them frozen.
+ 个应用套用	 apps
+ 个应用，	 apps, 
+ 个待打卡	 to check in
+ 个待打卡 · 禁忌 	 to check in · taboo 
+ 个成就	 achievements
+ 个目标	 goals
+ 个（学习目标未完成也不延长冻结）	 (not extended even when goals are unmet)
+ 个）	)
+ 个，	 , 
+ 冻结	 frozen
+ 分	 min
+ 分 	 min 
+ 分钟	 min
+ 分钟 · 点此修改	 min · tap to change
+ 分钟/日	 min/day
+ 分钟一轮，做完再休息	 min a round, then rest
+ 分钟（叠加）。	 minutes (stacks).
+ 分钟（可叠加）。	 minutes (stacks).
+ 分钟（补打也不撤销）	 min (finishing later does not undo it)
+ 天	 days
+ 天 	 d 
+ 天 · 	 days · 
+ 天 · 方案 	 days · plan 
+ 天 · 连续 	 days · streak 
+ 天后截止	 days left
+ 天）  	 days)  
+ 天）  ▸	 days)  ▸
+ 天，从 	 days, from 
+ 天，最长连续 	 days, best streak 
+ 天；本月日记 	 days; journal this month: 
+ 字	 chars
+ 字 · 返回或完成时保存	 chars · saved on back or done
+ 字到：\n	 chars to:\n
+ 字段无效或超长	 field invalid or too long
+ 字，存在本机，不上传	 characters, stored locally, never uploaded
+ 完成	 to go
+ 将不再被管理（立刻解冻）。	 will no longer be managed (unfrozen immediately).
+ 小时	 h
+ 小时 	 h 
+ 已解锁	 unlocked
+ 已选择	 selected
+ 应为 	 should be 
+ 张	\e
+ 张。	.
+ 张卡片	 cards
+ 张卡片 · 今日有效复习 	 cards · valid reviews today 
+ 张可学	 to learn
+ 张待确认	 pending
+ 张次（每天每张计一次）	 card-times (each card counts once a day)
+ 张，跳过重复 	 cards, skipped 
+ 必须是整数	 must be a whole number
+ 必须是文字	 must be text
+ 截止	 due
+ 条	\e
+ 条回收站记录。现有内容保留，冲突记录另存副本。	 trash entries. Existing content is kept and conflicting records are saved as copies.
+ 条笔记和 	 notes and 
+ 条记录列数不一致	 has a different column count
+ 次	 times
+ 次 · 点此编辑	 · tap to edit
+ 次 · 遗忘 	 · forgot 
+ 次呼吸 · 节律 	 breaths · rhythm 
+ 秒	 s
+ 秒后出现	 s
+ 笔	 entries
+ 等	 and more
+ 等 	 and 
+ 篇。	.
+ 至\n	 to\n
+ 至 	 to 
+ 行列数与表头不一致	 has a different column count than the header
+ 行选项重复	 has duplicate options
+ 行重复字段；两道题之间请用 --- 分隔	 has duplicate fields; separate questions with ---
+ 行需要 [题目]、[答案] 等标记	 needs [question], [answer] and similar tags
+ 行：用 Tab 分隔题目、答案、来源、备注	: tab-separate question, answer, source, note
+ 记多少 	 Log how much? 
+ 起 · 更新于 	 · updated 
+ 起算	 onward
+ 起，累计打卡 	, checked in 
+ 超过 16000 字	 exceeds 16000 characters
+ 连续用了 	 used for 
+ 道题目	 questions
+ 页	\e
+ 项	 done
+ 项待办？	 to-dos?
+ 题	\e
+ 题   /   累计 	 / all time 
+ 题   /   累计正确率 	 / overall accuracy 
+ 题   ·   	   ·   
+ 题  ›	  ›
+ 题 id 与已有不同题目冲突，请更换 id	 question id collides with a different question; change the id
+ 题 · 做对 	 · correct 
+ 题 · 待复习错题 	 · mistakes to review 
+ 题 · 答对 	 questions · correct 
+ 题 · 需要复习 	 · needs review 
+ 题。\n已有答题记录与收藏保留。	 duplicates.\nExisting answers and saves were kept.
+ 题。返回后可继续。	. Go back to continue.
+ 题完成	 done
+ 题（	 questions (
+ 题，现有进度已保留。	 questions; existing progress was kept.
+ 题：	\e
+#RRGGBB，如 FFD700	#RRGGBB, e.g. FFD700
+% · 上限 	% · cap 
+% · 最大间隔 	% · max interval 
+%.1f 分钟	%.1f min
+%d 个	%d
+%d 个应用 · %d 个时段	%d apps · %d time slots
+%d 个应用 · 没开	%d apps · off
+%d 个应用待断网（没连上隧道）	%d apps waiting (tunnel not up)
+%d 个应用断网中	%d apps cut off
+%d 个词 · %d 个应用 · 已拦 %d 次	%d words · %d apps · %d blocked
+%d 分钟	%d min
+%d 条	%d rules
+%d 项生效	%d active
+%s · 已用 %.1f / %d 分钟	%s · used %.1f / %d min
+.　	. 
+0 分	0 min
+00:00（零点）	00:00 (midnight)
+20:00 前打完卡就不延长；没打完，各应用本次冻结多 	Finish check-in before 20:00 and nothing is added; miss it and each app's freeze gets 
+24小时冻结时间条，	24-hour freeze bar, 
+25 分钟一轮 · 专注时锁住屏幕	25 minutes a round, screen locked while focusing
+4 秒吸气 · 4 秒屏息 · 4 秒呼气 · 4 秒停留。屏息不舒服就跳过，别硬撑。	Inhale 4 · hold 4 · exhale 4 · rest 4. Skip the hold if it feels bad — don't force it.
+4-4-4-4 呼吸，跟着圆圈慢下来	4-4-4-4 breathing, follow the circle down
+6 位数字	6 digits
+7 天平均 	7-day average 
+:00 重置	:00
+<1 分	<1 min
+AI API 设置	AI API settings
+AI 写作	AI writing
+AI 服务返回 HTTP 	AI service returned HTTP 
+AI 结果	AI result
+AI 设置已保存，密钥不包含在备份中	AI settings saved; the key is never included in backups
+AI 返回内容为空或超过正文上限	AI returned nothing, or more than the body limit
+API 密钥，留空沿用已保存的密钥	API key; leave empty to reuse the saved one
+API 设置	API settings
+Aa · 目标打卡 123	Aa · Goal 123
+AwayFromShorts · 今天还没学完	AwayFromShorts · goals still open today
+CSV 为空	CSV is empty
+CSV 引号位置错误	Misplaced quote in CSV
+CSV 引号未闭合	Unterminated quote in CSV
+CSV 第 	CSV record 
+CSV 结束引号后应为逗号或换行	A closing quote must be followed by a comma or newline
+CSV 表头重复：	Duplicate CSV header: 
+CSV 选项不能留空或跳号	CSV options cannot be blank or skip letters
+CSV 选项表头必须从 A 连续排列	CSV option headers must run consecutively from A
+CSV 首行需有 stem/题干 和 answer/答案 表头	The CSV first row needs stem/题干 and answer/答案 headers
+CSV（含表头）	CSV (with header)
+Excel XML 不支持 DTD 声明	Excel XML does not support DTD declarations
+Excel 共享文本索引无效	Invalid Excel shared-string index
+Excel 列次序错误或超过 64 列	Excel columns are out of order or exceed 64
+Excel 列编号无效	Invalid Excel column reference
+Excel 单元格缺少行	An Excel cell is missing its row
+Excel 单元格超过 16000 字	An Excel cell exceeds 16000 characters
+Excel 压缩包条目过多	Too many entries in the Excel archive
+Excel 含公式单元格，请先复制并粘贴为值	Excel has formula cells; copy and paste them as values first
+Excel 含错误值，请先修正	Excel contains error values; fix them first
+Excel 存在重复文件条目	The Excel file has duplicate entries
+Excel 工作表路径无效	Invalid Excel worksheet path
+Excel 工作表过大，请拆分	The worksheet is too large; split it
+Excel 数据超出表头列数	Excel data exceeds the header column count
+Excel 文本项目过多	Too many Excel shared strings
+Excel 最多 5000 题	Excel supports at most 5000 questions
+Excel 没有题目	Excel contains no questions
+Excel 解压后过大，请另存为 CSV	The Excel file is too large unpacked; save it as CSV
+Gist ID 无效	Invalid Gist ID
+Gist ID（与电脑端一致）	Gist ID (same as on the PC)
+Git 仓库（占位）	Git repo (placeholder)
+GitHub token 格式无效	Invalid GitHub token format
+GitHub token（需要 gist 权限）	GitHub token (needs gist scope)
+GitHub 用户名	GitHub username
+GitHub 用户名无效	Invalid GitHub username
+GitHub 私有仓库（占位）	Private GitHub repo (placeholder)
+GitHub 验证失败 HTTP 	GitHub auth failed, HTTP 
+HTTPS API 地址，例如 https://…/v1	HTTPS API URL, e.g. https://…/v1
+JSON / CSV / TSV 字段：subject、type、front、answer、source、note，也支持中文字段名。词表可用 word、meaning。\n无表头格式：题目〔Tab〕答案〔Tab〕来源〔Tab〕备注，需填写默认学科。文件最大 16MB，支持 UTF-8 / GB18030。	JSON / CSV / TSV fields: subject, type, front, answer, source, note; Chinese field names also work. Word lists can use word and meaning.\nHeaderless format: question[Tab]answer[Tab]source[Tab]note, and a default subject is required. Files up to 16MB, UTF-8 / GB18030.
+JSON Unicode 转义无效	Invalid JSON Unicode escape
+JSON 位置 	JSON at 
+JSON 内容不完整	Incomplete JSON
+JSON 字段重复：	Duplicate JSON field: 
+JSON 字符串中须转义换行	Line breaks must be escaped inside JSON strings
+JSON 字符串无效	Invalid JSON string
+JSON 字符串未闭合	Unterminated JSON string
+JSON 嵌套最多 64 层	JSON nests at most 64 levels
+JSON 结尾有多余内容	Extra content after the JSON
+JSON 转义无效	Invalid JSON escape
+JSON 转义未完成	Incomplete JSON escape
+JSON 需要 questions 数组	JSON needs a questions array
+JSONL（每行一个对象）	JSONL (one object per line)
+MB。	MB uncompressed.
+M月d日	MMM d
+M月d日 EEEE	EEE, MMM d
+M月d日 HH:mm:ss	MMM d, HH:mm:ss
+TSV（含表头）	TSV (with header)
+TXT / TSV（无表头，Tab 分列）	TXT / TSV (no header, tab-separated)
+UWP 应用	UWP app
+WebDAV（占位）	WebDAV (placeholder)
+[附件：	[Attachment: 
+finder	finder
+gray mode 需要授权: adb shell pm grant com.afs.guard 	gray mode needs this grant: adb shell pm grant com.afs.guard 
+id 只能使用文字、数字、下划线、点、冒号和短横线，最多 128 字	id may only use letters, digits, underscore, dot, colon and hyphen, up to 128 characters
+options 请使用数组或 A/B/C 对象	options must be a list or an A/B/C object
+options 请用文字数组或 A/B/C 对象	options must be a list of strings or an A/B/C object
+study.json 写失败: 	study.json write failed: 
+study.json 恢复失败: 	study.json restore failed: 
+study.json 恢复：不是合法 JSON	study.json restore: not valid JSON
+study.json 恢复：结构不对，拒绝	study.json restore: wrong structure, refused
+study.json 读失败，改用空库: 	study.json read failed, using an empty library: 
+token 所属账号与 GitHub 用户名不一致	The token belongs to a different account than the GitHub username
+yyyy 年 M 月 d 日	d MMM yyyy
+yyyy年M月	MMMM yyyy
+yyyy年M月d日	MMM d, yyyy
+· 不把屏幕内容发到任何服务器；关键词拦截在本地匹配。	· No screen content leaves the phone; keyword matching runs locally.
+· 不收集设备标识，不上报崩溃，没有广告或统计 SDK。\n	· No device identifiers, no crash reporting, no ads, no analytics SDK.\n
+· 使用时长只取自系统使用记录，在本机算，不上传。\n\n	· Usage time comes from system usage records and is computed on-device. It is never uploaded.\n\n
+· 只有你主动开启同步时，才把打卡与目标推到你自己配置的 Gist。\n	· Only when you enable sync yourself are check-ins and goals pushed to the Gist you configured.\n
+· 打卡目标、笔记、记忆卡、题库、额度与冻结规则，全部在本机应用私有目录。\n	· Goals, notes, memory cards, question banks, quotas and freeze rules all live in this app's private directory.\n
+· 检查更新会在你点按钮时去发布页取一份版本清单，只读不写，也不带任何本机信息。\n\n	· Checking for updates fetches a version list from the release page when you tap the button; it only reads, and sends nothing about this device.\n\n
+· 检查更新会在你点按钮时访问更新源，只读取版本号。\n\n	· Checking for updates contacts the update source when you tap the button, and reads only the version number.\n\n
+· 检查更新只在你点按钮时去发布页取一份版本清单（官方源连不上会换镜像），只读不写，也不带任何本机信息。\n\n	· Checking for updates only fetches a version list from the release page when you tap the button (a mirror is used when the official source is unreachable); it only reads, and sends nothing about this device.\n\n
+—（没添加应用）	— (no apps added)
+“全部卡片”包含尚未到复习日期的卡片；“仅到期卡片”只抽今天到期的卡片，按到期时间从早到晚。每张卡在今日闪卡中只出现一次。\n保存后重新抽取今日尚未复习的卡片，已完成记录保留。	“All cards” includes cards whose due date has not arrived; “Due only” draws today's due cards, earliest first. Each card appears once in today's flashcards.\nSaving redraws today's unreviewed cards; finished records are kept.
+‹  冻结应用	‹  Frozen apps
+‹  刷题	‹  Quiz
+‹  卡管理	‹  Cards
+‹  守卫	‹  Guard
+‹  记忆卡设置	‹  Memory card settings
+‹  返回	‹  Back
+‹ 前30天	‹ Previous 30 days
+‹ 返回	‹ Back
+← 松手，看上一个	← Release to see the previous one
+↑ 做了    ↓ 没做	↑ Did it    ↓ Skipped
+↑ 做了   ↓ 没做	↑ Did it   ↓ Skipped
+⏱ 批量设时段	⏱ Set hours in bulk
+★ 已收藏	★ Saved
+☆ 收藏本题	☆ Save this question
+✓ 今天认了	✓ Claimed today
+✓ 回答正确	✓ Correct
+✓ 已打卡	✓ Checked in
+　	\e
+　点击改日期	  tap to change the date
+　（这天数据太少，不算数）	  (too little data that day; not counted)
+、	, 
+。	.
+。\n删除后从学科列表移除，内容和学习记录保留，可以撤回或在回收站恢复。	.\nIt leaves the subject list but its content and history are kept; you can undo or restore it from the trash.
+。需单独完成这张总结卡。	. This summary card must be completed on its own.
+「	“
+「%s」今天已用的时间会保留；重新添加同一只应用会接着累计。原有冻结规则仍然生效。	Time “%s” used today is kept; re-adding the same app continues from there. Existing freeze rules still apply.
+「%s」的成员会并进「%s」，共用每天 %d 分钟（取两者较小值）。今天各自已用的分钟数照常累加进这个格子。	Members of “%s” move into “%s”, sharing %d min per day (the smaller of the two). Minutes each has used today still add up into this slot.
+」	”
+」 · 	” · 
+」· 各应用冻结结束后追加 	” · queued after each app's freeze: 
+」今天再认一次？\n\n冻结再延长 	” claim again today?\n\nFreeze extends by 
+」今天已经打过了	” is already checked in today
+」今天没做	” marked as skipped
+」包含 	” contains 
+」及其打卡记录移到最近删除。可在目标列表中撤回。	” and its check-ins move to Recently deleted, where you can restore them.
+」在回收站，请先恢复或更换科目名称	” is in the trash; restore it or change the subject name
+」的权限：	: 
+」移入回收站	” to the trash
+」认领一次？\n\n冻结程序将延长 	” claim once?\n\nFrozen apps extend by 
+」？	”?
+一个格子放一个应用，就是它单独的一份额度；放多个应用，就是它们共用同一份额度。应用放进冻结时段后，只累计所绑时段内的用量，额度用完才冻结；未绑定时段则全天累计。	One app in a quota means its own allowance; several apps share it. Apps inside a freeze window only count usage within their bound hours and freeze when the quota runs out; unbound quotas count all day.
+一周不断	A full week
+一天都没选	No days selected
+一次最多选择 20 个文件	At most 20 files at a time
+一次请导入 1 至 5000 题	Import 1 to 5000 questions at a time
+一直待在同一个应用里才算连续；切走再回来重新计时。	Only staying in one app counts as continuous; switching away restarts the clock.
+一直待在同一个应用里才算连续；切走再回来重新计时。不选应用时对全部应用生效，短视频这类最容易被抓。	Only staying in one app counts as continuous; switching away restarts the clock. With no app selected this applies to everything — short-video apps are what it catches first.
+一行一个词	One keyword per line
+一行一个，英文不分大小写。视频号那类可以填「推荐」「直播」。	One per line; English is case-insensitive. For short-video feeds try "For you" or "Live".
+一行就是一个额度：只放一个应用是它单独的一份，放多个应用就是共用同一份。点一行改成员和分钟数，长按可以并到另一个额度或删掉。未绑定时段按全天计时，放进时段只累计时段内的用量，额度用完才冻结，今日额度	A row is one quota: one app means its own allowance, several apps share it. Tap a row to change members and minutes; long-press to merge it into another quota or delete it. Unbound quotas count all day; inside a window only that window's usage counts, and apps freeze once the quota runs out. Today's quota
+一键添加	Add for me
+上一处	Previous
+上一期	Previous
+上一笔已确认，日期已变化；请刷新后再记录今天的完成量	The previous entry is confirmed and the date has changed; refresh before recording today's amount
+上一笔结果尚未确认，请稍后重试	The previous save is not confirmed yet. Try again shortly.
+上一页	Previous
+上个月	Previous month
+上传	Upload
+上传中	Uploading
+上传失败，检查网络后重试	Upload failed. Check the network and retry.
+上传打卡数据	Upload check-in data
+上次上传 	Last upload 
+上次上传：	Last upload: 
+上次已提交的答题记录会保留，未完成的练习队列将被替换。	Submitted answers are kept; the unfinished queue will be replaced.
+上滑与下滑\n揭晓答案后，上滑按“记住了”评分，下滑按“忘了”评分。输入题答错时不能上滑，需加入重学。今日闪卡每张每天只复习一次；选“忘了”会记录到错题和重学计划，不会在今日闪卡里反复出现。	Swipe up and down\nAfter the answer is revealed, swipe up to rate “remembered” and down to rate “forgot”. A wrong typed answer cannot be swiped up; it joins relearning. Each card is reviewed once a day; “forgot” logs a mistake and a relearning item, and the card does not come back in today's set.
+上滑前往学习页面	Swipe up to the study page
+上滑前往总结	Swipe up for the summary
+上滑卡片记一笔，今天还什么都没记	Swipe a card up to log one; nothing has been logged today
+上滑处理 · 下滑＝没做（禁忌卡）· 左右推换卡	Swipe up to handle · down = skipped (taboo) · left/right to switch cards
+上滑完成这项热爱，奖励可累计。\n每天最多一张，单次最多 60 分钟，仅抵扣定时冻结。	Swipe up to complete this passion task; rewards accumulate.\nOne draw per day, up to 60 min each, and it only offsets timed freezing.
+上滑平移打卡 · 左右推换目标 · 长按改数量	Swipe up to check in · left/right to switch goals · long-press to change the amount
+上滑＝今天做了 · 下滑＝今天没做	Up = did it today · down = skipped today
+上移	Move up
+下一处	Next
+下一期	Next
+下一步	Next
+下一页	Next
+下一题	Next question
+下个月	Next month
+下划线	Underline
+下午好	Good afternoon
+下次切换　	Next switch  
+下移	Move down
+不会做的事\n	What this app never does\n
+不允许的偏好设置	A preference is not allowed
+不支持外部 XML 实体	External XML entities are not supported
+不支持外部工作表	External worksheets are not supported
+不支持的云端类型	Unsupported cloud type
+不支持的备份版本	Unsupported backup version
+不支持的纸张样式	Unsupported paper style
+不支持符号链接	Symbolic links are not supported
+不是有效的 XLSX 文件	Not a valid XLSX file
+不是有效的备份文件，现有数据没动	Not a valid backup file; existing data untouched
+不能限制守卫自身	Guard cannot limit itself
+不限期	No deadline
+与旧版默认一致	Same as the old default
+专注	Focus
+专注 · 呼吸 · 期待	Focus · breathe · look forward
+专注中	Focusing
+专注中，不能重置	Focusing — can't reset
+专注时长	Focus length
+专注期间手机会被锁在本页：返回键、Home、暂停都关掉了，时间不走完出不去。	While focusing the phone is locked to this page: back, Home and pause are all disabled until the timer ends.
+专注进行中，不能暂停或退出	Focus is running — no pausing, no exit
+专注进行中，时间不走完出不去	Focus is running; you cannot leave until the timer ends
+个	\e
+个人同步	Personal sync
+个人同步已启用	Personal sync is on
+中	Mid
+中午好	Good midday
+中文	中文
+主题	Theme
+主题实时预览，点击底栏体验切换	Live theme preview; tap the bottom bar to try switching
+主题模式	Theme mode
+主题色彩	Accent colour
+主题色跟随系统	Accent follows the system
+主题设置	Theme settings
+主题选项预览	Theme option preview
+习惯成形	Habit formed
+云同步配置	Cloud sync config
+云端同步 · 	Cloud sync · 
+云端同步已重新启用，正在补推本机台账	Cloud sync re-enabled; pushing the local ledger
+云端同步未启用或已暂停，请点「同步设置」	Cloud sync is off or paused. Tap “Sync settings”.
+云端同步未启用，请先配置	Cloud sync is off. Configure it first.
+云端配置读取失败	Could not read the cloud settings
+五百笔	Five hundred entries
+亮屏累计锁机	Screen-on lock
+亮度	Brightness
+亲友解锁码	Family unlock code
+什么都做不了，先把权限开起来。	Nothing works yet — grant access first.
+什么都没开	Nothing granted
+仅到期卡片（按记忆曲线）	Due cards only (by memory curve)
+今天	Today
+今天 	Today 
+今天 20:00 打卡没打完，各应用冻结已各延长 	Check-in was unfinished at 20:00, so each app's freeze is extended by 
+今天做了什么，哪里卡住了。可以不写。	What you did, where you got stuck. Optional.
+今天已完成	Done today
+今天已完成一张热爱卡	You already completed one passion card today
+今天已正念 	Mindfulness today: 
+今天已确认	Confirmed today
+今天已经打过卡了	Already checked in today
+今天已认领 · 冻结已延长	Claimed today · freeze extended
+今天已认领 · 左右推换卡	Claimed today · left/right to switch cards
+今天拦了 %d 次	Blocked %d times today
+今天按时打完了卡，不延长	Check-in finished on time, nothing added
+今天没做	Skipped today
+今天没做 · 无额外冻结	Skipped today · no extra freeze
+今天没做 · 明天照常出现	Skipped today · back tomorrow as usual
+今天没有到期卡片	No cards due today
+今天没有待学卡片	No cards to learn today
+今天的卡都处理完了	All cards handled for today
+今天的卡都处理完了 · 已存本机	All cards handled · saved on this device
+今天的热爱奖励已领取	Today's passion reward is already claimed
+今天的额度用完了	Today's quota is used up
+今天第 %d 次	#%d today
+今天还可完成一张热爱卡，在打卡页面上滑完成。	You can still finish one passion card today. Swipe up on the check-in page.
+今天还未确认	Not confirmed yet today
+今天还没有完成一轮	No completed round today
+今天进度	Today
+今日作答  ·  正确率 	Answered today  ·  accuracy 
+今日刷题目标	Today's quiz goal
+今日学习	Learn today
+今日怎样抽卡\n“全部卡片”可抽新卡和未到期卡；“仅到期卡片”仅抽已学习且今天结束前到期的卡，优先较早到期的卡，不包含从未学习的新卡。随机模式从全部池随机抽取；顺序模式跨天接续。仅到期池始终按到期时间排序。	How cards are drawn today\n“All cards” includes new and not-yet-due cards. “Due only” draws learned cards that come due before today ends, earliest first, and never brand-new cards. Random mode picks from the whole pool; sequential mode continues across days. The due-only pool is always ordered by due time.
+今日有效复习 	Reviewed today 
+今日目标 	Today's goal 
+今日目标已完成 · 20:00 那笔罚时还要等满	Today's goals are done · the 20:00 penalty still has to run out
+今日目标已完成，学习联动已解冻	Today's goals are complete; the study gate is released
+今日禁忌	Today's taboos
+今日记忆目标	Today's memory goal
+今日进度	Today's progress
+今日闪卡设置	Today's card settings
+今日队列已完成	Today's queue is done
+从 	Since 
+从几点开始	Starts at
+从完整备份恢复	Restore from a full backup
+从文件恢复（覆盖现有数据）	Restore from file (overwrites current data)
+从时段起点整点起算：8:00 开始、每 45 分钟的话，8:00、8:45、9:30 各锁一次。灭屏期间不弹。	Counted from the window start. From 08:00 every 45 min means 08:00, 08:45 and 09:30 each lock once. Nothing pops up while the screen is off.
+从模板新建	From template
+从模板新建  ›	From template  ›
+从相册选一张…	Pick one from the gallery…
+仓库或 WebDAV HTTPS 地址	Repository or WebDAV HTTPS address
+以后再说	Later
+休息	Break
+休息 	Break 
+休息提醒	Break reminders
+休息时长	Break length
+休息结束，可以开始下一轮	Break over — ready for the next round
+会替换当前记忆卡库、复习记录与记忆目标设置。建议先导出当前备份。原有普通学习目标与屏蔽时间表不受影响。	This replaces the memory library, review history and memory goal settings. Export a backup first. Normal study goals and block schedules are untouched.
+会联网的地方\n	Where the network is touched\n
+你的答案：	Your answer: 
+你设置的待办提醒时间到了	Your to-do reminder is due
+使用情况访问	Usage access
+使用情况访问权限	Usage access
+使用记录暂不可读	Usage records are not readable right now
+使用限额	Usage quota
+使用限额已暂停	Usage quota paused
+使用额度	Usage quota
+使用额度冻结	Quota freeze
+使用额度数据无法读取	The quota usage record cannot be read
+使用额度须为1–1440分钟，0为取消	Quota must be 1-1440 minutes; 0 means off
+例如21或40	e.g. 21 or 40
+例如填写21：每21天总结一次；填写40：每40天总结一次。	Enter 21 for a summary every 21 days; 40 for every 40 days.
+例如：电路、材料力学、信号与系统	e.g. circuits, mechanics of materials, signals and systems
+例如：电路、药理学、计算机网络	e.g. circuits, pharmacology, computer networks
+例如：英语单词、医学、工科概念	e.g. English words, medicine, engineering concepts
+保存	Save
+保存卡片	Save card
+保存后移动	Move on save
+保存备忘录后生效。系统省电可能让提醒稍有延迟。	Takes effect once the note is saved. Battery saving may delay it slightly.
+保存失败	Save failed
+保存失败，未确认本次学习进度	Save failed; this study progress was not confirmed
+保存失败，本次操作尚未记录	Save failed; this change was not recorded
+保存失败，请保留当前内容后重试	Save failed. Keep the current content and retry.
+保存失败，请保留画布后重试	Save failed; keep the canvas and try again
+保存并抽取	Save and draw
+保存总结周期	Save summary cycle
+保存配置	Save config
+保存（已选 	Save (
+修改  ›	Edit  ›
+修改应用和时长	Adjust apps and duration
+修改成员和分钟数	Change members and minutes
+修改限额格子	Edit quota
+修改额度	Edit quota
+俯卧撑	Push-ups
+停下	Stop
+停用同步	Turn off sync
+停留	Rest
+先休息一下。到期后自动显示下一张，重复翻看不增加完成量。	Take a short break. The next card appears when due; flipping through again adds no progress.
+先停下再换节律	Stop first, then change the rhythm
+先停下再改时长	Stop before changing the length
+先写下备忘录内容，再保存提醒	Write something before saving a reminder
+先写下或选中要处理的内容	Write or select something to work on first
+先写下段落，再进行块编辑	Write a paragraph first, then edit blocks
+先启用并生成密钥	Enable it and generate a secret first
+先回忆再揭晓。新卡需要完成学习步骤；选择“忘了”不计完成，稍后会再次出现。	Recall first, then reveal. New cards need their learning steps; “forgot” adds no progress and the card returns later.
+先在纸上演算，也可以在下方记录思路。数学表达式由你核对，不作字符串判分。	Work it out on paper, or note your reasoning below. Maths expressions are yours to check; they are not string-graded.
+先把光标放到待办上，或选中多行待办	Put the cursor in a to-do, or select several lines
+先把应用移到其他时段，再删除空格	Move the apps to another window first, then delete this one
+先暂停再改时长	Pause before changing the length
+先添加卡片；开始答题后新增的卡片将进入明天的计划。	Add cards first; anything added after you start goes into tomorrow's plan.
+先画一些内容再保存	Draw something before saving
+先输入你的答案	Type your answer first
+先选中需要高亮的文字	Select the text to highlight first
+先选应用	Pick apps first
+先选要断网的应用	Pick the apps to cut off first
+光谱	Spectrum
+入门示例	Starter sample
+全天	All day
+全天冻结	Freeze all day
+全天限额 · 	All-day quota · 
+全天额度	All-day quota
+全选	Select all
+全选当前	Select all shown
+全部	All
+全部卡片（含未到期）	All cards (including not due)
+全部完成	Complete all
+全部应用	All apps
+全部应用都在屏蔽中，等某一应用进入自己的放行时段再加	Every app is in its block window. Wait until one enters its allowed hours.
+全部应用都在屏蔽中：现在改不了，到点自动解锁。没有解除按钮。	Every app is blocked right now. Nothing can be changed until the window ends — there is no unlock button.
+全部恢复	Reopen all
+全部打卡日期（	All check-in dates (
+全部放行	All allowed
+全部笔记	All notes
+六位十六进制颜色	Six-digit hex colour
+共 	Total 
+共 0 条	0 notes
+共享	Shared
+共享 	Shared 
+共享格子	Shared quota
+共享格子 	Shared quota 
+共享格子 · 	Shared · 
+共享额度	Shared allowance
+共享额度：勾几只应用，它们共用这一份分钟数。	Shared quota: tick several apps and they share these minutes.
+共用 	Shared by 
+共用 · 	Shared · 
+共用额度	Shared allowance
+关	Off
+关键应用　	Key apps    
+关键应用不受学习闸门延长；自身冻结时段和每日额度仍然生效。	Key apps skip the study-gate extension, but their own windows and daily quotas still apply.
+关键应用名单	Key apps
+关键应用白名单	Always allowed
+关键词	Keywords
+关键词与视频号拦截要用，本版本还没内置	Needed for keyword blocking; not built in yet
+关闭	Close
+关闭选色器	Close the colour picker
+关闭限额要等每天 22:00–23:00	Turning the quota off waits for 22:00–23:00
+其他云端目标（占位）：WebDAV / GitHub 私有仓库 / Git 仓库 只保存配置，尚未实现传输，不影响上面的个人同步。	Other cloud targets (placeholder): WebDAV / private GitHub repo / Git repo. Config is saved only; transfer is not implemented and does not affect personal sync above.
+内容包含控制字符	Content contains control characters
+内容导入与导出	Import and export
+内容已变化，请重新选择段落	The content changed; select the paragraph again
+内容未改变，或已达到 2 万字上限	Nothing changed, or the 20,000-character limit is reached
+内容格式	Content format
+内置亚克力底	Built-in acrylic
+内置字体	Built-in fonts
+再来一次	Again
+再次认领	Claim again
+再认一次	Claim again
+写下这段时间的收获与下一步计划	Write down what you gained and what is next
+写点什么…	Write something…
+冻结	Freeze
+冻结 	Freeze 
+冻结与锁机的基础能力	Required for freeze and lock
+冻结失败：	Freeze failed: 
+冻结已延长至 	Freeze extended to 
+冻结应用	Frozen apps
+冻结应用为空，请先添加应用。	No frozen apps. Add one first.
+冻结应用是空的。点下面的「添加应用」选一个。	No frozen apps yet. Tap “Add app” below to pick one.
+冻结应用是空的，先添加应用	No frozen apps. Add one first.
+冻结应用设置	Frozen app settings
+冻结开始时间	Freeze start time
+冻结时段	Freeze windows
+冻结时段  /  	Freeze windows  /  
+冻结时段内不能修改同步	Sync cannot be changed during freeze windows
+冻结时间　	Freeze hours 
+冻结星期	Freeze days
+冻结星期 	Freeze days 
+冻结星期（未选中的日子不定时冻结）	Freeze days (unselected days have no scheduled freeze)
+冻结结束时间	Freeze end time
+冻结规则	Freeze rule
+冻结设置	Freeze settings
+冻结（学习闸门）	Frozen (study gate)
+准备好就坐下，跟着圆圈呼吸	Sit down when you're ready and follow the circle
+减少动态效果	Reduce motion
+减少缩进	Outdent
+分	min
+分/日	min/day
+分享备忘录	Share note
+分享文本	Share text
+分支名无效	Invalid branch name
+分支（WebDAV 无需填写）	Branch (not needed for WebDAV)
+分类信息无效	Invalid category info
+分钟	min
+分钟前	 min ago
+分钟数，如 30、60、120	Minutes, e.g. 30, 60, 120
+列表/网格	List/grid
+刚刚	Just now
+创建热爱卡	Create passion card
+创建目标、默认完成量与卡面设置	Create goals, default amounts and card face
+删	Del
+删掉	Delete
+删掉「	Delete “
+删掉这条规则	Delete this rule
+删除	Delete
+删除「	Delete “
+删除后可通过撤销恢复。	You can undo this deletion.
+删除失败	Delete failed
+删除学科？	Delete subject?
+删除所选待办	Delete selected to-dos
+删除所选的 	Delete the selected 
+删除未保存，请重试	Delete not saved. Try again.
+删除段落	Delete paragraph
+删除目标…	Delete goal…
+删除目标？	Delete goal?
+删除禁忌卡	Delete taboo card
+删除空时段	Delete empty window
+删除笔记本	Delete notebook
+删除笔记本？	Delete notebook?
+删除线	Strikethrough
+删除这个颜色？	Delete this colour?
+删除这个额度	Delete this quota
+删除这个额度？	Delete this quota?
+删除这条备忘录	Delete this note
+删除这段内容？	Delete this paragraph?
+删除配置	Delete config
+判断	True/False
+判断题	True / false
+到 %s 结束，还剩 %s	Ends at %s, %s left
+到几点结束	Ends at
+到守卫 → 卡管理添加卡片	Go to Guard → Cards to add cards
+到点自己开，不用手动解	Unlocks itself when time is up
+制作 / 导入卡片	Create / import cards
+制卡预览	Card preview
+刷题	Quiz
+刷题卡	Quiz card
+刷题卡、	Quiz,
+刷题卡设置	Quiz settings
+刷题数据格式不正确	The quiz data format is invalid
+刷题目标	Quiz goal
+前台服务状态与提醒	Foreground status and reminders
+前往守卫的卡管理添加卡片 →	Go to Guard → Cards to add cards →
+副标题	Subheading
+功能	Features
+加一条	Add rule
+加了 %d 条规则	Added %d rules
+加入后不能移出，刚加入的十分钟内可纠正	Added apps cannot be removed; you can undo within the first ten minutes
+加入时段后仅累计时段内使用量，额度用完才冻结；未放入时段则全天累计。使用量按今天已有前台记录计算。取消时段内额度后恢复强制冻结。学习联动和禁忌惩罚仍独立生效。	Inside a window only that window's usage counts, and apps freeze when the quota runs out; outside windows it counts all day. Today's foreground records are used. Clearing the quota restores a hard freeze. Study-gate and taboo penalties still apply separately.
+加固已开启	Hardening on
+加固项　	Hardening  
+勾选多个应用，它们就共用这一份额度，不必再合并；只勾一个就是它单独的额度。新增默认120分钟；每个应用只在自身绑定的时段内计时，未绑定则全天计时。	Tick several apps and they share this one allowance; no merging needed. Tick one and it gets its own. New quotas default to 120 minutes. Each app only counts time inside its bound hours, or all day if unbound.
+包名格式不正确	Invalid package name format
+医学	Medicine
+半月不息	Half a month
+单个附件最多20MB，附件总计最多100MB	Up to 20MB per attachment and 100MB in total
+单个附件超过 20 MB	A single attachment exceeds 20 MB
+单位（篇 / 小时 / 个）	Unit (papers / hours / items)
+单元格不能为空值	Cells cannot be empty
+单元格不能包含换行、竖线或控制字符	Cells cannot contain line breaks, pipes or control characters
+单元格最多 1000 字	Cells hold at most 1000 characters
+单应用久用锁	Long-session lock
+单日完成全部目标，累计 10 天	Finish every goal in a day, 10 times
+单日完成全部目标，累计 50 天	Finish every goal in a day, 50 times
+单次复习上限间隔请填写 1–36500 天	Maximum interval must be 1-36500 days
+单次复习上限间隔（1–36500 天）	Maximum review interval (1-36500 days)
+单次最多处理 30000 张卡片	At most 30000 cards per run
+单次最多导入 10000 张	At most 10000 cards per import
+单独	Single
+单独额度只有一只应用，换应用要等每天 22:00–23:00	A single allowance holds one app; swapping waits for 22:00–23:00
+单独额度只能放一只应用	A single quota holds only one app
+单独额度：只锁一只应用，额度用完就冻结。	Single quota: one app only, frozen when the allowance runs out.
+单色	Monochrome
+单词	Word
+单选题	Single choice
+卡片	Cards
+卡片 · 奖励 · 周期	Cards & rewards
+卡片尚未到复习时间	This card is not due yet
+卡片标识或卡组无效	Invalid card id or deck
+卡片设置位于守卫 → 卡管理 → 记忆卡。	Card settings live in Guard → Cards → Memory.
+卡管理	Cards
+卡管理保存失败，本次操作未确认	Failed to save card data; this change was not confirmed
+卡管理数据无法读取，原文件已保留	Card data unreadable; the original file was kept
+卡管理记录超过 8MB	Card data exceeds 8MB
+卡管理读取失败，原文件已保留	Failed to read card data; the original file was kept
+卡组	Deck
+卡组设置无效	Invalid deck settings
+历史	History
+原有冻结计划	Existing freeze plan
+原有风格	Original
+原计划保留；选择新的冻结时间后才会替换。\n	The current plan is kept; it is replaced only when you pick new times.\n
+去下载	Download
+去开启使用情况访问	Open usage access settings
+去授权	Grant access
+参与学习联动	Include in study gate
+参与学习闸门（只有关键应用可豁免）	Include study gate (only key apps are exempt)
+参考答案：	Reference answer: 
+发现新版本 	New version available 
+发送	Send
+发送至你的 AI 服务？	Send to your AI service?
+取消	Cancel
+取消提醒	Cancel reminder
+取消置顶	Unpin
+只发一条通知，不拦人。灭屏、正在锁机、放行期里都不打扰。	Just a notification, nothing gets blocked. Stays quiet when the screen is off, while a lock is running, or during an unlock pass.
+只在这些应用里检查屏幕文字	Screen text is only checked in these apps
+只排 30 天内，短间隔高频	Only 30 days out, short high-frequency intervals
+只接管选中的应用，别的应用照常上网。用系统 VPN 通道实现，所以和代理、公司内网、加速器互斥。	Only the selected apps go through the tunnel; everything else keeps its network. It uses the system VPN slot, so it excludes proxies, corporate networks and accelerators.
+只放一个应用，单独计时，用完就冻	One app, timed alone, frozen when used up
+只有关键应用不受学习闸门影响；其他应用在 20:00 检查后可能延长冻结。	Only key apps skip the study gate. Other apps may be frozen longer after the 20:00 check.
+只监控选中的应用；一个都不选就是全部	Only the apps you pick are watched; none means all
+只算屏幕亮着的时间：灭屏、正在锁着的那几分钟都不累计。累计满一轮就锁一次，锁完从零开始算。	Only counts time with the screen on: screen-off and the locked minutes are not counted. Each full round triggers one lock, then the count restarts.
+只练未做题	Unseen only
+只能撤回当天的打卡记录	Only today's check-ins can be undone
+只能计时和提醒。冻结、锁屏、拦截都需要更高权限。	Timing and reminders only. Freezing, locking and blocking need more access.
+只能计时提醒	Timers only
+只记录哪个应用、哪个词、第几次。	Only the app, the keyword and the count are recorded.
+只进不出：加入后不能移出（刚加的 10 分钟内除外）。	Add-only: once added, an app cannot be removed (except within 10 minutes of adding).
+只进不出：已加入的应用不能移出冻结应用（刚加的 10 分钟内除外）	Add-only: apps already added cannot be removed (except within 10 minutes of adding).
+可使用	Allowed
+可拖入／拖回	Drag in or back
+可用余额 	Balance 
+可用奖励余额	Reward balance
+可选功能；离线学习和冻结无需配置。\n连接后同步本机目标、打卡、冻结配置及使用统计。请使用自己创建的 Gist；新空间可先放一个 README 文件。	Optional. Offline study and freezing need no setup.\nOnce connected, it syncs goals, check-ins, freeze settings and usage stats. Use a Gist you created yourself; a new gist can start with a README file.
+可选，可与自定义天数叠加。	Optional; stacks with the custom day count.
+合并	Merge
+合并后笔记本超过 100 个，未导入	Merging would exceed 100 notebooks; nothing imported
+合并后超过容量，未导入任何内容	Merging would exceed capacity; nothing was imported
+合并恢复	Merge
+合并恢复备忘录？	Merge the backup into your notes?
+合并成一个额度？	” into one quota?
+同一应用只能放在一个限额格子里	An app can only sit in one quota
+同时启用其他周期	Also enable other cycles
+同步	Sync
+同步凭据已清空，请填入 token 重新验证	Credentials cleared. Enter a token to verify again.
+同步文件名无效	Invalid sync file name
+同步正在执行，请结束后重试	Sync is running; try again when it finishes
+同步状态保存失败	Failed to save sync state
+同步设置	Sync settings
+同步配置保存失败	Failed to save the sync config
+名字不能为空	Name cannot be empty
+名字和总量都得填	Name and total are both required
+名字，如：读论文	Name, e.g. read a paper
+名称	Name
+后30天 ›	Next 30 days ›
+向家长要此刻的 6 位码	Ask the parent for the current 6-digit code
+否	No
+否 —— 冻结不会生效	No — freezes will not work
+否则后台守卫生存时间会被压缩	Otherwise the background guard gets killed
+听网课	Lecture
+启用开关、使用情况权限、删除额度	Toggle, usage access, delete a quota
+启用每日限额	Enable daily quota
+启用自定义天数	Enable custom day count
+启用解锁码	Unlock code
+吸气	Inhale
+周	 wk
+周一	Mon
+周三	Wed
+周二	Tue
+周五	Fri
+周六	Sat
+周四	Thu
+周日	Sun
+周期天数须为 1–365	Cycle length must be 1–365 days
+周期天数须为 1–365 的整数	Cycle length must be a whole number from 1 to 365
+周期天数：1–365天，可输入21、40等整数。	Cycle length: 1-365 days. Whole numbers such as 21 or 40.
+周期开始日期	Cycle start date
+周期性锁机	Periodic lock
+周期总结	Cycle summaries
+周期最后一天出现总结卡，20:00 后未完成会延长学习联动冻结。跨周期继续保留待办，完成后解除这项联动。	The summary card appears on the last day of a cycle. If unfinished after 20:00, the study-gate freeze is extended. It carries into the next cycle and clears when finished.
+周期最后一天开放完成总结	The summary opens on the last day of the cycle
+周期末 20:00 后未完成会延长冻结	Unfinished after 20:00 on the last day extends the freeze
+周末	Weekend
+呼吸	Breathe
+呼气	Exhale
+命中就盖住整屏并回桌面。文字只在本机比对，不保存屏幕内容、不上传。	A hit covers the screen and sends you home. Text is matched on-device only; screen content is never stored or uploaded.
+和「每隔 45 分钟锁 5 分钟」不一样：不按钟点走，摸鱼少的日子不会照样被锁，盯屏久的下午会锁得更勤。	Unlike "lock 5 minutes every 45 minutes", this does not follow the clock: light days are not locked anyway, heavy afternoons get locked more.
+和上面的定时锁机是两回事：锁机是硬拦，这个是轻提醒，可以只开一个。	Separate from the scheduled lock above: the lock blocks, this one only nudges. Either can run on its own.
+和按钟点的锁机不一样：不看几点，只看这一轮亮屏累计了多久。摸鱼少的日子不会被照常锁，盯屏久的下午会锁得更勤。	Unlike a clock-based lock this ignores the hour and only looks at how much screen-on time has piled up in this round: a light day never gets locked for nothing, a screen-heavy afternoon gets locked more often.
+回到刷题	Back to quiz
+回到本月	This month
+回到桌面	Go home
+回收站	Trash
+回收站 · 	Trash · 
+回收站中已有同名学科，请先恢复	A subject with this name is in the trash; restore it first
+回收站中没有这个学科	That subject is not in the trash
+回收站为空	Trash is empty
+回桌面	Back to home
+固定	Fixed
+图片保存失败	Failed to save the image
+图片文件名无效	Invalid image file name
+图片无法读取，请重新选择	Cannot read the image; pick another
+图片解码失败	Image decoding failed
+图片遮挡编辑器，拖动框选需要隐藏的标注	Image mask editor; drag to box the areas to hide
+图片题请先选图，再拖动框选标注。	For image cards, pick the image first, then drag to mask areas.
+图片题需要图片和至少一块遮挡区域	An image card needs an image and at least one mask
+在「%s」里挡住了「%s」	Blocked in "%s": "%s"
+在「%s」里看到「%s」	Saw "%s" in %s
+在哪个应用里拦这个页面	Which app should this page be blocked in
+在守卫 → 卡管理 → 记忆卡中添加学科、制作或导入卡片。	Add subjects and create or import cards in Guard → Cards → Memory.
+在这些应用里待够时间才放行娱乐应用	Entertainment apps open only after enough time here
+块编辑	Block edit
+块编辑 · 选择段落	Block edit · pick a paragraph
+基本	Basic
+填 1~1440 之间的分钟数	Enter between 1 and 1440 minutes
+填入三学科示例	Fill in a three-subject sample
+填空 {{答案}}	Cloze {{answer}}
+填空题	Fill in the blank
+填空题请用 {{答案}} 标出需要遮住的部分	For cloze cards, mark the hidden part with {{answer}}
+填窗口类名里的一段（如 finder），或页面上的固定文字。含中文按文字比对，全英文按类名比对。	Enter part of the window class name (e.g. finder) or a fixed string on the page. Chinese text is matched against page text, plain ASCII against the class name.
+填页面上会出现的字，几个词用 + 连接（都要出现才拦），例如 视频号+推荐。也可以填窗口类名的一段，但有些手机读不到。含中文按文字比对，全英文按类名比对。	Enter words that appear on the page; join several with + (all must appear), for example 视频号+推荐. You can also enter part of the window class name, but some phones can't report it. Text containing Chinese is matched as text; all-English input is matched as a class name.
+增加缩进	Indent
+处理文件	Process file
+备份 / 恢复	Backup / restore
+备份 JSON 格式无效	Backup JSON is malformed
+备份与恢复	Backup and restore
+备份包含不允许或重复的路径	Backup contains disallowed or duplicate paths
+备份包含不支持的路径	Backup contains unsupported paths
+备份包含受保护设置	Backup contains protected settings
+备份包含笔记、回收站、分类和附件，不包含同步密钥。恢复会合并并保留现有内容。	Backups include notes, trash, categories and attachments, never sync keys. Restoring merges and keeps what you already have.
+备份含重复或不支持的文件	Backup has duplicate or unsupported files
+备份图片损坏或尺寸过大	Backup images are corrupted or too large
+备份已准备，请完全重启应用以完成恢复	Backup prepared. Fully restart the app to finish restoring.
+备份已合并恢复	Backup merged
+备份已导出	Backup exported
+备份已恢复	Backup restored
+备份必须是有效的 UTF-8	Backup must be valid UTF-8
+备份操作失败：	Backup failed: 
+备份文件不完整	Backup file is incomplete
+备份文件过大或为空	Backup file is too large or empty
+备份暂存已关闭	Backup staging is closed
+备份有 	The backup has 
+备份校验失败：	Backup verification failed: 
+备份格式无效，原有内容未更改	Backup format invalid; existing content unchanged
+备份正文超过 20 MB	Backup body exceeds 20 MB
+备份相对目录	Backup relative directory
+备份缺少 memory.json	Backup is missing memory.json
+备份缺少图片：	Backup is missing images: 
+备份解压后超过 256MB	Backup exceeds 256MB unpacked
+备份超过 100 MB	Backup exceeds 100 MB
+备份超过大小上限	Backup exceeds the size limit
+备份超过当前设备的安全大小上限	Backup exceeds this device's safe size limit
+备份超过文件大小限制	Backup exceeds the file size limit
+备份路径或大小无效	Invalid backup path or size
+备份附件路径无效	Invalid path in the attachment backup
+备忘录	Notes
+备忘录内容为空	Note body is empty
+备忘录列表无效	Invalid note list
+备忘录字段无效	Invalid note field
+备忘录工具	Note tools
+备忘录已满，请先导出或整理已有记录	Notes are full; export or tidy existing ones first
+备忘录提醒	Note reminder
+备忘录数量超过容量	Too many notes for the capacity
+备注	Note
+备注与解释	Notes and explanation
+备注：	Notes: 
+复习 	Reviews 
+复习参数无效	Invalid review parameters
+复习方案	Review plan
+复习状态无效	Invalid review state
+复习记录已保存，明天按抽取设置生成新的闪卡。	Review saved. New cards are generated tomorrow according to your draw settings.
+复习进度已保存。放行仍遵守原时间表和其他学习目标。	Review progress saved. Allowed hours still follow the schedule and other goals.
+复习错题	Review mistakes
+复制	Copy
+复制段落	Copy paragraph
+外观 · 字体 · 同步 · 上传	Look · fonts · sync · upload
+多个应用共用同一份分钟数	Several apps share one pool of minutes
+多选合并最多 5000 题	A merged import holds at most 5000 questions
+多选题	Multiple choice
+夜深了	It's late
+天总结一次	 days
+天总结一次\n首个周期：	 days\nFirst cycle: 
+天重复，旧总结未完成会继续保留。	 days; unfinished summaries are kept.
+奖励分钟数无效	Invalid reward minutes
+奖励已存入余额，将自动抵扣后续定时冻结。每天只能抽取一次。	The reward went to your balance and will offset later scheduled freezes. One draw per day.
+奖励抵扣记录无效	Invalid reward offset record
+奖励明细	Reward history
+套用	Apply
+娱乐 = 黑名单应用 + 系统游戏类 · 占每天全部前台时长	Entertainment = blocked apps + system games, as a share of daily foreground time
+字体	Font
+字体没存上: 	Font not saved: 
+字体选择与导入	Font choice and import
+字体颜色	Font colour
+字体颜色已更新	Font colour updated
+字体，	Font, 
+字段必须是文字或数字	Fields must be text or numbers
+字段重复：	Duplicate field: 
+字段须为文字或数字	Fields must be text or numbers
+存为默认并打卡	Save as default and check in
+存在同编号记录，未覆盖任何内容	An entry with the same id exists; nothing was overwritten
+存在手机里的\n	Stored on the phone\n
+存在无效或重复的备忘录编号	Duplicate or invalid note numbers
+学习冻结期间不能修改同步	Sync cannot be changed while a study freeze is active
+学习数据保存在本机应用私有目录。完整备份包含目标、打卡、记忆与图片、题库与答题记录、卡片、笔记与附件、冻结规则；不包含密码、token、AI 密钥和设备管理授权。备份为未加密 ZIP，请存放在自己的安全位置。当前设备安全上限：解压后 	Study data lives in this app's private directory. A full backup holds goals, check-ins, memory cards and images, quizzes and answers, cards, notes and attachments, and freeze rules. It never holds passwords, tokens, AI keys or device-admin grants. Backups are unencrypted ZIPs, so keep them somewhere safe. Current device ceiling: 
+学习目标	Study goals
+学习联动 · 每日 	Study gate · daily 
+学习联动冻结	Study gate freeze
+学习联动罚时	Study gate penalty
+学习计划	Study plan
+学习闸门冻结 	Study gate freeze 
+学科	Subject
+学科、卡片、错题、学习设置与备份。	Subjects, cards, mistakes, learning settings and backups.
+学科、题库与每日目标设置在守卫 → 卡管理 → 刷题卡。选择题自动判分；其他题目查看解析后自行核对。	Subjects, banks and daily goals live in Guard → Cards → Quiz. Multiple choice is graded automatically; for others, check yourself against the analysis.
+学科「	The subject “
+学科不存在或已删除	The subject is missing or deleted
+学科与卡片已恢复	Subject and cards restored
+学科与题目已恢复	Subject and questions restored
+学科名称	Subject name
+学科名称请填写 1 至 40 个字，不能包含换行	Subject name must be 1 to 40 characters with no line breaks
+学科回收站	Subject trash
+学科回收站 · 	Subject trash · 
+学科已移入回收站，请先恢复	The subject is in the trash; restore it first
+孩子这边只验证、不显示码，验过一次放行 10 分钟，可以提前结束锁机。	This device only verifies and never shows a code. One valid code opens a 10-minute pass and can end a lock early.
+它已经在冻结应用里	It is already a frozen app
+它正在自己的屏蔽时间里，等它的放行时段才能改	It is inside its own block window. You can change it during its allowed hours.
+它防的是「手上没有别人手机时的一时冲动」，不是防技术破解。	It guards against impulse when the other person is not around — not against a determined user.
+守卫	Guard
+守护运行时约每5秒检查额度。后台、锁屏、灭屏不计时；额度耗尽会立刻冻结对应格子的应用，热爱奖励不抵扣。未授予使用情况访问权限时额度照常保存，但暂不计时、不冻结。	The guard checks every ~5 seconds while running. Background, locked screen and screen-off time do not count. When a quota runs out, the apps in that quota are frozen immediately; passion rewards do not offset it. Without usage access the quota is still saved, but nothing is timed or frozen.
+完成	Done
+完成 	Done 
+完成了。慢一点再站起来	Done. Stand up slowly.
+完成后等概率抽取 1–60 分钟，每天仅一张，单次上限固定。	After completing, draw 1–60 min with equal odds. One draw per day; the per-draw cap is fixed.
+完成当前待办	Complete this to-do
+完成总结	Finish summary
+完成所选待办	Complete selected to-dos
+完成热爱，积累冻结减免	Do what you love, earn freeze relief
+完成状态无法核实（缺少当日目标快照）	Completion cannot be verified (no goal snapshot for that day)
+完整备份已导出	Full backup exported
+完整备份超过当前设备的安全大小上限，请使用各模块的备份工具	The full backup exceeds this device's safe size limit; use each module's own backup tool
+完整恢复仅限未启用设备管理或首次配置宽限期，以防用旧备份绕过冻结	Full restore is only allowed before device management is enabled or during first-time setup, so an old backup cannot bypass a freeze
+完整覆盖恢复仅限未启用设备管理或首次配置期。日常内容导入请使用下方各模块入口。	Full overwrite restore is only allowed before device management is enabled, or during first-time setup. For everyday imports, use the module entries below.
+完整覆盖恢复？	Full overwrite restore?
+官方源没响应，正在试镜像…	Official source did not answer, trying a mirror…
+定位编辑	Edit here
+实测「%s」把页面内容对无障碍隐藏了（一屏读到 0 个字），所以「微信视频号」「微信朋友圈」这两条在它那儿不会命中。想限住它只能用整应用冻结或每日限额。	Measured: %s hides its page content from accessibility (0 characters read on a full screen), so the Channels and Moments rules never match inside it. Only whole-app freezing or a daily limit can hold it back.
+实测「%s」把页面内容对无障碍隐藏了（一屏读到 0 个字），所以「微信视频号」这条在它那儿不会命中。想限住它只能用整应用冻结或每日限额。	Measured: %s hides its page content from accessibility (a full screen yields 0 characters), so the WeChat Channels rule can never match there. To limit it, use whole-app freeze or a daily limit instead.
+密钥	Secret
+密钥格式无效	Invalid key format
+对上了，放行 10 分钟	Matched — 10-minute pass started
+导入 	Import 
+导入卡片	Import cards
+导入失败	Import failed
+导入失败：请使用不超过 2 万字的 UTF-8 文本或 Markdown 文件	Import failed: use a UTF-8 text or Markdown file of at most 20000 characters
+导入文件	Import file
+导入格式	Import formats
+导入格式说明	Import format guide
+导入粘贴内容	Import pasted content
+导入题库	Import questions
+导出到文件（目标 + 打卡记录全在里面）	Export to file (goals and check-ins included)
+导出填表模板（CSV）	Export a fill-in template (CSV)
+导出备份（含图片与复习记录）	Export backup (images and review history included)
+导出失败 	Export failed 
+导出失败，请重试	Export failed. Try again.
+导出失败：	Export failed: 
+导出完整备份	Export full backup
+导出完整本地备份	Export a full local backup
+导出当前全部题目（JSON）	Export every question (JSON)
+导出文件	Export file
+导出文本模板（TXT）	Export a text template (TXT)
+导出示例模板（JSON）	Export a sample template (JSON)
+将「	“
+将发送 	Sending 
+小标题	Heading
+小薇宋体	Xiaowei Song
+尚未保存的修改会被放弃。	Unsaved changes will be lost.
+尚未允许通知，提醒不会弹出；可在系统设置中开启	Notifications are not allowed, so reminders will not appear. Enable them in system settings.
+尚未启用同步或本地恢复后已暂停同步	Sync is off, or paused after a local restore
+尚未成为设备所有者，什么都没做。\n请先按 README 用 adb 执行 set-device-owner。	Not device owner yet, so nothing was done.\nFollow the README and run set-device-owner over adb first.
+尚未执行	Never run
+尚未设置冻结时段。长按应用，拖入上方时段即可安排冻结。	No freeze windows yet. Long-press an app and drag it into a window above.
+尚未设置每日限额。一个格子可以只放一个应用，也可以放多个应用共用一份。	No daily quota yet. A quota can hold one app, or several apps sharing one allowance.
+尚未选择应用	No apps selected
+尚未配置同步	Sync is not configured
+尚未配置同步凭据	Sync credentials are not configured
+尚未配置同步目标	No sync target configured
+尚未配置；保存不会连接服务器	Not configured; saving will not contact the server
+就到这里，随时可以重来	Stopping here; start again whenever
+就是今天	It is today
+屏幕内容只在本机比对，没有上传。	Screen content was matched on-device and never uploaded.
+屏幕统计	Stats
+屏息	Hold
+屏蔽时段内这些应用会被系统冻结，点不开	These apps are frozen by the system during blocked hours
+展开或收起应用库	Show or hide the app tray
+工作日	Weekdays
+工具箱	Toolbox
+工科概念	Engineering concepts
+已 	Done 
+已上传 	Uploaded 
+已保存	Saved
+已保存 %d 个词	Saved %d keyword(s)
+已保存的 API 密钥也会删除。	The saved API key is deleted too.
+已保存配置；尚未执行云端传输	Settings saved; no cloud transfer has run yet
+已停用同步，本机数据保留	Sync turned off; local data kept
+已关掉背景	Background turned off
+已关闭	Off
+已冻结	Frozen
+已准备恢复，请完全重启应用：	Ready to restore. Fully restart the app: 
+已创建：	Created: 
+已删掉	Deleted
+已删除段落，可用底部撤销恢复	Paragraph deleted; undo at the bottom to restore
+已删除额度	Quota deleted
+已到期	Due
+已加上朋友圈规则	Moments rule added
+已加上视频号规则	Channels rule added
+已加入应用库，长按拖入冻结时段	Added to the tray; long-press to drag it into a window
+已合并成一个额度	Merged into one quota
+已启用	on
+已启用 · 	On · 
+已在段落边界	Already at the edge
+已处理 · 左右推换卡	Handled · left/right to switch cards
+已复制	Copied
+已套用：	Applied: 
+已存在同名笔记本	A notebook with that name already exists
+已学卡的复习\n按天复习时选“忘了”，约 10 分钟后进入重学；重学中仍忘记，再等约 10 分钟；重学中“费力想起”约 15 分钟后再学，记住后恢复按天复习。按天间隔根据评分动态计算，并从到期日零点开放，不是一律等满 24 小时。	Reviews for learned cards\nChoosing “forgot” in a day-based review starts relearning in about 10 minutes; forgetting again adds another 10. Choosing “hard” during relearning schedules the next step in about 15 minutes, and remembering returns to day-based reviews. Day intervals are computed from ratings and open at the start of the due day, not after a full 24 hours.
+已安排在各应用冻结结束后追加 · 长按可再认一次	Queued after each app's freeze ends · long-press to claim again
+已安排待接续罚时，各应用时间见冻结页	Queued a continuing penalty; see the freeze page for each app's time
+已安装字体	Installed fonts
+已完成	Completed
+已完成的总结	Finished summaries
+已完成的总结  ›	Finished summaries  ›
+已导入 	Imported 
+已导入的字体	Imported fonts
+已导出	Exported
+已开启	On
+已开启 · 未授予使用情况权限，无法计时	On · no usage access, cannot count
+已待 %d / %d 分钟，还差 %d 分钟	%d / %d min, %d min to go
+已恢复	Restored
+已恢复 · 打卡页和闸门都用新数据	Restored · the check-in page and gate now use the new data
+已恢复目标和打卡记录	Goal and its check-ins restored
+已恢复自动建议量	Suggestion restored
+已恢复默认颜色	Default colour restored
+已打卡 	Checked in 
+已打卡 · 左右推换目标	Checked in · left/right to switch goals
+已换成内置亚克力底	Switched to the built-in acrylic
+已撤销 	Undone: 
+已改为全天累计，额度和已用时间保留	Switched to all-day counting; quota and used time are kept
+已改回零点重置	Reset time back to midnight
+已放入 	Placed in 
+已放行 10 分钟	10-minute pass started
+已新增 	Added 
+已暂停（本地完整恢复后挂起）· 点「重新启用」即可恢复 · 	Paused (suspended after a full local restore) · tap “Re-enable” to resume · 
+已暂停，回来再从这一刻接上	Paused — resume picks up from here
+已有	Set
+已有同名学科，请先修改名称再恢复	A subject with that name exists; rename it before restoring
+已有同名学科，请直接使用原学科或换一个名称	A subject with that name exists; use the original or pick another name
+已有应用已保留，加入后不能直接移出	Existing apps were kept; added apps cannot be removed directly
+已有相同冻结时段，直接把应用拖进去即可	That window already exists; just drag the app into it
+已永久删除	Deleted forever
+已添加	Added
+已清空	Cleared
+已清除自定义图片	Custom image cleared
+已生成新密钥	New secret generated
+已用 %.0f%%，剩余 %.1f 分钟	%.0f%% used, %.1f min left
+已用 %.1f / %d 分钟 · 剩余 %.1f 分钟	Used %.1f / %d min · %.1f min left
+已移入回收站 · 撤回	Moved to trash · undo
+已移到最近删除，可在下方撤回	Moved to Recently deleted; restore it below
+已累计够一轮	One round reached
+已经提交的答题记录会保留。	Submitted answers are kept.
+已经是最新版本（	Up to date (
+已经有这张禁忌卡了	That taboo card already exists
+已经过去 	Passed 
+已经连续 %d 分钟没休息，站起来走走，看看远处。	%d minutes without a break — stand up, walk around, look into the distance.
+已获得的奖励与余额会保留。	Earned rewards and the current balance are kept.
+已解锁	Unlocked
+已解锁。	Unlocked.
+已认领 · 左右推换卡	Claimed · left/right to switch cards
+已达成	Unlocked
+已达标（%d 分钟）	Reached (%d min)
+已迁到「	Moved to “
+已返回应用库	Back in the tray
+已返回应用库，使用限额改为全天累计	Back in the tray; its quota now counts all day
+已选	Selected
+已选 	Selected 
+已锁定在本页 · 时间到才解锁	Locked to this page · unlocks when time is up
+常规 · 6	Normal · 6
+并到另一个额度…	Merge into another quota…
+应用 	Apps: 
+应用　　　	Apps      
+应用会表现为转圈、超时，而不是弹「已断网」；视频类通常还会显示缓存过的内容。	Apps show spinners and timeouts rather than a "no internet" notice, and video apps still play cached content.
+应用内关键词拦截要用；开了才读得到屏幕文字	Needed for in-app keyword blocking; screen text is unreadable without it
+应用内的文字将以这个大小显示	Text in the app is shown at this size
+应用列表正在加载，请稍后重试	The app list is still loading; try again shortly
+应用密码 / token（留空保留）	App password / token (leave blank to keep)
+应用已不在应用库中	The app is no longer in the app library
+应用已在应用库中	The app is already in the tray
+应用库	App tray
+应用库  ·  	App tray  ·  
+应用库  ·  上滑展开	App tray  ·  swipe up to expand
+应用排行	App ranking
+应用正在冻结，解冻后才能移动	This app is frozen; it can move once unfrozen
+应用还没装也可以先加：装上之后它会被自动冻结。\n包名必须完全一致，填错了这条规则不会匹配任何东西。	You can add an app before it is installed; it will be frozen once installed.\nThe package name must match exactly, or the rule matches nothing.
+底栏	Bottom bar
+度	°
+开	On
+开启动画效果	Animations on
+开启后，打卡页显示刷题卡；在刷题页面完成每日题数。20:00 未完成时参与学习联动。	When on, the quiz card appears on the check-in page; finish the daily count here. Unfinished at 20:00 feeds the study gate.
+开启后，打卡页显示记忆卡；在记忆页完成目标。20:00 时目标未完成会参与学习联动。\n开始答题后修改设置，次日生效。到期复习积压超过上限时，暂停新增卡片。	When on, memory cards appear on the check-in page and goals are completed on the memory page. Unfinished goals at 20:00 join the study gate.\nChanges after a session starts apply the next day. When overdue reviews exceed the cap, new cards pause.
+开启拦截	Keyword blocking
+开启提醒	Reminders
+开启断网	Cut network
+开启钥匙闸门	Key-app gate
+开启页面拦截	Block these pages
+开始	Start
+开始专注	Start focus
+开始休息	Start break
+开始学习 · 	Start · 
+开始新的练习？	Start a new session?
+开始新练习	Start new
+开张	First step
+开源组件与许可证	Open-source components and licences
+开源说明	Open-source notice
+强化	Intensive
+当前不是设备所有者，拦不住 Home 键。要真正锁住装部署包后重新授权。	Not device owner, so Home is not blocked. Install the provisioning package and re-grant to really lock.
+当前冻结状态不允许完整恢复	Full restore is not allowed while frozen
+当前卡库最多支持 30000 张卡片	The library holds at most 30000 cards
+当前只抽到期卡片。可在守卫 → 卡管理 → 记忆卡调整抽取设置。	Only due cards are drawn. Change that in Guard → Cards → Memory.
+当前尚未获得设备所有者授权，应用冻结尚未生效。\n\n请在 Windows 电脑解压完整部署包，连接手机并开启 USB 调试，再双击“开始安装.cmd”。部署工具会检查账号、分身、多用户及管理状态。\n\n部分手机需要自行备份后恢复出厂；工具不会自动清机。	Device owner is not granted yet, so app freezing is inactive.\n\nOn a Windows PC, unzip the full deployment package, connect the phone with USB debugging on, and double-click “开始安装.cmd”. The tool checks accounts, clones, multi-user and management state.\n\nSome phones need a manual backup and factory reset; the tool never wipes a device on its own.
+当前已冻结，解冻后再调整额度	Frozen now; adjust the quota after it unfreezes
+当前已冻结，解冻后才能移动	Currently frozen; it can move once unfrozen
+当前所有笔迹都会移除。	Every stroke will be removed.
+当前方案：	Current plan: 
+当前无额外冻结	No extra freeze right now
+当前时间　	Current time  
+当前没有禁忌卡带来的延长冻结	No freeze extension from taboo cards right now
+当前没有设备所有者权限，只能拦住返回键，Home 拦不住。要真正锁住请先完成设备所有者部署。	Without device owner only the back key is blocked; Home still works. Provision device owner to really lock the phone.
+当前版本 	Current version 
+当前版本 %s，可以升到 %s。	Current version %s, you can upgrade to %s.
+当前状态 / 应用详情	Status / app details
+当前状态：	Current status: 
+当前系统未提供语音识别服务	No speech recognition service on this system
+当前系统版本不需要单独授权	This Android version does not need it
+当前连续	Streak now
+当前：	Current: 
+当天已用时间会保留。重新添加相同应用会继续累计；原有冻结规则仍然生效。	Time already used today is kept. Re-adding the same apps continues from it; existing freeze rules still apply.
+当天无必做卡片	No required cards that day
+当天的打卡可点记录撤回；昨天及更早的记录已锁定。红色是认领禁忌	Today's check-ins can be undone by tapping them; yesterday and older are locked. Red marks a taboo claim.
+待办	To-do
+待办 	To-do 
+待办管理	To-do management
+待办管理 · 所选 	To-dos · selected 
+待安排	Unassigned
+待完成	To do
+待完成：	Pending: 
+待补总结	Summary due
+得填点东西	Type something first
+微信	WeChat
+微信朋友圈	WeChat Moments
+微信视频号	WeChat Channels
+必做卡片已完成	All required cards completed
+忘了	Forgot
+忽略电池优化	Ignore battery optimisation
+总结	Summarise
+总结 · 	Summary · 
+总结内容最多 20000 字	Summary text is limited to 20000 characters
+总结卡	Summary card
+总结卡 · 	Summary card · 
+总结卡、	Summary,
+总结周期不存在	That summary cycle does not exist
+总结周期天数	Summary cycle days
+总结周期已保存	Summary cycle saved
+总结周期已变化，请重新打开待办总结	The cycle changed; reopen the pending summary
+总结周期开始日期	Summary cycle start date
+总结周期数据异常	Summary cycle data is corrupted
+总结周期类型不一致	The summary cycle types do not match
+总结已完成	Summary complete
+总结已逾期，补完后解除本项学习联动	The summary is overdue; finishing it clears this study-gate link
+总结配置无效	The summary settings are invalid
+总计	Total
+总量	Total
+恢复	Restore
+恢复「	Restore “
+恢复回滚未完成，原始回滚文件已保留	Rollback did not finish; the original rollback files were kept
+恢复备份	Restore backup
+恢复失败 	Restore failed 
+恢复失败：	Restore failed: 
+恢复并重启	Restore and restart
+恢复当前待办	Reopen this to-do
+恢复所选待办	Reopen selected to-dos
+恢复未保存，请重试	The restore was not saved; try again
+恢复未开始：	Restore did not start: 
+恢复记忆备份	Restore memory backup
+恢复默认	Restore default
+恢复默认色板、默认主题色和鲜明风格。	Restores the default palette, accent and vivid style.
+悬浮	Floating
+惩罚期至 	Penalty until 
+想不起来 · 查看答案	Cannot recall · show answer
+成就	Achievements
+我的答案 / 解题思路（选填）	My answer / reasoning (optional)
+我知道了	Got it
+我确认将「	I confirm moving “
+截止日 yyyy-MM-dd（空 = 不限期）	Due date yyyy-MM-dd (empty = no deadline)
+截止日（空 = 30 天后自动）	Due date (empty = 30 days from now)
+所有应用都已经在这个格子里了	Every app is already in this cell
+所有应用都已经在这个额度里了	Every app is already in this allowance
+所绑时段限额 · 	Bound-hours quota · 
+所绑时段额度	Quota within bound hours
+所选学科的卡片今天已经复习过。可以调整学科范围，或明天继续。	Cards in the selected subjects are already reviewed today. Change the subject scope or continue tomorrow.
+手动上传最新本机台账	Manually upload the latest local ledger
+手指绘制 · 白色画纸	Draw with a finger · white paper
+打不开设置页，请在系统设置里手动搜索「使用情况访问」	Cannot open that page; search for usage access manually in system settings
+打卡	Check-in
+打卡 + 禁忌追加：	Check-in + taboo extension: 
+打卡 30 天	30 days logged
+打卡历史	Check-in history
+打卡外观	Check-in look
+打卡天数	Days in
+打卡字体	Check-in font
+打卡字体已更新	Check-in font updated
+打卡字体颜色	Check-in font colour
+打卡日历	Check-in calendar
+打卡日记已关闭。想在设置里打开，就在「打卡」一栏里。	Journal is off. Turn it on under Check-in in Settings.
+打卡日记已关闭，已有的日记不会删	Journal off. Existing notes are kept.
+打卡日记已打开	Journal on
+打卡未保存，当前卡片保留，请检查存储后重试	Check-in not saved. The current card was kept; check storage and retry.
+打卡未保存：	Check-in not saved: 
+打卡没完成 · 20:00 判断点	Missed check-in · judged at 20:00
+打卡罚时未能保存	Failed to save the check-in penalty
+打卡记录读不出来：	Can't read check-in records: 
+打卡设置	Check-in settings
+打卡追加：	Check-in extension: 
+打卡页背景	Check-in background
+扩写	Expand
+批量导入	Bulk import
+批量导入文本 / TSV	Bulk import text / TSV
+找不到 Excel 的第一个工作表	Cannot find the first worksheet
+把「%s」并到	Merge “%s” into
+把电话、导航、备忘录这类放进白名单，锁机不会把它们一起挡住。	Put phone, maps or notes here so a lock never blocks them.
+折合 	That's 
+抽取、学习计划、学科与卡片	Draws, study plan, subjects and cards
+抽取学科（可多选）	Draw subjects (multi-select)
+抽取数量请填写 1–1000	Draw size must be 1-1000
+抽取数量（1–1000 张）	How many cards (1-1000)
+抽取池	Draw pool
+抽取范围无效	Invalid draw scope
+抽取规则	Draw rule
+抽取规则无效	Invalid draw rule
+抽取设置  ·  	Draw settings  ·  
+抽奖 · 1–60 分钟	Draw · 1–60 min
+抽奖奖励 1–60 分钟 · 点击修改	Draw reward 1–60 min · tap to change
+拖入应用，放到这个时间里	Drag apps in to place them in this window
+拖动添加矩形遮挡。所有遮挡区域作为同一张卡复习。	Drag to add rectangle masks. All masked areas are reviewed as one card.
+拦什么页面	Which page to block
+拿不到 DevicePolicyManager	DevicePolicyManager unavailable
+拿到部署包后按说明执行，应用会自动变成「设备所有者」，冻结和锁机才真正生效。\n\n	Run the deployment package as documented and the app becomes device owner, which is when freezing and locking actually work.\n\n
+按你的表现调整\n使用 FSRS-6，根据每次评分、距上次复习的时间、卡片稳定性和难度计算下一次复习，不固定为第 1、3、7 天。它是排程模型，不保证每个人都能达到同样的记忆效果。	Adjusted to your performance\nUses FSRS-6 to schedule the next review from each rating, time since the last review, card stability and difficulty. It is not a fixed 1-3-7 day ladder. It is a scheduling model and does not promise the same results for everyone.
+按包名添加	Add by package
+按包名添加到冻结应用	Add to frozen apps by package name
+按时间表工作	Working to the schedule
+按章节练习	Practise by chapter
+换	Replace
+换个源	Switch source
+换个词试试，再点 ⌕ 收起搜索	Try another word, then tap ⌕ to close search
+换手机时导出或导入数据	Export or import data when switching phones
+换掉之后，家长验证器里原来那条就废了，要重新加一次。确定？	The old entry in the parent's authenticator stops working and must be added again. Continue?
+提交答案	Submit
+提醒	Reminder
+提醒 	Reminder 
+提醒时间已过，请重新设置或取消提醒	That time has passed. Set a new reminder or cancel it.
+插入/更新	Insert/Update
+插入图片或附件	Insert image or attachment
+插入末尾	Append
+搜索	Search
+搜索备忘录	Search notes
+搜索字体	Search fonts
+搜索应用	Search apps
+搜索应用名或包名	Search name or package
+搜索题干、章节或来源	Search question, chapter or source
+搜索题目或答案	Search questions or answers
+撤回删除「	Restore “
+撤销	Undo
+撤销最后一个遮挡	Undo the last mask
+撤销这笔打卡？	Undo this check-in?
+操作处理中…	Working…
+操作处理中，请稍候	Working, please wait
+操作失败	Action failed
+操作失败：	Failed: 
+操作未完成	Action not completed
+支持格式与模板	Formats and templates
+收下	Take it
+收藏夹	Starred
+收藏夹 · 	Saved · 
+收集曾经选择“忘了”的卡片。到期后自动进入学习队列。	Collects cards you once answered “forgot”. They rejoin the queue when due.
+改	Edit
+改每次默认完成量	Change the default amount
+改这一组的时段	Change hours for this group
+放一个日子进去	Put a date in
+放弃	Discard
+放弃并进入记忆	Discard and open memory
+放弃本次编辑？	Discard this edit?
+放弃这张涂鸦？	Discard this sketch?
+放行中	Allowed
+放行后再添加应用	Add apps after the block window ends
+放行已结束	Pass ended
+数字不能是 NaN 或无穷大	Numbers cannot be NaN or infinite
+数字必须有限	Numbers must be finite
+数据与备份	Data and backup
+数据与备份 · 本地存储 / 云端配置	Data & backup · local / cloud
+数据来自电脑端学习台，PC 没在同步就会空着 ——\n点右上角「刷新」重试。	Data comes from the desktop study desk. It stays empty while the PC is not syncing —\ntap “Refresh” at the top right to retry.
+数据量超出导入上限	Data exceeds the import limit
+数量填个数字	Enter a number
+数量要大于 0	Amount must be greater than 0
+文件为空	File is empty
+文件内容超过大小限制	File content exceeds the size limit
+文件损坏	file is damaged
+文件数：	Files: 
+文件是空的	The file is empty
+文件最多 16MB	Files up to 16MB
+文件超过 2 万字，请拆分后导入	File exceeds 20000 characters; split it and import again
+文件过大	File too large
+文件过大，导入文件最多 4MB	File too large; imports are limited to 4MB
+文内查找	Find in note
+文字大小，	Text size, 
+文字字段超过 16000 字	A text field exceeds 16000 characters
+文本缩放	Text size
+斜体	Italic
+断网应用设置	Network cut settings
+断网的应用	Cut-off apps
+新加了 	Added 
+新卡 0–200，复习 1–1000，目标 1–1000；名称不能为空	New cards 0-200, reviews 1-1000, goal 1-1000; the name cannot be empty
+新卡的短期学习\n“忘了”：约 1 分钟后可重学；首次“记住了”：约 10 分钟后再确认，再次记住后转入按天复习。“费力想起”：第一步约 5 分 30 秒，后续学习步约 10 分钟；“很轻松”可直接转入按天复习。分钟间隔表示重学计划的到期时间，不会让今日闪卡当天重复抽到该卡。	Short-term learning for new cards\n“Forgot”: relearn in about 1 minute. First “remembered”: confirm again in about 10 minutes, then move to day-based reviews. “Hard”: first step about 5 min 30 s, later steps about 10 minutes. “Easy” goes straight to day-based reviews. Those minute gaps are relearning due times and do not make the card reappear in today's set.
+新增 	Added 
+新建	New
+新建共享额度	New shared quota
+新建冻结时段	New freeze window
+新建单独额度	New single quota
+新建卡片	New card
+新建备忘录	New note
+新建科目	New subject
+新建笔记本	New notebook
+新建额度	New quota
+新目标	New goal
+无	None
+无冻结时段	No freeze windows
+无定时冻结	No scheduled freeze
+无序列表	Bullet list
+无效 Unicode 字符	Invalid Unicode character
+无时段（整天冻结）	No window (all-day freeze)
+无标题	Untitled
+无法保存冻结时区	Failed to save the freeze timezone
+无法保存附件	Cannot save the attachment
+无法写入备份	Cannot write the backup
+无法写入文件	Cannot write the file
+无法切换同步缓存	Cannot switch the sync cache
+无法创建临时目录	Cannot create the temp directory
+无法创建目录	Cannot create the directory
+无法创建附件目录	Cannot create the attachment directory
+无法打开文件	Cannot open the file
+无法打开目标文件	Cannot open the target file
+无法打开附件，请检查文件是否存在或安装对应应用	Cannot open the attachment. Check that the file exists or install an app that handles it.
+无法提交恢复	Cannot commit the restore
+无法暂停旧版同步，恢复未开始	Could not pause legacy sync; restore did not start
+无法暂存恢复附件	Cannot stage attachments for restore
+无法暂存附件	Cannot stage the attachment
+无法替换旧文件	Cannot replace the old file
+无法清理未开始的恢复	Cannot clear an unstarted restore
+无法结束回滚	Cannot finish the rollback
+无法编码备份	Cannot encode the backup
+无法编码笔记本数据	Cannot encode notebook data
+无法解码文件，请另存为 UTF-8	Cannot decode the file; save it as UTF-8
+无法读取图片	Cannot read the image
+无法读取备份	Cannot read the backup
+无法读取文件	Cannot read the file
+无法读取文字编码，请另存为 UTF-8	Cannot read the text encoding; save it as UTF-8
+无法读取附件	Cannot read the attachment
+无法读取附件目录	Cannot read the attachment directory
+无背景（纯色）	No background (solid colour)
+无障碍	Accessibility
+无障碍服务	Accessibility service
+无障碍服务没开，不会生效	Accessibility off, so nothing happens
+日历	Calendar
+日期已更新，请从今日闪卡继续	The date changed; continue from today's flashcards
+日期来自当天记下的必做卡状态（打开 App 或守卫轮询时写入）；同一天多种卡只算一次。	Dates come from the required-card status recorded that day (written when you open the app or the guard polls); several card types on one day count once.
+日期须为有效的 yyyy-MM-dd	Date must be a valid yyyy-MM-dd
+日记	Journal
+日记已保存	Journal saved
+旧版 .xls 请先另存为 .xlsx 或 CSV	Save legacy .xls as .xlsx or CSV first
+早上好	Good morning
+时	h
+时段	Window
+时段内有正在冻结的应用，放行后再修改	The window holds frozen apps; edit it after they are allowed
+时段冻结	Window freeze
+时间段	Window
+时间表守护	Schedule guard
+时间限额	Time quotas
+时间限额、用量统计要用；不授权就不计时	Needed for limits and usage. No access, no timing.
+昨天 	Yesterday 
+是（已锁死）	Yes (locked down)
+显示答案	Show answer
+晚上好	Good evening
+暂停	Pause
+暂无可抽取的闪卡	No cards to draw
+暂无启用的总结周期	No summary cycle enabled
+暂无学科。请到守卫 → 卡管理 → 刷题卡添加学科、导入题库或恢复学科。	No subjects yet. Go to Guard → Cards → Quiz to add a subject, import questions or restore one.
+暂无学科，点击上方添加，或从回收站恢复。	No subjects yet. Add one above, or restore from trash.
+暂无已完成总结	No finished summaries yet
+暂无法确认保存结果，本次记录编号已保留；请稍后再次确认原卡片	Cannot confirm the save yet. This entry's id was kept; confirm the same card again shortly.
+暂无自建笔记本	No notebooks of your own yet
+暂无记录	No records yet
+暂时无法读取	Cannot read right now
+暂未完成	Not done yet
+暖纸	Warm paper
+更多	More
+更多设置	More settings
+更换密钥	Replace secret
+更改 API 地址时请重新填写密钥	Re-enter the key when you change the API address
+更新源今天被问得太多，明天再试	The update source has been asked too often today, try again tomorrow
+更新源给的内容看不懂	the update source returned something unreadable
+更新源还没有发布过版本	The update source has no releases yet
+替换原文	Replace
+替换未完成的练习队列？	Replace the unfinished queue?
+最多 	Up to 
+最多 4MB	Up to 4MB
+最多 5000 题	At most 5000 questions
+最多创建 200 个卡组	At most 200 decks
+最多设置100个限额格子	At most 100 quotas
+最近一次应用 · 	Last apply · 
+最近删除 · 可撤回目标和原有打卡记录	Recently deleted · goals and their check-ins can be restored
+最近流水  ▸	Recent entries  ▸
+最近流水  ▾	Recent entries  ▾
+最长连续	Best streak
+月视图、每天明细与打卡日记 ›	Month view, daily detail and journal ›
+有 %d 个词只有一个字，几乎一定会误拦，建议改成两三个字的词。	%d keyword(s) are a single character and will almost certainly misfire — use two or three.
+有序列表	Numbered list
+有效复习 +1，进度已保存	Valid review +1, progress saved
+服务器返回 	Server returned 
+未保存的笔迹将被丢弃。	Unsaved strokes will be lost.
+未取得设备所有者权限	Device owner not granted
+未启用	Off
+未启用 · 本机照常保存，只是不往云端推	Off · saved locally as usual, just not pushed to the cloud
+未安装	Not installed
+未完成卡日	Days with missing cards
+未完成卡片日期	Days with missing cards
+未完成日期，点击展开	Days with gaps; tap to expand
+未完成：	Unfinished: 
+未开启	Off
+未找到 Markdown 表格（需要表头与分隔行）	No Markdown table found (needs a header and a separator row)
+未找到匹配	No matches
+未找到可编辑表格，或包含不支持的竖线转义	No editable table found, or it uses an unsupported pipe escape
+未找到字体	No fonts found
+未授予使用情况权限，暂不计时	Usage access not granted, so timing is paused
+未授权	No access
+未授权或用量暂不可读，暂不计时	Not authorised or usage unreadable; timing paused
+未来倒计时	Countdown
+未知卡片类型	Unknown card type
+未知字段：	Unknown field: 
+未知设置类型	Unknown setting type
+未知题型 	Unknown question type 
+未选择冻结星期，不定时冻结，已保存	No freeze days selected: no scheduled freeze. Saved.
+未限额	No quota
+本地备份已导出	Local backup exported
+本地题库暂时无法读取	The local question bank cannot be read right now
+本日	Today
+本日已复习 	Reviewed today 
+本日记忆闪卡	Today's memory cards
+本日闪卡已完成	Today's cards are done
+本月	This month
+本月 	This month 
+本月合计	This month
+本月应用排行	Top apps this month
+本月应用排行 · 游戏时长 · 娱乐占比趋势	Top apps this month · game time · entertainment share
+本月打卡天数	Days this month
+本月打卡笔数	Entries this month
+本月没有游戏类应用的前台记录	No game app foreground time this month
+本期	This one
+本机备份	Local backup
+本次减免剩余 	Remaining offset 
+本轮完成	Session done
+本轮已完成 	Finished 
+本题已经记录，请进入下一题	Already recorded; move to the next question
+本题未提供解析。	No explanation was provided for this question.
+来源	Source
+来源（教材 / 页码 / 链接）	Source (textbook / page / link)
+来源：	Source: 
+松手放入这个时段	Release to drop into this window
+松手返回应用库	Release to return to the tray
+松手，今天没做	Release to mark as skipped
+松手，完成热爱	Release to finish this passion
+松手，打卡	Release to check in
+松手，看下一个 →	Release to see the next one →
+松手，认领「	Release to claim “
+极致	Max
+柔和	Soft
+查找标题和正文	Search titles and bodies
+查看与完成总结  ›	View and finish summaries  ›
+查看总结	View summary
+查看本轮结果	See session results
+查看答案与解析	Show answer and analysis
+查看重学倒计时	See relearning countdown
+标准	Standard
+标题	Title
+校验卡片	Validate cards
+校验并预览	Validate and preview
+核对后：做对了	Checked: got it right
+核对后：需复习	Checked: needs review
+核对答案	Check answer
+格子名称、应用或分钟数无效（1–1440整数分钟）	Invalid name, apps or minutes (whole minutes, 1-1440)
+格子名称（可选）	Quota name (optional)
+格式	Format
+格式错误：	Format error: 
+格式面板	Format panel
+检查失败：	Check failed: 
+检查失败：官方源和镜像都连不上，过会儿再试	Check failed: neither the official source nor the mirrors are reachable, try again later
+检查失败：更新源没有给出版本号	Check failed: the update source returned no version
+检查失败：更新源给的内容看不懂	Check failed: the update source returned something unreadable
+检查失败：服务器返回 	Check failed: HTTP 
+检查并预览	Check and preview
+检查题库	Check questions
+检测并应用中…	Checking and applying…
+模型名称	Model name
+模板 / 导出题库 / 格式说明	Template / export / format guide
+橙色	Orange
+次日 	next day 
+正在上传	Uploading
+正在准备恢复…	Preparing the restore…
+正在导出本地备份…	Exporting the local backup…
+正在校验本地备份…	Verifying the local backup…
+正在校验题目与重复项…	Checking questions and duplicates…
+正在检查…	Checking…
+正在生成…	Generating…
+正在确认上一笔保存结果	Confirming the previous save
+正在读取图片…	Reading image…
+正在读取字体…	Reading fonts…
+正在读系统使用数据…	Reading system usage data…
+正在转换文件，稍后显示导入预览…	Converting files; the preview appears shortly…
+正在验证账号与 Gist…	Verifying account and Gist…
+正念空间	Mindfulness
+正文	Body
+正文已变化，请重新打开表格	The body changed; reopen the table
+正文已变化，请重新生成后再替换	The body changed; regenerate before replacing
+正文已达到 2 万字上限	Body has reached the 20000-character limit
+正文超过2万字	Body exceeds 20000 characters
+正确 	Correct 
+正确答案	Correct answer
+正面	Front
+此操作无法撤回。	This cannot be undone.
+段落 	Paragraph 
+每	Every 
+每 	Every 
+每 %d 分钟 · %s	Every %d min · %s
+每个字段最多 20000 字	Each field holds at most 20000 characters
+每周	Weekly
+每周总结	Weekly summary
+每天	Daily
+每天 10 分钟以内，间隔更长	Under 10 minutes a day, longer intervals
+每天 1–1440 分钟	1-1440 minutes per day
+每天1–1440分钟	1-1440 minutes per day
+每天冻 21-23	Freeze 21-23 daily
+每天冻 22-23	Freeze 22-23 daily
+每天几点重置额度	Daily limit reset time
+每天总结	Daily summary
+每天最多完成一张热爱卡，等概率抽取 1–60 分钟。余额自动抵扣后续定时冻结，学习联动和禁忌惩罚仍然有效。	One passion card per day. The reward is drawn evenly from 1-60 minutes. The balance auto-offsets later scheduled freezes; study-gate and taboo penalties still apply.
+每天核对每张卡，记录做了还是没做	Review every card daily: did it or did not
+每天每张卡只计一次。新卡和遗忘卡须完成学习步骤后才计数。\n今日目标最多为今日队列数量。开始答题后，当日计划固定，设置次日生效。	Each card counts once a day. New and forgotten cards count only after their learning steps are done.\nToday's goal cannot exceed today's queue. Once you start answering, the day's plan is fixed and settings apply tomorrow.
+每张卡片必须是对象	Each card must be an object
+每张热爱卡的奖励只能为 1–60 分钟	Each passion card rewards 1-60 minutes
+每日 %d:00	Daily at %d:00
+每日20:00检查；未完成则在各应用自身冻结结束后接续，持续至任务完成，不设固定分钟数。正在放行的应用接在下一段冻结之后，不提前打断放行。待接续跨零点保留；完成任务解除。热爱奖励不抵扣。	Checked daily at 20:00. If goals are unmet, the penalty continues after each app's own freeze ends and lasts until goals are done, with no fixed minutes. Apps currently allowed are not interrupted; the penalty starts after their next freeze. Pending penalties survive midnight and clear when goals are finished. Passion rewards do not offset this.
+每日分钟数（1–1440），0为取消	Minutes per day (1-1440); 0 cancels
+每日复习上限（1–1000）	Daily review cap (1-1000)
+每日完成记录无效	Invalid daily completion record
+每日新卡上限（0–200）	Daily new-card cap (0–200)
+每日有效复习目标（1–1000）	Daily valid review goal (1-1000)
+每日目标、学习联动、学科与题库。	Daily goal, study gate, subjects and banks.
+每日目标、学习联动与题库	Daily goal, study link and question bank
+每日计划卡片无效	Invalid daily plan card
+每日计划字段无效	Invalid daily plan field
+每日计划格式无效	Malformed daily plan
+每日限额只在 22:00–23:00 可改	Daily quotas are editable only 22:00-23:00
+每日限额已保存	Daily quota saved
+每日限额已暂停	Daily quota is paused
+每日限额已锁定，仅每天22:00–23:00可修改	Daily quota is locked; it opens only 22:00-23:00
+每日限额未能保存	Failed to save the daily quota
+每日限额用尽	Daily quota used up
+每日限额用量未能保存	Failed to save daily quota usage
+每日限额配置无效	The daily quota settings are invalid
+每日限额配置无法读取	Daily quota config is unreadable
+每日零点	Midnight daily
+每日题数与学习联动	Daily question count and study gate
+每日题数须为 1–1000	Daily question count must be 1-1000
+每日题数（1–1000）	Questions per day (1-1000)
+每月	Monthly
+每月总结	Monthly summary
+每次认领延长冻结	Freeze extension per claim
+每次锁多久	Lock for
+每次默认 +	Default +
+每行一张，用 Tab 分隔：题目、答案、来源（可选）、备注（可选）。\n可从表格复制两列。完全相同的卡片会跳过。\n示例：memory〔Tab〕记忆	One card per line, tab-separated: question, answer, source (optional), note (optional).\nYou can copy two columns from a spreadsheet. Identical cards are skipped.\nExample: memory[Tab]记忆
+每道题必须是 JSON 对象	Each question must be a JSON object
+每道题必须是对象	Each question must be an object
+每隔你填写的天数完成一次总结。填写天数会自动勾选启用。	A summary is due every N days you enter. Typing a number enables this automatically.
+每隔多久提醒	Remind me every
+每隔多久锁一次	Lock every
+氛围	Moody
+永久删除	Delete forever
+永久删除？	Delete forever?
+没有 token	No token
+没有冻结时段 = 不定时冻结（学习闸门仍可生效）	No freeze hours = no scheduled freeze (the study gate still applies)
+没有匹配的应用	No matching app
+没有可导入的新卡片（空内容或完全重复）	No new cards to import (empty or exact duplicates)
+没有可用的分享应用	No app available to share with
+没有可用的文件选择器	No file picker available
+没有可用的系统文件选择器	No system file picker available
+没有应用	No apps
+没有找到备忘录	No notes found
+没有新题目	No new questions
+没有能打开这个链接的浏览器	No browser can open this link
+没有能选文件的程序	No app on this device can pick files
+没有要写的内容	Nothing to write
+没有设备所有者，锁机拦不住 Home 键	Without device owner a lock cannot stop the Home key
+没看懂，填个分钟数	Not understood. Enter a number of minutes.
+没给 VPN 授权，断网开不了	No VPN permission, so the cut cannot start
+没能保存	Couldn't save
+没选应用（屏蔽中的会被跳过）	No apps selected (apps in block windows are skipped)
+浅底大标题 · 圆角白卡	Big titles · soft cards
+浅底白卡	Soft cards
+浅绿	Pale green
+浅色	Light
+浅蓝	Pale blue
+浏览题库	Browse questions
+涂鸦	Sketch
+涂鸦-	Sketch-
+涂鸦画布	Sketch canvas
+涟漪风格	Ripple
+润色	Polish
+液态玻璃	Liquid glass
+液态玻璃 · 自定义配色	Liquid glass · custom colours
+深色	Dark
+添加	Add
+添加一件自己热爱的事，例如练琴、运动或绘画。	Add something you love, like piano, sport or drawing.
+添加一张禁忌卡后，每天都可以单独确认它。	Once you add a taboo card, you can confirm it daily.
+添加学科	Add subject
+添加禁忌卡	Add taboo card
+添加限额格子	Add quota
+添加颜色	Add colour
+清空	Clear
+清空画布？	Clear the canvas?
+清除	Clear
+清除 AI 设置？	Clear AI settings?
+清除拦截记录	Clear history
+清除自定义图片	Clear the custom image
+清除设置	Clear settings
+游戏时长	Game time
+滑块	Sliders
+满勤	Full days
+满勤 ×10	Perfect days ×10
+满勤 ×50	Perfect days ×50
+点一行改它的冻结时间。时段相同的一批应用会折成一张卡，点卡片展开明细。	Tap a row to change its freeze time. Apps sharing the same hours fold into one card; tap it for details.
+点一行改它的冻结时间，长按从冻结应用移除。	Tap a row to change its freeze time. Long-press to remove it.
+点下面去开：找到 AwayFromShorts，允许「使用情况访问」。	Tap below to open it: find AwayFromShorts and allow usage access.
+点右上角 ＋ 写第一条	Tap + at the top right to write the first one
+点某一天看明细，也能补写日记	Tap a day for details, or to write the journal
+点色块直接生效；或输入十六进制色值后点「用输入的颜色」。✓/数量等状态色不跟随。	Tap a swatch to apply instantly, or type a hex value and tap “Use typed colour”. Status colours (✓, counts) do not follow.
+热爱卡	Passion card
+热爱卡不存在	Passion card not found
+热爱卡回收站	Passion card trash
+热爱卡配置无效	The passion card settings are invalid
+热爱名称	Passion name
+热爱名称须为 1–80 字	Passion name must be 1-80 characters
+热爱奖励	Passion reward
+热爱奖励余额 · 跨天累计 · 自动抵扣定时冻结	Passion reward balance · carries over days · auto-offsets scheduled freezes
+热爱奖励记录违反每日上限	A passion reward entry exceeds the daily cap
+热爱抽奖 · 	Passion draw · 
+特粗 · 24	Extra · 24
+状态	Status
+现在 	now 
+现在只有「	Right now you only have 
+现在只能加 · 移除或减少要等 	Adding only · removing or lowering waits for 
+现在只能加分钟数，调小要等每天 22:00–23:00	You can only add minutes now; lowering waits for 22:00–23:00
+现在只能加：勾上就进这个格子。想把应用拿出去，等每天 22:00–23:00。	Adding only: tick an app to put it in. To take one out, come back at 22:00–23:00.
+现在只能加：把成员减到一只要等每天 22:00–23:00	Adding only: trimming members down to one waits for 22:00–23:00
+现在每天 	Daily reset at 
+现在用的不是自定义图片	No custom image is in use right now
+现在设	Set now
+现在默认记 	Defaults to 
+现在：	Now: 
+现有备忘录数据无效	Existing note data is invalid
+现有规则保持生效：	Current rules stay in effect:
+生效时段	Active hours
+用亲友解锁码提前结束	End early with a family code
+用户名（可选）	Username (optional)
+用输入的颜色	Use typed colour
+用量数据无效	Invalid usage data
+用量暂不可读，保护性冻结	Usage unreadable; frozen as a safeguard
+用量记录损坏，限额保护性冻结至次日	Usage ledger is corrupted; quota frozen until tomorrow as a safeguard
+用默认的	Use default
+电脑端应用时长	Desktop app time
+画笔粗细	Brush width
+画笔颜色	Brush colour
+界面语言已切换	Language switched
+界面风格	Interface style
+界面风格：	Interface style: 
+番茄钟	Pomodoro
+番茄钟 · 正念 · 倒计时	Pomodoro · mindful
+百日记	Hundred days
+监控哪些应用	Apps to watch
+目录须为不含 .. 的相对路径	The directory must be a relative path without ..
+目标列表	Goals
+目标列表已满，请先导出或整理记录	The goal list is full; export or tidy records first
+目标卡	Goal card
+目标卡、	Goal,
+目标已完成	Goal complete
+目标应用	Watched apps
+目标白 · 禁忌黑 · 记忆黄 · 刷题蓝 · 热爱粉 · 总结红\n点击日期查看数量与完成状态；点击日期范围可选择历史区间。	Goals white · taboos black · memory yellow · quiz blue · passion pink · summary red\nTap a date for counts and completion; tap a range to pick history span.
+目标管理	Goals
+目标记忆率与间隔\n默认目标记忆率为 90%，可在各学科学习设置中调整为 70–97%。调高目标通常会缩短复习间隔、增加复习量；目标记忆率是模型参数，不是测得的个人记忆率。按天间隔至少 1 天，并受该学科的最大间隔限制。当前未使用个人历史自动训练参数。	Target retention and intervals\nDefault target retention is 90% and can be set to 70-97% per subject. Raising it usually shortens intervals and increases workload; it is a model parameter, not a measured personal retention. Day intervals are at least 1 day and capped by the subject's maximum. Parameters are not auto-trained on your history yet.
+目标记忆率请填写 70–97（百分比）	Target retention must be 70-97 (percent)
+目标记忆率（70–97%）	Target retention (70-97%)
+目标超过队列数量	The goal exceeds the queue size
+目标进度	Goal progress
+直接填写周期天数，例如21天、40天。自定义周期可与每周、每月总结同时启用；各周期分别完成，取消周期不会清除已经到期的总结。	Enter a cycle length in days, such as 21 or 40. The custom cycle can run alongside weekly and monthly summaries; each cycle is completed separately, and cancelling a cycle does not erase summaries already due.
+直接选择 JSON、CSV、TSV、Excel（.xlsx）、带标记的 TXT/MD 文件，支持多选合并；每个源文件最多 16MB，转换后合计最多 4MB、5000 题。\n\n表格首行使用：科目、章节、题型、题干、A、B、C、D、答案、解析、来源。题干、答案必填；Excel 读取第一个工作表，公式单元格须先粘贴为值。CSV/TSV 支持 UTF-8、GB18030 和带 BOM 的 UTF-16。\n\nJSON：数组，或 {name, subject, questions:[…]}。题目使用 stem、answer、options、analysis 等字段。选择题答案为 B 或 AC，判断题为正确/错误。\n\nTXT/MD 使用 [科目]、[章节]、[题目]、[答案]、[解析] 标记；选项写 A. …，两题之间单独一行 ---。可在此页导出模板。\n\n公式用 $…$ 或 $$…$$ 包围；JSON 中反斜杠双写。\n重复题跳过，格式错误整批不写入；确认预览后才导入。PDF、Word、图片和旧式 .xls 需先整理。导出题库不含答题进度。	Pick JSON, CSV, TSV, Excel (.xlsx) or tagged TXT/MD files; several can be merged. Each source file is up to 16MB, and the converted total is up to 4MB or 5000 questions.\n\nSpreadsheet header: subject, chapter, type, stem, A, B, C, D, answer, analysis, source. Stem and answer are required. Excel reads the first sheet, and formula cells must be pasted as values first. CSV/TSV support UTF-8, GB18030 and UTF-16 with BOM.\n\nJSON: an array, or {name, subject, questions:[…]}. Questions use stem, answer, options, analysis and similar fields. Multiple choice answers look like B or AC; true/false answers are 正确/错误.\n\nTXT/MD use [subject], [chapter], [question], [answer], [analysis] tags; options are written A. …, and questions are separated by a line with ---. Templates can be exported on this page.\n\nWrap formulas in $…$ or $$…$$; double backslashes in JSON.\nDuplicate questions are skipped and malformed batches are rejected whole; nothing imports until you confirm the preview. PDFs, Word files, images and legacy .xls need cleaning up first. Exports never include answer progress.
+看的是系统使用记录里今天在这些应用里的累计时长，不看打卡，也不上传。没开使用情况权限时不计时。	Uses today's accumulated time in these apps from the system usage log. No check-ins involved, nothing uploaded. Without usage access it cannot count.
+知识图片，显示答案后揭开标注	Knowledge image; masks lift when the answer is shown
+知道了	Got it
+码不对，或者已经过期了	Wrong or expired code
+确定	OK
+确定颜色	Apply colour
+确认	OK
+确认入库	Confirm import
+确认删除	Delete
+确认后仅新增卡片，已有卡片和复习记录保留。复习独立于打卡。	Confirming only adds cards; existing cards and review history are kept. Reviews are separate from check-ins.
+确认导入预览	Confirm import
+禁	No
+禁卸载	No uninstall
+禁安全模式	No safe mode
+禁强停/清数据	No force-stop/clear data
+禁忌内容与惩罚时长	Taboo content and penalty length
+禁忌卡	Taboo card
+禁忌卡  /  每日确认	Taboo  /  Daily check
+禁忌卡 · 每天一张	Taboo card · one per day
+禁忌卡列表	Taboo cards
+禁忌卡待确认 	Taboo cards pending 
+禁忌名称，如：吃辣、吃甜	Taboo name, e.g. spicy food, sweets
+禁忌延长冻结	Taboo extension
+禁忌惩罚到点自动解除，没有解除按钮	Taboo penalties expire on their own; there is no release button
+禁忌罚时无法读取	The taboo penalty record cannot be read
+禁忌罚时未能保存	Failed to save the taboo penalty
+禁忌追加：	Taboo added: 
+禁恢复出厂	No factory reset
+禁改时间	No clock change
+离开专注页时计时停住了，现在接着走	The timer stopped while you were away; it is running again now
+离开卡片编辑？	Leave card editing?
+科目	Subject
+科目名称请填写 1 至 40 个字，不能包含换行	Subject name must be 1 to 40 characters with no line breaks
+移入	Move
+移入回收站	Move to trash
+移入回收站？	Move to trash?
+移出冻结列表	Remove from the freeze list
+移出冻结应用	Remove from frozen apps
+移动到笔记本	Move to notebook
+移除	Remove
+移除勾选框	Remove checkbox
+移除或减少要等每天 22:00–23:00	Removing or lowering waits for 22:00–23:00
+移除格子	Remove quota
+移除这个限额格子？	Remove this quota?
+空行	Blank line
+窗口类名	Window class
+立即应用	Apply now
+章节	Chapter
+笔记会移回默认笔记本，不会删除笔记。	Notes move back to the default notebook; none are deleted.
+笔记分类记录已满	Category records are full
+笔记本	Notebooks
+笔记本不存在	Notebook not found
+笔记本保存失败，请重试	Failed to save notebooks. Try again.
+笔记本名称须为 1 至 60 字，且不能包含换行	Notebook name must be 1-60 characters with no line breaks
+笔记本已达到 100 个上限	You already have 100 notebooks
+笔记本数据损坏，请恢复本地备份	Notebook data is corrupted; restore a local backup
+笔记本数据无效，未导入	Notebook data invalid; nothing imported
+笔记本：	Notebook: 
+笔记：文件导入、导出与合并恢复	Notes: import, export, merge restore
+笔迹已达上限，请保存后继续新建	Stroke limit reached; save before starting a new one
+第 	Line 
+第一次打卡	Check in once
+答案	Answer
+答案 answer 不能为空	answer cannot be empty
+答案不匹配，本次计为遗忘，稍后重学	Answer did not match; counted as forgotten and shown again later
+答案与解析	Answer and analysis
+答案匹配	Answers match
+答案请填选项字母	Put option letters in the answer
+答案超出选项范围	The answer is outside the options
+答案（输入题可用 | 分隔可接受答案）	Answer (for typed questions, separate accepted answers with |)
+简洁线条 · 清晰选中	Clean lines · clear selection
+简约风格	Minimal
+算了	Never mind
+管理	Manage
+管理学科	Manage subjects
+管理笔记本	Manage notebooks
+管理进度、默认完成量和打卡设置	Manage progress, default amounts and check-in settings
+管理额度	Manage quotas
+类型	Type
+粗 · 12	Thick · 12
+粗体	Bold
+粗细	Width
+粗细 	Width 
+粘贴 JSON、带表头的 CSV/TSV，或用 [题目]、[答案] 标记的文本	Paste JSON, CSV/TSV with a header, or text tagged with [question] and [answer]
+粘贴内容	Paste content
+粘贴题库	Paste questions
+粘贴题库内容	Paste question bank content
+精确闹钟	Exact alarms
+精简	Shorten
+系统使用记录暂不可读，额度保护性冻结	System usage records unreadable; quota frozen as a safeguard
+系统同一时间只允许一个 VPN：开了它就要关掉代理，否则两边都用不了。	The system allows one VPN at a time: turn the proxy off first, or neither will work.
+系统设置	System Settings
+系统还没攒出本月数据（刚授权 / 刚开机）	The system has no data for this month yet (just granted / just booted)
+紫色	Purple
+累计亮屏多久就锁	Lock after this much screen-on time
+累计写下 500 条记录	Log 500 entries in total
+累计天数	Total days
+累计打卡 100 天	Check in on 100 days
+累计打卡天数	Days all time
+累计打卡笔数	Entries all time
+累计自 	Since 
+红色	Red
+纯黑	True black
+纯黑模式	True black
+纸张背景	Paper background
+纸张记录已满	Paper records are full
+线性代数	Linear algebra
+线条清晰	Crisp lines
+练习 	Practice 
+练习本题	Practise this one
+练习这些题	Practise these
+细 · 3	Fine · 3
+终端	Terminal
+结束引号后应为分隔符或换行	A closing quote must be followed by a separator or newline
+结束这一轮	End this round
+结果：	Result: 
+给它起个名字	Give it a name
+给这 	Apply to these 
+统一管理卡片、学习联动和奖励。	Manage cards, study linkage and rewards in one place.
+统计	Stats
+统计中	Collecting…
+统计失败，稍后重试	Stats failed. Try again later.
+统计要读系统的应用使用时长（按 Android 的规矩，这一项必须用户在系统设置里亲手开）。\n	Stats read system app usage time, which Android only allows if you turn it on yourself in system settings.\n
+继续	Resume
+继续 · 加入重学	Continue · add to relearning
+继续上次	Continue
+继续上次 · 	Continue · 
+继续绘制	Keep drawing
+继续编辑	Keep editing
+绿色	Green
+编号	Id
+编辑	Edit
+编辑中 · 	Editing · 
+编辑体验参考 Markor（Apache-2.0）。\n基础 Markdown 预览使用其 GsSimpleMarkdownParser 组件（Unlicense / CC0-1.0）。\n作者：Gregor Santner。\nhttps://github.com/gsantner/markor\n\n支持标题、粗体、斜体和列表；不加载远程图片，不执行 HTML。文件为 UTF-8 纯文本。	Editing is inspired by Markor (Apache-2.0).\nBasic Markdown preview uses its GsSimpleMarkdownParser component (Unlicense / CC0-1.0).\nAuthor: Gregor Santner.\nhttps://github.com/gsantner/markor\n\nSupports headings, bold, italic and lists; no remote images, no HTML execution. Files are UTF-8 plain text.
+编辑冻结时段	Edit freeze window
+编辑卡片	Edit card
+编辑热爱卡	Edit passion card
+编辑目标	Edit goal
+缺关键词或目标应用，不会生效	No keywords or no target apps, so nothing happens
+缺少备份正文	Backup body missing
+缺少备份清单	Backup manifest missing
+缺少必要字段或版本不支持	Missing required fields, or an unsupported version
+网格	Grid
+罚时还没到点：继续冻结到 	Penalty still running: frozen until 
+置顶	Pin
+置顶字段无效	Invalid pinned field
+翻译成中文	Translate to Chinese
+翻译成英文	Translate to English
+考前冲刺	Exam sprint
+背景	Background
+背景图片与亚克力	Background image and acrylic
+背景已换	Background changed
+背面	Back
+能冻结、能锁机	Can freeze and lock
+能冻结应用、能真锁屏、能把你请出应用。这是完整形态。	Can freeze apps, really lock the screen and kick you out of an app. This is the full form.
+能力等级	Capability level
+能读屏做关键词拦截、能按返回键，但冻不住应用、锁屏拦不住 Home。	Can read the screen for keyword blocking and press Back, but cannot freeze apps and Home still escapes a lock.
+能读屏拦截	Can read the screen
+自动	Auto
+自动：词表为输入卡，其余为问答	Auto: word lists become typed cards, the rest Q&A
+自定义	Custom
+自定义…	Custom…
+自定义周期修改将在旧总结补完后生效：每 	Cycle changes apply after pending summaries are done: every 
+自定义天数	Custom days
+自定义科目与题库，按自己的节奏练习。	Your own subjects and question banks, at your own pace.
+自定义颜色	Custom colour
+至少选择一个学科	Pick at least one subject
+色值不对，形如 #FFD700	Bad colour value; use the form #FFD700
+色相	Hue
+节律 	Rhythm 
+英语单词	English words
+草稿尚未保存	Draft not saved yet
+草稿未能恢复，原缓存已保留	The draft could not be restored; the original cache was kept
+草稿缓存失败，请尽快保存图片	Draft caching failed; save the image soon
+蓝色	Blue
+蓝色表示定时冻结 · 学习联动另计	Blue means a scheduled freeze · study gate counts separately
+补推失败，检查网络后点「上传打卡数据」重试	Push failed. Check the network and tap “Upload check-in data”.
+表头为空或重复：	Header is empty or duplicated: 
+表格	Table
+表格 · 首行为表头	Table · first row is the header
+表格为空	The sheet is empty
+表格位置无效	Invalid table position
+表格分隔行列数不一致	Separator row has a different column count
+表格分隔行须使用 ---	The table separator row must use ---
+表格引号位置错误	Misplaced quote in the sheet
+表格引号未闭合	Unterminated quote in the sheet
+表格数据无效	Invalid table data
+表格文本无效或超过 2 万字	Table text invalid or over 20000 characters
+表格最多 5000 题	Sheets hold at most 5000 questions
+表格每行列数必须一致	Every row must have the same number of columns
+表格超过正文 2 万字上限	The table pushes the body past 20000 characters
+表格须为 1 至 20 行、1 至 10 列（含表头）	A table needs 1-20 rows and 1-10 columns (header included)
+要更硬的隔离，让家长在自己手机上生成 32 位密钥再手输进来。	For a harder barrier, have the parent generate a 32-character secret on their own phone and type it in.
+要装部署包	Needs the provisioning package
+要说明的边界：密钥存在这台手机上，能打开这一页的人就看得到。	Be clear about the limit: the secret lives on this phone, so anyone who can open this page can read it.
+规则	Rules
+规则只在选定的应用里生效。屏幕内容只在本机比对，不保存、不上传。	Rules apply only in the apps you picked. Screen text is compared on this device only; nothing is stored or uploaded.
+视频号规则已经在里面了	The Channels rule is already there
+解不开这张图	Cannot decode this image
+解析	Analysis
+解答	Solution
+解答题	Free response
+解释	Explanation
+解锁了 	Unlocked 
+解锁成就：	Achievement unlocked: 
+计时中 · 返回键已被拦住	Running · back key blocked
+认了	Claimed
+认页面靠窗口类名或页面文字：类名更准（视频号那种独立页面用 finder 就够），填文字方便但同样的字出现在别处也会被拦。	Pages are recognised by window class or on-screen text: class names are precise (finder is enough for Channels); text is easier to fill, but the same words elsewhere get blocked too.
+认页面靠页面文字或窗口类名。有些手机读不到窗口类名，所以文字才是主力：几个词用 + 连接，都出现才算，只填一个词很容易误拦。	A page is recognized by its text or by the window class name. Some phones can't report the window class, so text is the reliable one: join several words with + and all of them must appear — a single word blocks far too much.
+认领	Claim
+认领「	Claim “
+认领一次 · 冻结延长 	Claim once · freeze +
+认领一次延长冻结	Each claim extends the freeze
+认领禁忌卡	Claim taboo card
+记住	Good
+记录已清除	History cleared
+记录已锁定或已不存在，只能撤回当天打卡	The record is locked or gone; only today's check-ins can be undone
+记录格式无效，无法确认	Malformed record, cannot confirm
+记录笔数	Entries
+记忆	Memory
+记忆卡	Memory
+记忆卡、	Memory,
+记忆卡片：导入、导出与模块备份	Memory cards: import, export, module backup
+记忆卡设置	Memory settings
+记忆复习独立保存，不写入打卡	Memory reviews are stored separately and never written into check-ins
+记忆库暂时不可用	The memory library is unavailable
+记忆库读取失败，已保留原文件。请恢复备份：	Failed to read the library; the original file was kept. Restore a backup: 
+记忆库超过 64MB，请先导出备份	The library exceeds 64MB; export a backup first
+记忆数据格式不正确：	Malformed memory data: 
+记忆率更高，复习更密	Higher retention, denser reviews
+记忆规律与复习规则	How memory and reviews work
+设备所有者	Device owner
+设备所有者　	Device owner  
+设备所有者只能用部署包一次性授权，系统设置里没有这个开关。\n\n	Device owner can only be granted once by the deployment package; there is no switch for it in the system settings.\n\n
+设备所有者已锁住屏幕：返回、Home、最近任务都不起作用。时间走完自动解除。	Device owner holds the screen: Back, Home and Recents do nothing. It releases itself when time is up.
+设备所有者授权已验证。\n\n1. 在冻结管理中选择需要管理的应用与时段。\n2. 检查关键应用，保留必要的通讯和系统功能。\n3. 配置完成后点“立即应用”。\n\n首次设置有 10 分钟编辑宽限；冻结开始后按规则限制修改。日常无需连接电脑。	Device owner is verified.\n\n1. Pick the apps and windows to manage under Freeze.\n2. Review key apps, keeping the communication and system features you need.\n3. Tap “Apply now” when done.\n\nFirst-time setup allows 10 minutes of editing; after freezes start, changes follow your rules. No PC needed day to day.
+设备所有者由系统保护。启用前请阅读部署包的恢复说明。	Device owner is protected by the system. Read the recovery notes before enabling.
+设备所有者由系统保护，无法在此处停用。请按部署包的恢复说明处理。	Device owner is protected by the system and cannot be turned off here. Follow the restore steps in the deployment package.
+设置	Settings
+设置写入失败	Failed to write settings
+设置已锁定 · 下次开放 	Settings locked · opens again 
+设置提醒	Set reminder
+设置时间	Set time
+设置未保存	Settings not saved
+设置类型不符	Setting type mismatch
+试一次码	Try a code
+该休息了	Time for a break
+该周期总结已确认完成。	This cycle's summary is confirmed.
+该歇会儿了	Time for a break
+语音输入	Voice input
+请从总结卡管理设置周期	Set the cycle from the summary card manager
+请使用 HTTPS 地址，Git 也支持 SSH 地址	Use an HTTPS address; Git also accepts SSH addresses
+请使用其他笔记本名称	Use a different notebook name
+请先在卡管理的记忆卡中添加学科	Add a subject in Cards → Memory first
+请先完成本题	Finish this question first
+请先尝试输入答案	Try typing an answer first
+请先查看答案，再自行核对	Show the answer first, then check yourself
+请先设置模型和 API 密钥	Set a model and API key first
+请先选择答案	Pick an answer first
+请只选择一个答案	Select only one answer
+请在刷题页面练习，完成后自动打卡	Practise on the quiz page; it checks in automatically when done
+请在系统设置中打开本应用的通知权限	Allow notifications for this app in system settings
+请在记忆页面学习，完成后自动打卡	Study on the memory page; it checks in automatically when done
+请填写 1–1000 的整数	Enter a whole number from 1 to 1000
+请填写 1–1000 的每日题数	Enter a daily count from 1 to 1000
+请填写 GitHub token	Enter a GitHub token
+请填写 owner/private-repository	Enter owner/private-repository
+请填写不含账号、查询参数的 HTTPS API 地址	Enter an HTTPS API address with no credentials or query parameters
+请填写整数	Enter a whole number
+请填写有效模型名称	Enter a valid model name
+请填写答案	Enter an answer
+请将题库保存为 UTF-8 编码	Save the bank as UTF-8
+请按当前闪卡顺序复习	Review in the current flashcard order
+请稍候…	Please wait…
+请稍后重试	Try again shortly
+请至少添加一个应用限额格子	Add at least one quota
+请至少选择一个总结周期	Pick at least one summary cycle
+请输入1–365的整数天数和有效的开始日期。	Enter a whole number of days from 1 to 365 and a valid start date.
+请输入六位颜色值，例如 007AFF	Enter a 6-digit colour, e.g. 007AFF
+请输入卡组名称	Enter a deck name
+请输入有效的六位颜色值	Enter a valid six-digit colour value
+请输入笔记本名称	Enter a notebook name
+请选择 JSON、CSV、TSV、XLSX 或带标记的 TXT/Markdown 题库	Choose a JSON, CSV, TSV, XLSX or marked-up TXT/Markdown question bank
+请选择仍在使用的学科	Pick a subject that still exists
+请选择冻结星期和至少一段时间	Pick freeze days and at least one window
+请选择包含 1–5000 题的文件	Pick files containing 1-5000 questions
+请选择未来的提醒时间	Pick a time in the future
+读不到今日目标	Cannot read today's goals
+读不到这张图	Cannot read this image
+读书	Read
+读取学习台账失败 HTTP 	Failed to read the study ledger, HTTP 
+读取题库	Read questions
+调度核心适配自 java-fsrs\n版本 c561ee6c56239b621a0a45b16a6c2e688441eae5\nhttps://github.com/open-spaced-repetition/java-fsrs\n\n	Scheduling core adapted from java-fsrs\nVersion c561ee6c56239b621a0a45b16a6c2e688441eae5\nhttps://github.com/open-spaced-repetition/java-fsrs\n\n
+账号和密码请填写在单独字段中	Put the account and password in their own fields
+费力	Hard
+资源管理器	File Explorer
+起点和终点不能相同	Start and end cannot be the same
+距本次检查已过 	Since this check: 
+距离那个日子还有几天	How many days until that date
+跟随主题	Follow theme
+跟随系统	Follow system
+转换后超过 4MB，请拆分题库	Converted size exceeds 4MB; split the bank
+轻松	Easy
+轻量	Light
+输入家长手机验证器上此刻的码，验证配置对不对。验过会直接进入 10 分钟放行期。	Type the code showing in the parent's authenticator to check the setup. A valid code starts a 10-minute pass.
+输入答案	Typed answer
+输入要查找的文字	Type text to find
+边界到点才能准点执行	Boundaries fire on time
+达成 %d 项算满勤	All %d goals make a full day
+运动	Exercise
+运行中	Running
+运行状态	Status
+近 7 天娱乐占比	Entertainment share, last 7 days
+近30天 · 卡片类型	Last 30 days · card types
+返回	Back
+返回记忆首页	Back to memory
+返回首页	Back to home
+还剩 %d 分钟	%d min left
+还差 	Still 
+还有 	In 
+还没上传过	Never uploaded
+还没填	Empty
+还没拉到电脑数据。电脑开着面板时每 15 分钟推一次，晚点再进来看。	No desktop data yet. It is pushed every 15 minutes while the panel is open on the PC; check back later.
+还没有「使用情况访问」权限\n\n	No usage access permission yet\n\n
+还没有上传过	Never uploaded
+还没有冻结时段\n在设置里新建时间格，再拖入应用	No freeze windows yet\nCreate a window in settings, then drag apps in
+还没有卡片。可手动添加，或导入每行一张的问答文本。	No cards yet. Add them by hand, or import one Q&A per line.
+还没有备忘录	No notes yet
+还没有学习目标	No study goals yet
+还没有学习目标。添加一个目标，开始记录每天的进度。	No study goals yet. Add one to start tracking daily progress.
+还没有学习目标，去打卡页右上「管理」建一个	No goals yet. Tap “Manage” at the top right of the check-in page.
+还没有打卡日期	No check-in dates yet
+还没有打卡记录	No check-ins yet
+还没有拦到	Nothing blocked yet
+还没有放进去的日子。\n添加一个：考试、出发、见面、发工资都行。	No dates yet.\nAdd one: an exam, a trip, a meetup, payday.
+还没有未完成记录：每天打开 App 时会记一次当天的必做卡状态。	Nothing missing so far: the required-card status is recorded once each day when you open the app.
+还没有目标	No goals yet
+还没有禁忌卡	No taboo cards yet
+还没有规则。可以先用下面的「微信视频号」「微信朋友圈」加一条，或者自己挑应用和页面特征。	No rules yet. Add the built-in Channels or Moments rule below, or pick an app and a page fingerprint yourself.
+还没有规则。可以先用下面的「微信视频号」加一条，或者自己挑应用和页面特征。	No rules yet. Add the WeChat Channels one below, or pick an app and a page marker yourself.
+还没有规则，先在下面加一条	No rules yet — add one below first
+还没有记录。第一次打卡之后，这里会开始长东西。	Nothing recorded yet. The first check-in starts this page growing.
+还没有配置更新源。当前版本 	No update source configured. Current version 
+还没有额度。点右上角 ⋯ 新建一个单独额度或共享额度。	No quotas yet. Tap ⋯ at the top right to create a single or shared quota.
+还没生成	Not generated
+还没选应用	No apps selected
+还没配亲友解锁码	No family code configured
+还没配规则	No rules yet
+还要去系统设置里打开无障碍服务	Also turn on the accessibility service in system settings
+这一屏被拦下了	This screen was blocked
+这一步会减少额度，只在每天 22:00–23:00 开放	This step lowers an allowance; it opens only at 22:00–23:00
+这一轮	This round
+这一轮专注完成，休息一下	Round done. Take a break.
+这一轮还没走完	This round is not over yet
+这不是一张图片	This is not an image
+这个 Gist 不属于所填写的账号	This Gist does not belong to the account entered
+这个应用	this app
+这个应用用得有点久	You have been here a while
+这个改动要减少额度，只在每天 22:00–23:00 开放	This change lowers an allowance; it opens only at 22:00–23:00
+这个方向没有可换的卡了	No more cards that way
+这个日子已经过去了	This date has passed
+这个时段已不存在	That window no longer exists
+这个时段暂时没有同步记录	No synced records for this window yet
+这个目标今天不用再打了	This goal needs no more check-ins today
+这个系统没有对应的设置页	This system has no such settings page
+这个系统没有无障碍设置页	This system has no accessibility settings page
+这个页面不看了	Not this page
+这些应用连不上任何服务器	These apps cannot reach any server
+这件事叫什么	What is it
+这只应用已经在这个额度里	That app is already in this quota
+这台机器没有能选图片的程序	No app on this device can pick images
+这台系统不允许建 VPN	This system does not allow creating a VPN
+这天没有打卡记录。	No check-ins on this day.
+这张卡不在今日待学队列中	This card is not in today's queue
+这张闪卡已处理或不在当前抽取队列中	This flashcard is already handled or is not in the current queue
+这是新密钥，旧验证器里的条目立刻失效。\n\n	This is a new secret; the old authenticator entry stops working.\n\n
+这是标准的 6 位动态码，30 秒一换。把密钥加进家长手机上的验证器，Google Authenticator、1Password、微软验证器都行。	A standard 6-digit code that changes every 30 s. Add the secret to the parent's authenticator — Google Authenticator, 1Password or Microsoft Authenticator all work.
+这条备忘录已删除，请先复制当前内容	This note was deleted; copy the current content first
+这条规则已经在里面了	That rule is already in the list
+这条规则已经有了	That rule already exists
+这次练习的记录已经保存在本机。	This session is saved on this device.
+这里还没有题目	No questions here yet
+这里还没有题目，可以切换科目、搜索条件，或导入题库。	No questions here. Switch subject, change the search, or import questions.
+进到指定页面就盖住并把人送回桌面，同一个应用里的其他页面不受影响。	Opening the chosen page covers it and sends you home; other pages in the same app are unaffected.
+进度 	Progress 
+进度怎样计算\n今日闪卡进度表示已复习的卡片数，包含选了“忘了”的卡，不代表全部记牢。学习联动以对应学科的学习目标为准：遗忘不计为有效完成；达到复习阶段的有效评分才可能增加完成量，同一计划内不重复计数。	How progress is counted\nToday's progress is the number of cards reviewed, including ones rated “forgot”; it does not mean they are all memorised. The study gate follows the subject's study goals: forgetting does not count, only valid ratings in the review stage can add progress, and one plan is never counted twice.
+连三	Three in a row
+连续天数 · 统计	Streaks · stats
+连续打卡	Current streak
+连续打卡 15 天	Check in 15 days straight
+连续打卡 3 天	Check in 3 days straight
+连续打卡 30 天	Check in 30 days straight
+连续打卡 7 天	Check in 7 days straight
+连续用多久就锁	Lock after
+选一只应用	Pick one app
+选中完整表格可编辑；取消选区可新建表格	Select the whole table to edit it; clear the selection to insert a new one
+选中的应用会按这一项自己的规则执行	Selected apps follow this setting's own rules
+选中的应用只按各自的冻结时间执行，不受学习闸门延长。冻结时间仍可在应用列表中修改。	Selected apps follow their own freeze hours and are not extended by the study gate. Hours are still editable in the app list.
+选中的应用都在自己的屏蔽时段里，改不了	All selected apps are in their own block windows. Cannot change.
+选中的时段内禁止使用；开始与结束相同表示全天冻结。	Apps are blocked inside the selected window; identical start and end mean all day.
+选字体文件（ttf/otf）	Pick a font file (ttf/otf)
+选择 / 更换图片	Pick / replace image
+选择 TXT / TSV 文件	Pick a TXT / TSV file
+选择一个答案后提交	Select an answer, then submit
+选择周期首日 ›	Pick the first day ›
+选择备份	Pick a backup
+选择应用	Pick apps
+选择总结周期	Pick a summary cycle
+选择所有正确选项后提交	Select all correct options, then submit
+选择文件	Pick a file
+选择文件或粘贴已准备好的题目与答案，校验并预览后入库。按内容中的学科自动归类，缺少的学科会在确认后创建。	Pick a file or paste prepared questions and answers, then validate and preview before importing. Subjects are detected from the content; missing ones are created after you confirm.
+选择要冻结的应用	Choose apps to freeze
+选择限额应用	Pick apps for this quota
+选择题库文件（可多选）	Pick question bank files (multi-select)
+选择题需要 2 至 8 个选项	Multiple choice needs 2 to 8 options
+选择额度成员	Choose quota members
+选要一起设时段的 	Pick apps to set hours for 
+选项	Options
+选项 	Option 
+选项不能留空或跳号	Options cannot be blank or skip letters
+选项不能跳号	Options must not skip letters
+选项卡动画	Tab animation
+选项字母格式不正确	Malformed option letter
+选项对象的键须为 A–H	Option object keys must be A–H
+选项超出范围	Option out of range
+选项须从 A 连续排列，不能跳号	Options must run consecutively from A with no gaps
+选项须是非空文字	Options must be non-empty text
+通知	Notifications
+通知没开，提醒发不出来	Notifications are off — the reminder can't show up
+通知设置	Notification settings
+速记 · 置顶	Quick notes · pinned
+遮挡区域无效	Invalid mask area
+遮挡区域格式错误	Malformed mask area
+遮挡区域超出图片	Mask area is outside the image
+部署与首次设置	Deployment and first setup
+都没开	All off
+配置云端同步（Gist 目标与密钥）	Configure cloud sync (Gist target and key)
+配置已保存，尚未进行云端传输	Config saved; nothing has been transferred yet
+配置已删除	Settings deleted
+配色风格	Colour style
+配色风格，	Colour style, 
+释义	Meaning
+重做	Redo
+重命名	Rename
+重命名笔记本	Rename notebook
+重复 	Duplicates: 
+重复卡片标识	Duplicate card id
+重复或过多备份条目	Duplicate or excessive backup entries
+重复清单	Duplicate manifest
+重学卡片将在 	Relearning cards appear in 
+重新启用	Re-enable
+重新启用云端同步	Re-enable cloud sync
+重新输入凭据以验证账号	Re-enter credentials to verify the account
+重置	Reset
+重置。	resets at the boundary.
+重置。现在先回到桌面，下次再说。	 resets. Go back to the home screen for now.
+重置主题色彩？	Reset accent colours?
+重置时刻只能是 0–23 时	Reset hour must be 0-23
+重置，改格子不清空已用时间。加到格子里的操作随时都能做（加应用、加分钟数）；移出应用、调小分钟数、删格子只在每天 22:00–23:00 开放。学习联动与禁忌惩罚继续生效。	reset, and editing a cell keeps the time already spent. Adding is always open (new apps, more minutes); taking an app out, lowering minutes or deleting a cell opens only at 22:00–23:00. Study gating and penalty rules still apply.
+重置，改格子不清空已用时间。学习联动与禁忌惩罚继续生效。	 resets. Editing a quota does not clear time already used. Study-gate and taboo penalties still apply.
+钥匙应用	Key app
+钥匙应用未达标	Key app not enough yet
+锁多久	Rest for
+锁屏	Lock screen
+锁机时这些应用照常可用	These apps stay usable during a lock
+错太多次，%d 秒后再试	Too many wrong tries, retry in %d s
+错题	Mistakes
+错题本	Wrong answers
+错题本 · 	Mistakes · 
+错题答对后会移出待复习列表，历史答题次数仍保留。	Answering a wrong question correctly removes it from review; past attempt counts are kept.
+长按应用可移动到其他时段	Long-press an app to move it to another window
+闪卡列表存在重复或未知项目	The flashcard list has duplicates or unknown items
+闪卡抽取设置无效	Invalid flashcard draw settings
+闪卡数据格式无效	Malformed flashcard data
+闪卡日期无效	Invalid flashcard date
+闪卡选择列表无效	Invalid flashcard selection
+闪卡队列无效	Invalid flashcard queue
+闪卡队列超出数量限制	The flashcard queue exceeds the limit
+问答	Q&A
+问答、输入与图片遮挡；点卡片可以编辑。	Q&A, typed answers and image masking; tap a card to edit it.
+附件	Attachments
+附件不存在	Attachment not found
+附件元数据异常	Attachment metadata corrupted
+附件恢复失败	Attachment restore failed
+附件描述字段无效	Invalid attachment description field
+附件描述格式无效	Invalid attachment description format
+附件描述编码无效	Invalid attachment description encoding
+附件描述过大	Attachment description too large
+附件数量超过备份限制	Too many attachments for a backup
+附件文件路径无效	Invalid attachment file path
+附件目录不可用	Attachment directory unavailable
+附件目录无效	Invalid attachment directory
+附件编号冲突，未覆盖任何附件	Attachment id conflict; nothing was overwritten
+附件编号无效	Invalid attachment id
+附件超过限制	Attachment over the limit
+降级要去系统的无障碍设置里关掉服务，应用里关不了	To step down, turn the service off in the system accessibility settings; the app cannot do it for you
+限	Limit
+限额格子无效	The quota slot is invalid
+限额配置缺少分组	The quota settings have no groups
+随时可以重新开始	Restart any time
+随时可修改 · 当天已用时间保留	Editable anytime · today's used time is kept
+随机	Random
+随机抽取	Random draw
+随机练习	Random
+需要复习 · 已加入错题本	Needs review · added to mistakes
+需要开启无障碍服务（在系统设置 → 无障碍里打开）	Needs the accessibility service (turn it on in Settings → Accessibility)
+需要待够	Required
+需要设备所有者（要装部署包，系统设置里开不了）	Needs device owner (install the provisioning package; Settings has no switch for it)
+需要部署包授权，系统设置里开不了	Needs the provisioning package, not system settings
+非法恢复路径	Illegal restore path
+页	pages
+页面文字	Page text
+页面规则	Page rules
+顺序	Sequential
+顺序执行 · 按入库顺序跨日接续	Sequential · continues across days in insertion order
+顺序练习	In order
+预览	Preview
+题	questions
+题号	Number
+题型	Card type
+题干	Stem
+题干 stem 不能为空	The stem cannot be empty
+题库	Bank
+题库工具	Bank tools
+题库总量最多 5000 题	A bank holds at most 5000 questions
+题库数据超过 16MB，请先导出整理	Bank data exceeds 16MB; export and tidy it first
+题库浏览与搜索	Browse and search questions
+题库源文件最多 16MB	Source files are limited to 16MB
+题库读取失败，原文件已保留：	Failed to read the bank; the original file was kept: 
+题库超过 5000 题	The bank exceeds 5000 questions
+题库：导入与导出	Quizzes: import and export
+题目	Question
+题目不存在	Question not found
+题目不能为空；题目或答案不能超过 20000 字	The question cannot be empty; question and answer are limited to 20000 characters
+题目未填写科目时，归入	Questions without a subject go into 
+颜色	Colour
+颜色光谱，滑动或点按选择	Colour spectrum; slide or tap to pick
+颜色网格，滑动或点按选择	Colour grid; slide or tap to pick
+额度	Quota
+额度 	Quota 
+额度名称（可选）	Quota name (optional)
+额度已不再存在	That quota no longer exists
+额度已不存在	That quota no longer exists
+额度已建好	Quota created
+额度已更新	Quota updated
+额度已用尽	Quota used up
+额度未能保存	The quota could not be saved
+额度的更多操作	More quota actions
+额度迁移未能保存	The quota migration could not be saved
+额度迁移未能保存备份	Failed to save the quota migration backup
+额度重置时刻	Limit reset time
+额度重置时刻 	Limit reset time 
+额度须为0–1440分钟	Quota must be 0-1440 minutes
+饱和度	Saturation
+首次使用：现在可以配置，在冻结应用的设置里点「立即应用」后按锁定规则执行。	First run: configure freely. After you tap Apply in the freeze settings, the lock rules take over.
+首行需要题干/stem 和答案/answer 表头	The first row needs stem/题干 and answer/答案 headers
+马善政楷体	Ma Shanzheng Kai
+验证	Verify
+验证失败：	Verification failed: 
+验证并启用	Verify and enable
+高亮	Highlight
+高亮 / 取消高亮	Highlight / remove highlight
+高数	Calculus
+高等数学	Advanced mathematics
+鲜明	Vivid
+黑色	Black
+默认	Default
+默认 default	Default
+默认学科（内容已含学科时可留空）	Default subject (leave empty if the content has one)
+默认笔记本	Default notebook
+默认笔记本不可删除，或笔记本已删除	The default notebook cannot be deleted, or it is gone
+默认笔记本不可改名，或笔记本已删除	The default notebook cannot be renamed, or it is gone
+默认量已存：每次 	Default saved: 
+默认题型（卡片内指定的题型优先）	Default card type (type given in the card wins)
+默认颜色	Default colour
+鼻吸鼻呼，屏息不舒服就跳过，别硬撑。离开这一页会自动暂停。	Breathe through the nose. Skip the hold if it feels bad. Leaving this page pauses automatically.
+（	 (
+（全天）	 (all day)
+（含跨午夜）	 (crosses midnight)
+（学习闸门生效中）	 (study gate active)
+（导入 	 (imported 
+（导入）	 (imported)
+（屏蔽中，跳过）	 (in block window, skipped)
+（待接续）	 (queued)
+（所绑时段）	 (bound hours)
+（更新失败）	 (update failed)
+（生效中）	 (active)
+（自动）	 (auto)
+（自定义）	 (custom)
+）	)
+）\n跳过重复 	)\nSkipped 
+）：	): 
+＋	+
+＋  从文件导入 ttf / otf	+  Import ttf / otf from file
+＋  新目标	+  New goal
+＋  添加禁忌卡	+  Add taboo card
+＋ 创建热爱卡	+ Create passion card
+＋ 加一段	+ Add a window
+＋ 按包名添加	+ Add by package
+＋ 新建科目	+ New subject
+＋ 添加	＋ Add
+＋ 添加一段冻结时间	+ Add a freeze window
+＋ 添加学科	+ Add subject
+＋ 添加应用	+ Add app
+＋ 添加限额格子	+ Add quota
+＋列	+Col
+＋行	+Row
+，	, 
+，发布后这里会直接告诉你有没有新版。	. Once a source is set, this tells you whether a newer build exists.
+，可以升到 	, you can upgrade to 
+，完成 	, 
+，已选	, selected
+，显示前 100 张，请用搜索缩小范围	, showing the first 100; narrow it with search
+，请检查地址、模型和密钥	; check the URL, model and key
+，还差 	, still 
+，长按可以拖到别的额度	, long-press to drag into another quota
+－列	-Col
+－行	-Row
+：	: 
+：已冻结（堵网页版）\n	: frozen (blocks the web version)\n
+：未安装\n	: not installed\n
+：目标记忆率 	: target retention 
+；	; 
+？	?
+📊 屏幕使用统计	📊 Screen time stats
+🔒 关键应用名单	🔒 Key apps
+🔒 关键应用名单 · 	🔒 Key apps · 
+🧊 全部冻结	🧊 All frozen
+🧊 冻结中 	🧊 Frozen 

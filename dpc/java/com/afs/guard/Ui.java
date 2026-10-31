@@ -61,12 +61,21 @@ public final class Ui {
     public final boolean dark;
     public final AppearancePalette palette;
     public final boolean amap;
+    /** 涟漪风格：浅底、大标题、圆角白卡、胶囊控件。 */
+    public final boolean ripple;
 
     public Ui(Context c) {
         this.ctx = c;
         this.dark = isDark(c);
         this.palette = ThemeStore.palette(c,dark);
-        this.amap = ThemeStore.load(c).amap();
+        AppearanceConfig config=ThemeStore.load(c);
+        this.amap = config.amap();
+        this.ripple = config.ripple();
+    }
+
+    /** 给没有 Ui 实例的地方（排版、导航）快速判断是否涟漪风格。 */
+    public static boolean rippleMode(Context c) {
+        return ThemeStore.load(c).ripple();
     }
 
     /* ==================== 主题 ==================== */
@@ -169,9 +178,14 @@ public final class Ui {
         v.setBackground(round(color, radiusDp));
     }
 
-    /** 一张标准卡片：圆角 18、内边距 16、无描边。 */
+    /** 按钮圆角：涟漪风格下，所有按钮统一成胶囊。 */
+    public float button(float baseDp) {
+        return ripple ? 99f : baseDp;
+    }
+
+    /** 一张标准卡片：圆角 18、内边距 16、无描边。涟漪风格更圆一点。 */
     public LinearLayout card() {
-        return card(18f, 16f);
+        return card(ripple?22f:18f, ripple?18f:16f);
     }
 
     public LinearLayout card(float radiusDp, float padDp) {
@@ -180,7 +194,7 @@ public final class Ui {
         box.setBackground(round(surface(), radiusDp));
         int p = dp(padDp);
         box.setPadding(p, p, p, p);
-        if(amap){box.setElevation(dp(1));box.setClipToOutline(true);}
+        if(amap||ripple){box.setElevation(dp(1));box.setClipToOutline(true);}
         return box;
     }
 
@@ -223,7 +237,7 @@ public final class Ui {
         row.setGravity(Gravity.CENTER_VERTICAL);
 
         if(amap){row.addView(new AmapStyle.Icon(ctx,name,text()),new LinearLayout.LayoutParams(dp(24),dp(24)));}
-        else {
+        else if(!ripple) {
         TextView icon = new TextView(ctx);
         icon.setText(glyph);
         icon.setTextSize(11);
@@ -235,13 +249,13 @@ public final class Ui {
 
         TextView t = new TextView(ctx);
         t.setText(name);
-        t.setTextSize(18);
-        t.setTextColor(text());
-        t.setTypeface(Typeface.DEFAULT_BOLD);
-        SwissTypography.role(t,SwissTypography.Role.SECTION);
+        t.setTextSize(ripple?14:18);
+        t.setTextColor(ripple?text3():text());
+        t.setTypeface(ripple?Typeface.DEFAULT:Typeface.DEFAULT_BOLD);
+        SwissTypography.role(t,ripple?SwissTypography.Role.KEEP:SwissTypography.Role.SECTION);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        tlp.leftMargin = dp(12);
+        tlp.leftMargin = ripple ? 0 : dp(12);
         row.addView(t, tlp);
 
         if (action != null) {
@@ -289,6 +303,13 @@ public final class Ui {
         LinearLayout iconWrap = new LinearLayout(ctx);
         iconWrap.setGravity(Gravity.CENTER);
         if(amap)iconWrap.addView(new AmapStyle.Icon(ctx,label,text()),new LinearLayout.LayoutParams(dp(32),dp(32)));
+        else if(ripple){
+            TextView badge = new TextView(ctx);
+            badge.setText(glyph);badge.setTextSize(17);badge.setTextColor(circleColor);
+            badge.setGravity(Gravity.CENTER);
+            badge.setBackground(round(soft(circleColor,.86f),14f));
+            iconWrap.addView(badge,new LinearLayout.LayoutParams(dp(44),dp(44)));
+        }
         else iconWrap.addView(circle(glyph, circleColor, 44f, 17));
         box.addView(iconWrap);
 
@@ -298,6 +319,7 @@ public final class Ui {
         t.setTextColor(text());
         t.setGravity(Gravity.CENTER);
         t.setMaxLines(1);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tlp.topMargin = dp(9);
@@ -310,6 +332,9 @@ public final class Ui {
             h.setTextColor(text3());
             h.setGravity(Gravity.CENTER);
             h.setMaxLines(1);
+            // 英文比中文长，超出宽度时静默裁掉会留下「Cards · rewards ·」这种断尾。
+            // 显示省略号至少说明「还有内容」，不至于看起来像 bug。
+            h.setEllipsize(android.text.TextUtils.TruncateAt.END);
             box.addView(h);
         }
         return box;
@@ -319,12 +344,38 @@ public final class Ui {
     public TextView chip(String s, int fg, int fill) {
         TextView tv = new TextView(ctx);
         tv.setText(s);
-        tv.setTextSize(11);
+        tv.setTextSize(ripple?12:11);
         tv.setTextColor(fg);
         tv.setGravity(Gravity.CENTER);
         tv.setBackground(round(fill, 99f));
-        tv.setPadding(dp(10), dp(5), dp(10), dp(5));
+        tv.setPadding(dp(ripple?12:10), dp(ripple?6:5), dp(ripple?12:10), dp(ripple?6:5));
         return tv;
+    }
+
+    /** 把颜色朝页面底色拉近，做出参考稿里那种很淡的色块底。 */
+    public int soft(int color, float amount) {
+        int base = surface();
+        float keep = 1 - Math.max(0, Math.min(1, amount));
+        int r = Math.round(((color >> 16) & 255) * keep + ((base >> 16) & 255) * amount);
+        int g = Math.round(((color >> 8) & 255) * keep + ((base >> 8) & 255) * amount);
+        int b = Math.round((color & 255) * keep + (base & 255) * amount);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
+    /**
+     * 右上角的设置按钮：圆角底 + 齿轮。
+     *
+     * 齿轮是画出来的（{@link GearIcon}），不用字体里的「⚙」—— 那个字符在 ColorOS 上
+     * 会走 emoji 字体，颜色和大小都不受控。
+     */
+    public View settingsButton(int fg, int fill) {
+        LinearLayout box = new LinearLayout(ctx);
+        box.setOrientation(LinearLayout.HORIZONTAL);
+        box.setGravity(Gravity.CENTER);
+        box.setBackground(round(fill, 12f));
+        box.addView(new GearIcon(ctx, fg), new LinearLayout.LayoutParams(dp(19), dp(19)));
+        box.setContentDescription(T.s("设置"));
+        return box;
     }
 
     /** 圆角图标按钮（右上角主题切换那种）。 */

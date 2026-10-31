@@ -233,17 +233,17 @@ public final class Rule {
 
     public String freezeSummary() {
         if (freeze && days == ALL_DAYS) {
-            for (int[] w : windows) if (w[0] == w[1]) return "全天冻结";
+            for (int[] w : windows) if (w[0] == w[1]) return T.s("全天冻结");
         }
-        if (freeze) return days == 0 || windows.length == 0 ? "无定时冻结" : "冻结 " + summary();
+        if (freeze) return days == 0 || windows.length == 0 ? T.s("无定时冻结") : T.s("冻结 ") + summary();
         Rule converted = freezeEditorRule();
         if (converted != null) return converted.freezeSummary();
-        StringBuilder out = new StringBuilder("冻结 ");
+        StringBuilder out = new StringBuilder(T.s("冻结 "));
         Calendar c = Calendar.getInstance();
         c.set(2026, Calendar.OCTOBER, 19, 0, 0, 0);
         for (int day = 0; day < 7; day++) {
-            if (day > 0) out.append("；");
-            out.append("周").append(DAY_NAMES[day]).append(' ');
+            if (day > 0) out.append(T.s("；"));
+            out.append(T.s("周")).append(T.s(DAY_NAMES[day])).append(' ');
             boolean any = false;
             for (int m = 0; m < 1440;) {
                 c.set(Calendar.HOUR_OF_DAY, m / 60); c.set(Calendar.MINUTE, m % 60);
@@ -258,7 +258,7 @@ public final class Rule {
                 out.append(hm(s / 60, s % 60)).append('-').append(m == 1440 ? "24:00" : hm(m / 60, m % 60));
                 any = true;
             }
-            if (!any) out.append("无");
+            if (!any) out.append(T.s("无"));
             c.add(Calendar.DAY_OF_MONTH, 1);
         }
         return out.toString();
@@ -344,7 +344,7 @@ public final class Rule {
               .append('-')
               .append(hm(windows[i][1] / 60, windows[i][1] % 60));
         }
-        return sb.length() == 0 ? (freeze ? "无冻结时段" : "无时段（整天冻结）") : sb.toString();
+        return sb.length() == 0 ? (freeze ? T.s("无冻结时段") : T.s("无时段（整天冻结）")) : sb.toString();
     }
 
     public String summary() {
@@ -355,21 +355,21 @@ public final class Rule {
                 break;
             }
         }
-        return daysText(days) + " " + windowText() + (cross ? "（含跨午夜）" : "");
+        return daysText(days) + " " + windowText() + (cross ? T.s("（含跨午夜）") : "");
     }
 
     public static String daysText(int mask) {
         if ((mask & ALL_DAYS) == ALL_DAYS) {
-            return "每天";
+            return T.s("每天");
         }
         if (mask == 0) {
-            return "一天都没选";
+            return T.s("一天都没选");
         }
         if (mask == 0x1F) {
-            return "工作日";
+            return T.s("工作日");
         }
         if (mask == 0x60) {
-            return "周末";
+            return T.s("周末");
         }
         StringBuilder sb = new StringBuilder();
         boolean first = true;
@@ -378,7 +378,7 @@ public final class Rule {
                 if (!first) {
                     sb.append('、');
                 }
-                sb.append("周").append(DAY_NAMES[i]);
+                sb.append(T.s("周")).append(T.s(DAY_NAMES[i]));
                 first = false;
             }
         }

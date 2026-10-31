@@ -32,9 +32,9 @@ final class CheckinSync {
     static void fetch(final Context c, final Sink sink) {
         new Thread(new Runnable() {
             public void run() {
-                try {
+                try (SyncConfig.Session session = SyncConfig.acquire(c)) {
                     String raw = StudyGate.fetchRaw(
-                            StudyGate.rawUrl() + "?t=" + System.currentTimeMillis());
+                            session.target.rawUrl(StudyGate.GIST_FILE) + "?t=" + System.currentTimeMillis());
                     JSONObject o = new JSONObject(raw);
                     String date = o.optString("date", "");
                     String at = o.optString("checkedAt", "");
@@ -65,7 +65,7 @@ final class CheckinSync {
                     final String fa = at;
                     post(new Runnable() {
                         public void run() {
-                            sink.onData(merged, fd, fa, null);
+                            if (session.isCurrent(c)) sink.onData(merged, fd, fa, null);
                         }
                     });
                 } catch (final Exception e) {

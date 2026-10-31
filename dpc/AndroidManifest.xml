@@ -34,10 +34,15 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
+        android:name=".GuardClock"
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+        <activity android:name=".DataManagementActivity" android:exported="false" android:theme="@style/NavTheme" />
+        <activity android:name=".DailyQuotaActivity" android:exported="false" android:theme="@style/NavTheme" android:windowSoftInputMode="adjustResize" android:label="每日限额" />
+        <activity android:name=".QuotaBlockedActivity" android:exported="false" android:theme="@style/NavTheme" android:excludeFromRecents="true" android:launchMode="singleTop" android:label="额度用尽" />
 
         <activity
             android:name=".MainActivity"
@@ -51,10 +56,55 @@
         </activity>
 
         <activity
+            android:name=".CardManagementActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="卡管理"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".ThemeActivity"
             android:theme="@style/NavTheme"
             android:exported="false"
             android:label="主题"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".CalendarActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="打卡日历"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".ControlActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="自律规则"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".LockScreenActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:noHistory="false"
+            android:label="休息一下" />
+
+        <activity
+            android:name=".KeywordBlockActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:label="已拦截" />
+
+        <activity
+            android:name=".SettingsActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="设置"
             android:windowSoftInputMode="adjustResize" />
 
         <activity
@@ -91,6 +141,12 @@
             android:exported="false"
             android:label="@string/checkin_title"
             android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".AchievementActivity"
+            android:theme="@style/NavTheme"
+            android:exported="false"
+            android:label="成就" />
 
         <activity
             android:name=".AppListActivity"
@@ -136,6 +192,16 @@
             </intent-filter>
         </receiver>
 
+        <activity android:name=".MemoSketchActivity" android:exported="false" android:label="涂鸦" />
+        <provider android:name=".MemoFileProvider" android:authorities="com.afs.guard.memo.files" android:exported="false" android:grantUriPermissions="true" />
+        <receiver android:name=".MemoReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <receiver
             android:name=".AlarmReceiver"
             android:exported="false" />
@@ -147,6 +213,8 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
@@ -156,6 +224,30 @@
             android:name=".GuardJob"
             android:exported="true"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- 关键词拦截：无障碍服务。用户必须在系统设置里手动打开，
+             代码装不上也开不了；没开时 self-check 只显示"未开启"，不假装在工作。 -->
+        <service
+            android:name=".KeywordGuardService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service" />
+        </service>
+
+        <!-- 屏蔽联网：本地 VPN 黑洞，只接管用户选中的应用 -->
+        <service
+            android:name=".NetBlockService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
 
         <service
             android:name=".GuardService"

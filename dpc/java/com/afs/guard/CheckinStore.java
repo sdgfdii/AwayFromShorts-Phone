@@ -28,7 +28,6 @@ import java.util.Locale;
 final class CheckinStore {
 
     private static final String FILE = "afs_checkin";
-    private static final String K_TOKEN = "token";
     private static final String K_QUEUE = "queue";
     private static final String K_GOALS = "goals";
     private static final String K_DATE = "goalsDate";
@@ -41,40 +40,8 @@ final class CheckinStore {
         return c.getSharedPreferences(FILE, Context.MODE_PRIVATE);
     }
 
-    /* ---------- token ---------- */
-
-    static String token(Context c) {
-        String t = sp(c).getString(K_TOKEN, "");
-        if (t != null && !t.trim().isEmpty()) {
-            return t.trim();
-        }
-        return BuildConfig.PREFILL_TOKEN == null ? "" : BuildConfig.PREFILL_TOKEN.trim();
-    }
-
-    /**
-     * 把构建期注入的 token 落到 prefs（只在 prefs 还空着时）。
-     *
-     * 为什么要落盘：仓库里发的那份 APK 是不带 token 的公开构建，
-     * 本机这份带 token。如果只读 BuildConfig，换成公开构建覆盖安装之后，
-     * 打卡就突然推不动了 —— 落到 prefs 里就与后续装的是哪份包无关。
-     */
-    static void seedToken(Context c) {
-        String cur = sp(c).getString(K_TOKEN, "");
-        if (cur != null && !cur.trim().isEmpty()) {
-            return;
-        }
-        String pre = BuildConfig.PREFILL_TOKEN == null ? "" : BuildConfig.PREFILL_TOKEN.trim();
-        if (!pre.isEmpty()) {
-            sp(c).edit().putString(K_TOKEN, pre).apply();
-        }
-    }
-
-    static void setToken(Context c, String t) {
-        sp(c).edit().putString(K_TOKEN, t == null ? "" : t.trim()).apply();
-    }
-
-    static boolean hasToken(Context c) {
-        return !token(c).isEmpty();
+    private static SharedPreferences remoteSp(Context c) {
+        return c.getSharedPreferences(SyncConfig.cacheName(c, "afs_checkin_remote"), Context.MODE_PRIVATE);
     }
 
     /* ---------- 目标 ---------- */
@@ -82,7 +49,7 @@ final class CheckinStore {
     static final class Goal {
         String id = "";
         String name = "";
-        String unit = "个";
+        String unit = T.s("个");
         double total;
         double done;
         double suggest;
@@ -96,15 +63,15 @@ final class CheckinStore {
     }
 
     static String goalsJson(Context c) {
-        return sp(c).getString(K_GOALS, "");
+        return remoteSp(c).getString(K_GOALS, "");
     }
 
     static String goalsDate(Context c) {
-        return sp(c).getString(K_DATE, "");
+        return remoteSp(c).getString(K_DATE, "");
     }
 
     static String goalsAt(Context c) {
-        return sp(c).getString(K_AT, "");
+        return remoteSp(c).getString(K_AT, "");
     }
 
     static void saveGoals(Context c, List<Goal> list, String date, String at) {
@@ -123,7 +90,7 @@ final class CheckinStore {
             } catch (Throwable ignored) {
             }
         }
-        sp(c).edit().putString(K_GOALS, arr.toString())
+        remoteSp(c).edit().putString(K_GOALS, arr.toString())
                 .putString(K_DATE, date == null ? "" : date)
                 .putString(K_AT, at == null ? "" : at).apply();
     }

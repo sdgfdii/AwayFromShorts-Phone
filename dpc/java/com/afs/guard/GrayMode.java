@@ -75,7 +75,7 @@ public final class GrayMode {
             // 下次 Guard.apply 还会重试 —— 这样用户事后 adb 授权完不用重启 App。
             if (!warned) {
                 warned = true;
-                Log.w(TAG, "gray mode 需要授权: adb shell pm grant com.afs.guard "
+                Log.w(TAG, T.s("gray mode 需要授权: adb shell pm grant com.afs.guard ")
                         + "android.permission.WRITE_SECURE_SETTINGS (" + t.getClass().getSimpleName() + ")");
             }
         }

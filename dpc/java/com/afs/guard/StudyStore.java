@@ -48,7 +48,7 @@ public final class StudyStore {
     public static final class G {
         public String id = "";
         public String name = "";
-        public String unit = "个";
+        public String unit = T.s("个");
         /** 总量（篇 / 小时 / 个）。 */
         public double total;
         /** 迁移时带过来的历史完成量：done = base + 本机所有记录之和。 */
@@ -106,7 +106,7 @@ public final class StudyStore {
                 return o;
             } catch (Throwable t) {
                 // 文件坏了不能连带把闸门弄崩：留个备份，从空库起步（fail-open）
-                Log.w(TAG, "study.json 读失败，改用空库: " + t);
+                Log.w(TAG, T.s("study.json 读失败，改用空库: ") + t);
                 try {
                     f.renameTo(new File(c.getFilesDir(), FILE + ".bad"));
                 } catch (Throwable ignored) {
@@ -150,7 +150,7 @@ public final class StudyStore {
                     tmp.renameTo(dst);
                 }
             } catch (Throwable t) {
-                Log.w(TAG, "study.json 写失败: " + t);
+                Log.w(TAG, T.s("study.json 写失败: ") + t);
             } finally {
                 try {
                     if (out != null) {
@@ -403,7 +403,7 @@ public final class StudyStore {
      */
     public static Rec check(Context c, String goalId, double amount, String date) {
         if (goalId.startsWith(MemoryData.GOAL_PREFIX)) {
-            throw new IllegalArgumentException("记忆复习独立保存，不写入打卡");
+            throw new IllegalArgumentException(T.s("记忆复习独立保存，不写入打卡"));
         }
         Rec r = new Rec();
         r.id = "r" + System.currentTimeMillis() + "_" + (int) (Math.random() * 1000);
@@ -550,6 +550,23 @@ public final class StudyStore {
             }
         }
         return n;
+    }
+
+    /**
+     * 今天最后一笔打卡的时刻（0 = 今天一笔都没有）。
+     *
+     * 用来判「20:00 前打完了没有」：全部打完但最后一笔在 20:00 之后，也算没赶上判断点。
+     */
+    public static long lastHitToday(Context c) {
+        List<Rec> all = recs(c);
+        String d = today();
+        long max = 0;
+        for (Rec r : all) {
+            if (r != null && d.equals(r.date)) {
+                max = Math.max(max, r.ts);
+            }
+        }
+        return max;
     }
 
     private static double sumOf(List<Rec> all, String goalId) {
@@ -768,11 +785,11 @@ public final class StudyStore {
         try {
             o = new JSONObject(json);
         } catch (Throwable t) {
-            Log.w(TAG, "study.json 恢复：不是合法 JSON");
+            Log.w(TAG, T.s("study.json 恢复：不是合法 JSON"));
             return false;
         }
         if (o.optJSONArray("goals") == null || o.optJSONArray("recs") == null) {
-            Log.w(TAG, "study.json 恢复：结构不对，拒绝");
+            Log.w(TAG, T.s("study.json 恢复：结构不对，拒绝"));
             return false;
         }
         synchronized (LOCK) {
@@ -787,7 +804,7 @@ public final class StudyStore {
                         + " recs=" + o.optJSONArray("recs").length());
                 return true;
             } catch (Throwable t) {
-                Log.w(TAG, "study.json 恢复失败: " + t);
+                Log.w(TAG, T.s("study.json 恢复失败: ") + t);
                 return false;
             }
         }

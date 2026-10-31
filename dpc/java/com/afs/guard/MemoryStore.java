@@ -38,7 +38,7 @@ public final class MemoryStore {
         try (InputStream in = f.openRead()) {
             cache = new MemoryData(new String(read(in, 64 * 1024 * 1024), "UTF-8")); error = "";
         } catch (Exception e) {
-            error = "记忆库读取失败，已保留原文件。请恢复备份：" + e.getMessage();
+            error = T.s("记忆库读取失败，已保留原文件。请恢复备份：") + e.getMessage();
             throw new IllegalStateException(error, e);
         }
         return cache;
@@ -48,12 +48,12 @@ public final class MemoryStore {
         AtomicFile f = file(c);
         try {
             byte[] bytes = cache.db.toString().getBytes("UTF-8");
-            if (bytes.length > 64 * 1024 * 1024) throw new IllegalStateException("记忆库超过 64MB，请先导出备份");
+            if (bytes.length > 64 * 1024 * 1024) throw new IllegalStateException(T.s("记忆库超过 64MB，请先导出备份"));
             out = f.startWrite(); out.write(bytes); f.finishWrite(out);
         } catch (Exception e) {
             if (out != null) f.failWrite(out);
             cache = null;
-            throw new IllegalStateException("保存失败，未确认本次学习进度", e);
+            throw new IllegalStateException(T.s("保存失败，未确认本次学习进度"), e);
         }
         StudyGate.invalidate(c);
     }
@@ -80,8 +80,11 @@ public final class MemoryStore {
         return new MemoryData(m.db.toString());
     }
     public static synchronized void configureFlashcards(Context c, JSONArray subjects, int count, String mode) {
+        configureFlashcards(c, subjects, count, mode, MemoryFlashcards.POOL_ALL);
+    }
+    public static synchronized void configureFlashcards(Context c, JSONArray subjects, int count, String mode, String pool) {
         MemoryData candidate = new MemoryData(data(c).db.toString());
-        MemoryFlashcards.configure(candidate, subjects, count, mode, System.currentTimeMillis());
+        MemoryFlashcards.configure(candidate, subjects, count, mode, pool, System.currentTimeMillis());
         cache = candidate; save(c);
     }
     public static synchronized void rateFlashcard(Context c, String id, int rating, String date) {
@@ -98,8 +101,12 @@ public final class MemoryStore {
     public static synchronized void settings(Context c, String id, String name, int nl, int rl, int target, boolean linked) {
         data(c).settings(id, name, nl, rl, target, linked); save(c);
     }
+    public static synchronized void settings(Context c, String id, String name, int nl, int rl, int target, boolean linked,
+                                             double retention, int maxInterval) {
+        data(c).settings(id, name, nl, rl, target, linked, retention, maxInterval); save(c);
+    }
     public static synchronized void addDeck(Context c, String name, String subject) {
-        if (name.trim().isEmpty()) throw new IllegalArgumentException("请输入卡组名称");
+        if (name.trim().isEmpty()) throw new IllegalArgumentException(T.s("请输入卡组名称"));
         data(c).addDeck(name.trim(), subject); save(c);
     }
     public static synchronized void deleteDeck(Context c,String id) {data(c).deleteDeck(id,System.currentTimeMillis());save(c);}
@@ -109,24 +116,33 @@ public final class MemoryStore {
         boolean credit = data(c).rate(id, rating, System.currentTimeMillis()); save(c); return credit;
     }
     public static File media(Context c, String name) {
-        if (!name.matches("[a-zA-Z0-9_-]+\\.jpg")) throw new IllegalArgumentException("图片文件名无效");
+        if (!name.matches("[a-zA-Z0-9_-]+\\.jpg")) throw new IllegalArgumentException(T.s("图片文件名无效"));
         return new File(new File(c.getFilesDir(), "memory-media"), name);
     }
     /** Decode sampled, then re-encode locally: bounded memory and no retained URI dependency. */
     public static String importImage(Context c, Uri uri) throws Exception {
         BitmapFactory.Options bounds = new BitmapFactory.Options(); bounds.inJustDecodeBounds = true;
         try (InputStream in = c.getContentResolver().openInputStream(uri)) { BitmapFactory.decodeStream(in, null, bounds); }
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw new IllegalArgumentException("无法读取图片");
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw new IllegalArgumentException(T.s("无法读取图片"));
         BitmapFactory.Options opts = new BitmapFactory.Options(); opts.inSampleSize = 1;
         while (Math.max(bounds.outWidth, bounds.outHeight) / opts.inSampleSize > 1800) opts.inSampleSize *= 2;
         Bitmap bitmap;
         try (InputStream in = c.getContentResolver().openInputStream(uri)) { bitmap = BitmapFactory.decodeStream(in, null, opts); }
-        if (bitmap == null) throw new IllegalArgumentException("图片解码失败");
+        if (bitmap == null) throw new IllegalArgumentException(T.s("图片解码失败"));
         String name = MemoryData.id() + ".jpg"; File target = media(c, name); target.getParentFile().mkdirs();
         try (OutputStream out = new FileOutputStream(target)) {
-            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out)) throw new IllegalStateException("图片保存失败");
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 88, out)) throw new IllegalStateException(T.s("图片保存失败"));
         } finally { bitmap.recycle(); }
         return name;
+    }
+    public static synchronized MemoryAuthoring.Result previewCards(Context c, MemoryAuthoring.Batch batch) {
+        return MemoryAuthoring.prepare(data(c), batch);
+    }
+    public static synchronized MemoryAuthoring.Result importCards(Context c, MemoryAuthoring.Batch batch) {
+        // Revalidate against the current library; previews never overwrite intervening edits.
+        MemoryAuthoring.Result result = MemoryAuthoring.prepare(data(c), batch);
+        if (result.added > 0) { cache = result.data; save(c); }
+        return result;
     }
     public static synchronized int importText(Context c, String deck, String text, String type) {
         // Full preflight on a candidate. One malformed row never produces a partial import.
@@ -140,13 +156,13 @@ public final class MemoryStore {
         for (String row : text.replace("\r", "").split("\n")) {
             line++; if (row.trim().isEmpty()) continue;
             String[] cols = row.split("\t", -1);
-            if (cols.length < 2 || cols.length > 4) throw new IllegalArgumentException("第 " + line + " 行：用 Tab 分隔题目、答案、来源、备注");
+            if (cols.length < 2 || cols.length > 4) throw new IllegalArgumentException(T.s("第 ") + line + T.s(" 行：用 Tab 分隔题目、答案、来源、备注"));
             JSONObject card = MemoryData.newCard(deck, type, cols[0], cols[1], cols.length > 2 ? cols[2] : "", cols.length > 3 ? cols[3] : "");
             String key = type + "\u0000" + card.optString("front") + "\u0000" + card.optString("answer");
             if (existing.add(key)) { candidate.saveCard(card); n++; }
-            if (n > 10000) throw new IllegalArgumentException("单次最多导入 10000 张");
+            if (n > 10000) throw new IllegalArgumentException(T.s("单次最多导入 10000 张"));
         }
-        if (n == 0) throw new IllegalArgumentException("没有可导入的新卡片（空内容或完全重复）");
+        if (n == 0) throw new IllegalArgumentException(T.s("没有可导入的新卡片（空内容或完全重复）"));
         cache = candidate; save(c); return n;
     }
     public static synchronized void exportBackup(Context c, OutputStream output) throws Exception {
@@ -171,19 +187,19 @@ public final class MemoryStore {
                 ZipEntry entry;
                 while ((entry = zip.getNextEntry()) != null) {
                     String name = entry.getName();
-                    if (!entries.add(name) || entries.size() > 30001) throw new IllegalArgumentException("重复或过多备份条目");
+                    if (!entries.add(name) || entries.size() > 30001) throw new IllegalArgumentException(T.s("重复或过多备份条目"));
                     if (!name.equals("memory.json") && !name.matches("media/[a-zA-Z0-9_-]+\\.jpg"))
-                        throw new IllegalArgumentException("备份包含不支持的路径");
+                        throw new IllegalArgumentException(T.s("备份包含不支持的路径"));
                     byte[] bytes = read(zip, name.equals("memory.json") ? 64 * 1024 * 1024 : 12 * 1024 * 1024);
                     total += bytes.length;
-                    if (total > 256L * 1024 * 1024) throw new IllegalArgumentException("备份解压后超过 256MB");
+                    if (total > 256L * 1024 * 1024) throw new IllegalArgumentException(T.s("备份解压后超过 256MB"));
                     if (name.equals("memory.json")) json = new String(bytes, "UTF-8");
                     else {
                         String filename = name.substring(6);
                         BitmapFactory.Options b = new BitmapFactory.Options(); b.inJustDecodeBounds = true;
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.length, b);
                         if (b.outWidth <= 0 || b.outHeight <= 0 || Math.max(b.outWidth, b.outHeight) > 4096)
-                            throw new IllegalArgumentException("备份图片损坏或尺寸过大");
+                            throw new IllegalArgumentException(T.s("备份图片损坏或尺寸过大"));
                         File temp = new File(stage, filename);
                         try (OutputStream out = new FileOutputStream(temp)) { out.write(bytes); }
                         images.put(filename, temp);
@@ -191,7 +207,7 @@ public final class MemoryStore {
                     zip.closeEntry();
                 }
             }
-            if (json == null) throw new IllegalArgumentException("备份缺少 memory.json");
+            if (json == null) throw new IllegalArgumentException(T.s("备份缺少 memory.json"));
             MemoryData candidate = new MemoryData(json);
             // New media names ensure even a failed restore cannot overwrite live images.
             Map<String, String> renamed = new HashMap<>();
@@ -201,7 +217,7 @@ public final class MemoryStore {
                 for (int i = 0; i < candidate.cards().length(); i++) {
                     JSONObject card = candidate.cards().optJSONObject(i); String old = card.optString("image");
                     if (old.isEmpty()) continue;
-                    if (!images.containsKey(old)) throw new IllegalArgumentException("备份缺少图片：" + old);
+                    if (!images.containsKey(old)) throw new IllegalArgumentException(T.s("备份缺少图片：") + old);
                     String fresh = renamed.get(old);
                     if (fresh == null) {
                         fresh = MemoryData.id() + ".jpg"; File dest = media(c, fresh); dest.getParentFile().mkdirs();
@@ -235,7 +251,7 @@ public final class MemoryStore {
     static byte[] read(InputStream in, int limit) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream(); byte[] buf = new byte[8192]; int n;
         while ((n = in.read(buf)) != -1) {
-            if (out.size() + n > limit) throw new IllegalArgumentException("文件内容超过大小限制");
+            if (out.size() + n > limit) throw new IllegalArgumentException(T.s("文件内容超过大小限制"));
             out.write(buf, 0, n);
         }
         return out.toByteArray();

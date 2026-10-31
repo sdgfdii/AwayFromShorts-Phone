@@ -20,8 +20,7 @@ public class AfsAdmin extends DeviceAdminReceiver {
 
     @Override
     public CharSequence onDisableRequested(Context ctx, Intent intent) {
-        return "无法在此处停用。设备所有者只能通过 adb 移除：\n"
-                + "adb shell dpm remove-active-admin com.afs.guard/.AfsAdmin";
+        return T.s("设备所有者由系统保护，无法在此处停用。请按部署包的恢复说明处理。");
     }
 
     @Override

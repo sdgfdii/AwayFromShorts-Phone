@@ -59,11 +59,11 @@ public class FrostView extends View {
             return;
         }
         long now = System.currentTimeMillis();
-        float dt = Math.min(0.1f, (now - last) / 1000f);
+        float dt = 0;
         last = now;
 
         // 边缘冷光：中心透明 → 四角一层淡冰蓝，随呼吸明暗
-        float breath = 0.55f + 0.45f * (float) Math.sin((now - t0) / 2400.0);
+        float breath = 0.55f;
         int a = (int) (0x14 + 0x0e * breath);
         if (a != lastEdgeAlpha) {
             lastEdgeAlpha = a;
@@ -81,12 +81,11 @@ public class FrostView extends View {
                 fy[i] = -0.05f;
                 fx[i] = rnd.nextFloat();
             }
-            float x = (fx[i] + 0.02f * (float) Math.sin(now / 1700f + fp[i])) * w;
+            float x = (fx[i] + 0.02f * (float) Math.sin(fp[i])) * w;
             float y = fy[i] * h;
             flake.setAlpha((int) (fa[i] * 255f * flakeBoost));
             canvas.drawCircle(x, y, fr[i] * dp * 0.5f, flake);
         }
-        postInvalidateOnAnimation();
     }
 
     @Override
@@ -94,7 +93,7 @@ public class FrostView extends View {
         super.onVisibilityChanged(v, vis);
         last = System.currentTimeMillis();
         if (vis == VISIBLE) {
-            postInvalidateOnAnimation();
+            invalidate();
         }
     }
 
@@ -103,7 +102,7 @@ public class FrostView extends View {
         super.onWindowVisibilityChanged(vis);
         last = System.currentTimeMillis();
         if (vis == VISIBLE) {
-            postInvalidateOnAnimation();
+            invalidate();
         }
     }
 }

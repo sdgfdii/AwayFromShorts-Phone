@@ -126,27 +126,82 @@ public final class Guard {
 
     /** 0=可使用，1=自身时段，2=学习联动，3=禁忌惩罚。与实际冻结使用同一判定。 */
     public static int blockReasonNow(Context ctx, String pkg) {
-        Calendar c = Calendar.getInstance();
-        Rule r = RuleStore.get(ctx, pkg);
+        Calendar c = GuardClock.now(ctx);
+        Rule r = enforcedRules(ctx).get(pkg);if(r==null)return 0;
         boolean holding = StudyGate.holding(ctx, c);
         boolean taboo = StudyGate.tabooHolding(c.getTimeInMillis(), StudyGate.tabooUntil(ctx));
-        return blockReason(r, RuleStore.keyApps(ctx).contains(pkg), holding, taboo, c);
+        return effectiveReason(ctx,pkg,r,RuleStore.keyApps(ctx).contains(pkg),holding,taboo,c,CardStore.rewardUntil(ctx,c.getTimeInMillis())>0);
     }
 
     static int blockReason(Rule rule, boolean keyApp, boolean holding, boolean taboo, Calendar now) {
-        if (blocked(rule, now)) return 1;
+        return blockReason(rule,keyApp,holding,taboo,now,false);
+    }
+    /**
+     * 最终判定 = 时段/额度/禁忌这些基础规则，再叠一层钥匙闸门。
+     *
+     * 拆成两层是故意的：基础规则是纯函数（离线回归 207 项断言全压在上面），
+     * 钥匙闸门要读使用记录，只能在带 Context 的这一层追加。reason 6 只在这里出现。
+     */
+    private static int effectiveReason(Context c,String pkg,Rule rule,boolean key,boolean hold,boolean taboo,Calendar now,boolean reward){
+        int base=effectiveBase(c,pkg,rule,key,hold,taboo,now,reward);
+        if(base!=0)return base;
+        return KeyGate.blocks(c,pkg,now.getTimeInMillis())?6:0;
+    }
+    private static int effectiveBase(Context c,String pkg,Rule rule,boolean key,boolean hold,boolean taboo,Calendar now,boolean reward){
+        if(DailyQuotaStore.exceeded(c,pkg))return 5;
+        key=key||!rule.gate;
+        hold=hold&&StudyGate.learningFor(c,rule,now);
+        taboo=PenaltyStore.holding(c,pkg,now.getTimeInMillis());
+        if(AppUsageQuota.minutes(c,pkg)==0&&!DailyQuotaStore.hasAllowance(c,pkg))return blockReason(rule,key,hold,taboo,now,reward);
+        int base=blockReason(FreezeSlotStore.withoutSchedule(),key,hold,taboo,now,false);
+        if(base!=0)return base;return AppUsageQuota.exceeded(c,pkg,rule,now.getTimeInMillis())?4:0;
+    }
+
+    static int blockReason(Rule rule, boolean keyApp, boolean holding, boolean taboo, Calendar now, boolean reward) {
+        if (blocked(rule, now) && !reward) return 1;
         if (keyApp) return 0;
         if (taboo) return 3;
         return holding ? 2 : 0;
     }
 
     public static String blockReasonText(int reason) {
-        return reason == 1 ? "时段冻结" : reason == 2 ? "学习联动冻结" : reason == 3 ? "禁忌延长冻结" : "可使用";
+        return reason == 1 ? T.s("时段冻结") : reason == 2 ? T.s("学习联动冻结") : reason == 3 ? T.s("禁忌延长冻结") : reason==4?T.s("使用额度冻结"):reason==5?T.s("每日限额用尽"):reason==6?T.s("钥匙应用未达标"):T.s("可使用");
     }
+
+    /** 最近一次「额度用完请出去」的对象与时刻：同一次使用只拉一次提示页。 */
+    private static long lastQuotaKickAt;
+    private static String lastQuotaKickPkg;
+
+    /**
+     * 额度用尽时把用户请出正在用的那只应用。
+     *
+     * setPackagesSuspended 只挡「下一次启动」，已经在前台的实例照样能刷，
+     * 所以额度一到点就主动把提示页拉到最前，当场结束这次使用。
+     * 设备所有者不受后台启动 Activity 的限制，这条路不依赖无障碍服务。
+     */
+    static void kickQuotaExceeded(Context ctx) {
+        try {
+            android.os.PowerManager power = (android.os.PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+            if (power != null && !power.isInteractive()) return;   // 灭屏时不必抢前台
+            long now = GuardClock.now(ctx).getTimeInMillis();
+            String pkg = AppUsageQuota.foreground(ctx, now);
+            if (pkg == null || pkg.equals(ctx.getPackageName())) return;
+            int reason = blockReasonNow(ctx, pkg);
+            if (reason != 4 && reason != 5) return;
+            if (pkg.equals(lastQuotaKickPkg) && now - lastQuotaKickAt < 8000L) return;
+            lastQuotaKickPkg = pkg; lastQuotaKickAt = now;
+            ctx.startActivity(new Intent(ctx, QuotaBlockedActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    .putExtra(QuotaBlockedActivity.EXTRA_PACKAGE, pkg));
+        } catch (RuntimeException error) {
+            Log.w(TAG, "quota kick failed: " + error.getClass().getSimpleName());
+        }
+    }
+    private static Map<String,Rule> enforcedRules(Context c){Map<String,Rule> rules=RuleStore.all(c);for(String pkg:DailyQuotaStore.packages(c))if(!rules.containsKey(pkg))rules.put(pkg,FreezeSlotStore.withoutSchedule());return rules;}
 
     /** 这个应用现在是否在自己的放行窗口里（不看学习闸门）。 */
     public static boolean inWindowNow(Context ctx, String pkg) {
-        return RuleStore.get(ctx, pkg).inWindow(Calendar.getInstance());
+        return RuleStore.get(ctx, pkg).inWindow(GuardClock.now(ctx));
     }
 
     /**
@@ -163,6 +218,8 @@ public final class Guard {
         if (RuleStore.isFresh(ctx, pkg)) {
             return false;
         }
+        if(DailyQuotaStore.hasAllowance(ctx,pkg))return DailyQuotaStore.exceeded(ctx,pkg)||AppUsageQuota.exceeded(ctx,pkg,RuleStore.get(ctx,pkg),GuardClock.now(ctx).getTimeInMillis());
+        if(AppUsageQuota.minutes(ctx,pkg)>0)return AppUsageQuota.exceeded(ctx,pkg,RuleStore.get(ctx,pkg),GuardClock.now(ctx).getTimeInMillis());
         return !inWindowNow(ctx, pkg);
     }
 
@@ -180,9 +237,11 @@ public final class Guard {
 
     /** 有没有应用正处在放行窗口（决定强制模式能不能关）。 */
     public static boolean anyUnlocked(Context ctx) {
-        Calendar now = Calendar.getInstance();
-        for (Rule r : RuleStore.all(ctx).values()) {
-            if (r.inWindow(now)) {
+        Calendar now = GuardClock.now(ctx);
+        for (Map.Entry<String,Rule> entry : enforcedRules(ctx).entrySet()) {
+            if(DailyQuotaStore.exceeded(ctx,entry.getKey()))continue;
+            Rule r=entry.getValue();
+            if ((DailyQuotaStore.hasAllowance(ctx,entry.getKey())||r.inWindow(now)||AppUsageQuota.minutes(ctx,entry.getKey())>0)&&!AppUsageQuota.exceeded(ctx,entry.getKey(),r,now.getTimeInMillis())) {
                 return true;
             }
         }
@@ -195,19 +254,19 @@ public final class Guard {
     }
 
     public static int blockedCount(Context ctx) {
-        Calendar now = Calendar.getInstance();
+        Calendar now = GuardClock.now(ctx);
         // 必须把学习闸门算进去，否则状态卡显示"5 个冻结"、下面结果却是"12 个冻结"
         boolean gate = StudyGate.holding(ctx, now);
         java.util.Set<String> keys = RuleStore.keyApps(ctx);
         PackageManager pm = ctx.getPackageManager();
         int n = 0;
-        for (Map.Entry<String, Rule> e : RuleStore.all(ctx).entrySet()) {
+        for (Map.Entry<String, Rule> e : enforcedRules(ctx).entrySet()) {
             // 与 apply() 的统计口径一致：没装的应用不算"冻结中"
             if (!installed(pm, e.getKey())) {
                 continue;
             }
             Rule r = e.getValue();
-            if (blocked(r, now) || (gate && !keys.contains(e.getKey()))) {
+            if (blockReasonNow(ctx,e.getKey())!=0) {
                 n++;
             }
         }
@@ -223,9 +282,10 @@ public final class Guard {
      * 学习联动还需要在 20:00 检查，并在次日零点清除前一天的延长冻结。
      */
     public static long nextFlipMillis(Context ctx) {
-        Calendar now = Calendar.getInstance();
-        return Math.min(nextFlipOf(RuleStore.all(ctx).values(), now),
-                StudyGate.nextCheckBoundaryMillis(now));
+        Calendar now = GuardClock.now(ctx);
+        long next=Math.min(Math.min(nextFlipOf(RuleStore.all(ctx).values(), now),StudyGate.nextCheckBoundaryMillis(now)),PenaltyStore.boundary(ctx,now.getTimeInMillis()));
+        long reward=CardStore.rewardUntil(ctx,now.getTimeInMillis());
+        return reward>0?Math.min(next,reward):next;
     }
 
     /* ==================== 落地 ==================== */
@@ -235,12 +295,14 @@ public final class Guard {
      * 幂等：反复调用没有副作用。
      */
     public static String apply(Context ctx) {
+        try{DailyQuotaStore.refresh(ctx);}catch(IllegalStateException error){Log.e(TAG,"daily quota state unavailable",error);}
+        DailyCardCompletion.capture(ctx);
         DevicePolicyManager d = dpm(ctx);
         if (d == null) {
-            return "拿不到 DevicePolicyManager";
+            return T.s("拿不到 DevicePolicyManager");
         }
         if (!isOwner(ctx)) {
-            return "尚未成为设备所有者，什么都没做。\n请先按 README 用 adb 执行 set-device-owner。";
+            return T.s("尚未成为设备所有者，什么都没做。\n请先按 README 用 adb 执行 set-device-owner。");
         }
 
         // 顺手触发学习闸门的数据刷新（内部节流 10 分钟 + 后台线程，绝不阻塞）
@@ -249,14 +311,26 @@ public final class Guard {
         ComponentName a = admin(ctx);
         applyRestrictions(ctx, d, a);
 
-        Map<String, Rule> rules = RuleStore.all(ctx);
-        Calendar now = Calendar.getInstance();
+        java.util.Set<String> scheduled=RuleStore.packages(ctx);
+        Map<String, Rule> rules = enforcedRules(ctx);
+        Calendar now = GuardClock.now(ctx);
         // 学习闸门：整轮判一次。true = 今天目标没打完且此刻在延长区间里
         boolean gateHold = StudyGate.holding(ctx, now);
         java.util.Set<String> keys = RuleStore.keyApps(ctx);
+        boolean taboo=StudyGate.tabooHolding(now.getTimeInMillis(),StudyGate.tabooUntil(ctx));
+        boolean eligible=false;
+        PackageManager pm=ctx.getPackageManager();
+        for(Map.Entry<String,Rule> e:rules.entrySet()){
+            if(installed(pm,e.getKey())&&blocked(e.getValue(),now)
+                    && effectiveReason(ctx,e.getKey(),e.getValue(),keys.contains(e.getKey()),gateHold,taboo,now,true)==0){eligible=true;break;}
+        }
+        long rewardBoundary=Math.min(nextFlipOf(rules.values(),now),StudyGate.nextCheckBoundaryMillis(now));
+        boolean reward=false;
+        try{reward=CardStore.reconcile(ctx,now.getTimeInMillis(),eligible,rewardBoundary);}
+        catch(RuntimeException error){Log.w(TAG,"reward accounting: "+error.getClass().getSimpleName());}
         boolean anyBlocked = false;
         for (Map.Entry<String, Rule> entry : rules.entrySet()) {
-            if (blocked(entry.getValue(), now) || (gateHold && !keys.contains(entry.getKey()))) {
+            if (effectiveReason(ctx,entry.getKey(),entry.getValue(),keys.contains(entry.getKey()),gateHold,taboo,now,reward)!=0) {
                 anyBlocked = true;
                 break;
             }
@@ -268,16 +342,16 @@ public final class Guard {
         GrayMode.apply(ctx, !MainActivity.isHomeVisible()
                 && (st == StudyGate.ST_ACTIVE || st == StudyGate.ST_PENDING));
 
-        PackageManager pm = ctx.getPackageManager();
         StringBuilder sb = new StringBuilder();
         int frozen = 0;
+        boolean rewardUsed=false;
 
         // 被移出列表的必须先解冻，否则它会永远停在被冻结的状态
         for (String p : RuleStore.applied(ctx)) {
             if (!rules.containsKey(p)) {
                 try {
-                    d.setPackagesSuspended(a, new String[] { p }, false);
-                    d.setUninstallBlocked(a, p, false);
+                    setSuspended(d, a, new String[] { p }, false);
+                    setUninstall(d, a, p, false);
                 } catch (Throwable ignored) {
                 }
             }
@@ -287,34 +361,36 @@ public final class Guard {
             String pkg = e.getKey();
             Rule r = e.getValue();
             if (!installed(pm, pkg)) {
-                sb.append("- ").append(pkg).append("：未安装\n");
+                sb.append("- ").append(pkg).append(T.s("：未安装\n"));
                 continue;
             }
             // 只有关键应用不受学习闸门牵连。
             boolean gateBlock = gateHold && !keys.contains(pkg);
-            boolean block = blocked(r, now) || gateBlock;
+            boolean block = effectiveReason(ctx,pkg,r,keys.contains(pkg),gateHold,taboo,now,reward)!=0;
             try {
-                d.setUninstallBlocked(a, pkg, true);
+                setUninstall(d, a, pkg, true);
             } catch (Throwable ignored) {
             }
             String state;
             try {
-                d.setPackagesSuspended(a, new String[] { pkg }, block);
+                String[] failed=setSuspended(d, a, new String[] { pkg }, block);
+                if(reward&&!block&&blocked(r,now)&&(failed==null||failed.length==0))rewardUsed=true;
                 state = block
-                        ? (gateBlock && !blocked(r, now) ? "冻结（学习闸门）" : "已冻结")
-                        : "放行中";
+                        ? (gateBlock && !blocked(r, now) ? T.s("冻结（学习闸门）") : T.s("已冻结"))
+                        : T.s("放行中");
             } catch (Throwable t) {
-                state = "冻结失败：" + t.getClass().getSimpleName();
+                state = T.s("冻结失败：") + t.getClass().getSimpleName();
             }
             if (block) {
                 frozen++;
             }
             // 应用名给人看，包名方便核对是哪个版本，后面带它自己的放行时段
-            sb.append("- ").append(labelOf(pm, pkg)).append("（").append(pkg).append("）：")
+            sb.append("- ").append(labelOf(pm, pkg)).append(T.s("（")).append(pkg).append(T.s("）："))
                     .append(state).append(" · ").append(r.freezeSummary())
-                    .append(keys.contains(pkg) ? " · 关键应用" : " · 参与学习闸门").append('\n');
+                    .append(keys.contains(pkg) ? T.s(" · 关键应用") : scheduled.contains(pkg)?T.s(" · 参与学习闸门"):T.s(" · 每日限额 · 参与学习闸门")).append('\n');
         }
         RuleStore.setApplied(ctx, rules.keySet());
+        if(reward&&!rewardUsed){try{CardStore.reconcile(ctx,now.getTimeInMillis(),false,rewardBoundary);}catch(RuntimeException ignored){ }reward=false;}
 
         if (ALSO_SUSPEND_BROWSERS) {
             for (int i = 0; i < BROWSERS.length; i++) {
@@ -322,9 +398,9 @@ public final class Guard {
                     continue;
                 }
                 try {
-                    d.setPackagesSuspended(a, new String[] { BROWSERS[i] }, anyBlocked);
+                    setSuspended(d, a, new String[] { BROWSERS[i] }, anyBlocked);
                     if (anyBlocked) {
-                        sb.append("- ").append(BROWSERS[i]).append("：已冻结（堵网页版）\n");
+                        sb.append("- ").append(BROWSERS[i]).append(T.s("：已冻结（堵网页版）\n"));
                     }
                 } catch (Throwable ignored) {
                 }
@@ -335,8 +411,8 @@ public final class Guard {
         // 而 schedule() 原本只在开机/闹钟/Job 回调里调用 —— 装完就再也排不上了。
         schedule(ctx);
 
-        String head = "结果：" + rules.size() + " 个应用，" + frozen + " 个冻结"
-                + (gateHold ? "（学习闸门生效中）" : "") + "\n";
+        String head = T.s("结果：") + rules.size() + T.s(" 个应用，") + frozen + T.s(" 个冻结")
+                + (gateHold ? T.s("（学习闸门生效中）") : "") + (reward?T.s(" · 热爱奖励减免中"):"") + "\n";
         String result = head + sb.toString();
         ctx.getSharedPreferences("afs_status", Context.MODE_PRIVATE).edit()
                 .putString("last_result", result)
@@ -344,11 +420,30 @@ public final class Guard {
         return result;
     }
 
+    static final Object POLICY_LOCK = new Object();
+    private static String[] setSuspended(DevicePolicyManager d, ComponentName a, String[] packages, boolean value) {
+        synchronized (POLICY_LOCK) { return d.setPackagesSuspended(a,packages,value); }
+    }
+    private static void setUninstall(DevicePolicyManager d, ComponentName a, String pkg, boolean value) {
+        synchronized (POLICY_LOCK) { d.setUninstallBlocked(a,pkg,value); }
+    }
     private static void applyRestrictions(Context ctx, DevicePolicyManager d, ComponentName a) {
+        synchronized (POLICY_LOCK) { applyRestrictionsUnlocked(ctx,d,a); }
+    }
+    private static void applyRestrictionsUnlocked(Context ctx, DevicePolicyManager d, ComponentName a) {
         add(d, a, BLOCK_FACTORY_RESET ? UserManager.DISALLOW_FACTORY_RESET : null);
         add(d, a, BLOCK_SAFE_BOOT     ? UserManager.DISALLOW_SAFE_BOOT     : null);
         add(d, a, BLOCK_APPS_CONTROL  ? UserManager.DISALLOW_APPS_CONTROL  : null);
-        add(d, a, BLOCK_TIME_CHANGE   ? UserManager.DISALLOW_CONFIG_DATE_TIME : null);
+        if (BLOCK_TIME_CHANGE) {
+            if (Build.VERSION.SDK_INT >= 28) {
+                add(d, a, UserManager.DISALLOW_CONFIG_DATE_TIME);
+            } else {
+                // DISALLOW_CONFIG_DATE_TIME was added in API 28. On Android 7/8
+                // require network time and pin the schedule timezone in GuardClock.
+                try { d.setAutoTimeRequired(a, true); }
+                catch (RuntimeException e) { Log.e(TAG, "Cannot enforce automatic time", e); }
+            }
+        }
         add(d, a, BLOCK_UNINSTALL_ALL ? UserManager.DISALLOW_UNINSTALL_APPS : null);
         try {
             d.setUninstallBlocked(a, ctx.getPackageName(), true);
@@ -403,7 +498,7 @@ public final class Guard {
      *   其余 23 小时全冻结。这是最容易误读的地方。
      */
     static String allowText(Rule r) {
-        return r.freezeSummary() + (r.gate ? "" : " · 不受学习闸门影响");
+        return r.freezeSummary() + (r.gate ? "" : T.s(" · 不受学习闸门影响"));
     }
 
     private static boolean installed(PackageManager pm, String pkg) {
@@ -522,36 +617,36 @@ public final class Guard {
     /* ==================== 展示 ==================== */
 
     public static String describe(Context ctx) {
-        Calendar now = Calendar.getInstance();
+        Calendar now = GuardClock.now(ctx);
         int total = RuleStore.count(ctx);
         int frozen = blockedCount(ctx);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("设备所有者　").append(isOwner(ctx) ? "是（已锁死）" : "否 —— 冻结不会生效").append('\n');
-        sb.append("当前时间　").append(stamp(now.getTimeInMillis())).append('\n');
-        sb.append("应用　　　").append(total).append(" 个，").append(frozen).append(" 个冻结中").append('\n');
+        sb.append(T.s("设备所有者　")).append(isOwner(ctx) ? T.s("是（已锁死）") : T.s("否 —— 冻结不会生效")).append('\n');
+        sb.append(T.s("当前时间　")).append(stamp(now.getTimeInMillis())).append('\n');
+        sb.append(T.s("应用　　　")).append(total).append(T.s(" 个，")).append(frozen).append(T.s(" 个冻结中")).append('\n');
         // 关键应用名单：用户自己列的，学习目标没完成时只按自己的时段走。
         // 不显示这一行的话，用户没法确认"我列的那几个到底生效了没有"。
         int keys = RuleStore.keyApps(ctx).size();
-        sb.append("关键应用　").append(keys).append(" 个（学习目标未完成也不延长冻结）").append('\n');
+        sb.append(T.s("关键应用　")).append(keys).append(T.s(" 个（学习目标未完成也不延长冻结）")).append('\n');
         // 学习联动不在这里 —— 它现在并进首页的「打卡」按钮了（styleCheckin：
         // 后缀带「冻结中 / ⚠ 联动过期 / 等记账」），埋在这个同色同字号的
         // 文本块里没人看得见。
-        sb.append("下次切换　").append(total == 0 ? "—（没添加应用）" : stamp(nextFlipMillis(ctx))).append('\n');
+        sb.append(T.s("下次切换　")).append(total == 0 ? T.s("—（没添加应用）") : stamp(nextFlipMillis(ctx))).append('\n');
         sb.append('\n');
-        sb.append("加固项　").append(restrictionSummary()).append('\n');
+        sb.append(T.s("加固项　")).append(restrictionSummary()).append('\n');
         return sb.toString();
     }
 
     private static String restrictionSummary() {
         java.util.List<String> items = new java.util.ArrayList<String>();
-        if (BLOCK_FACTORY_RESET) items.add("禁恢复出厂");
-        if (BLOCK_SAFE_BOOT)     items.add("禁安全模式");
-        if (BLOCK_APPS_CONTROL)  items.add("禁强停/清数据");
-        if (BLOCK_TIME_CHANGE)   items.add("禁改时间");
-        if (BLOCK_UNINSTALL_ALL) items.add("禁卸载");
+        if (BLOCK_FACTORY_RESET) items.add(T.s("禁恢复出厂"));
+        if (BLOCK_SAFE_BOOT)     items.add(T.s("禁安全模式"));
+        if (BLOCK_APPS_CONTROL)  items.add(T.s("禁强停/清数据"));
+        if (BLOCK_TIME_CHANGE)   items.add(T.s("禁改时间"));
+        if (BLOCK_UNINSTALL_ALL) items.add(T.s("禁卸载"));
         if (items.isEmpty()) {
-            return "无";
+            return T.s("无");
         }
         // 每两项一行。(char)10 = 换行, (char)0x3000 = 全角空格
         StringBuilder sb = new StringBuilder();
@@ -568,7 +663,7 @@ public final class Guard {
         Calendar c = Calendar.getInstance();
         c.setTimeInMillis(millis);
         int[] wd = { 0, 7, 1, 2, 3, 4, 5, 6 };
-        String[] names = { "", "周一", "周二", "周三", "周四", "周五", "周六", "周日" };
+        String[] names = { "", T.s("周一"), T.s("周二"), T.s("周三"), T.s("周四"), T.s("周五"), T.s("周六"), T.s("周日") };
         StringBuilder sb = new StringBuilder();
         sb.append(c.get(Calendar.MONTH) + 1).append('/')
           .append(c.get(Calendar.DAY_OF_MONTH)).append(' ')

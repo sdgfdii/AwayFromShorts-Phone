@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.lifecyclewindowqa"><application android:label="AFS LifecycleWindow QA"/><instrumentation android:name="com.afs.guard.LifecycleWindowDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true"/></manifest>
+
+
+

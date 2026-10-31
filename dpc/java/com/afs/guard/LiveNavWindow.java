@@ -5,7 +5,6 @@ import android.app.Application;
 import android.app.Dialog;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
-import android.graphics.drawable.InsetDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -31,6 +30,7 @@ final class LiveNavWindow {
     private final WindowManager manager;
     private Consumer<Boolean> blurListener;
     private boolean destroyed;
+    private boolean pendingShow;
     private int lastWidth,lastBottom;
 
     static void attach(Activity activity,View host,View nav) {
@@ -50,11 +50,13 @@ final class LiveNavWindow {
         LiveNavWindow window=new LiveNavWindow(activity,host,nav);
         windows.put(activity,new WeakReference<>(window));host.setTag(window);
         host.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener(){
-            public void onViewAttachedToWindow(View v){v.post(window::sync);}
+            public void onViewAttachedToWindow(View v){window.showImmediately();v.post(window::sync);}
             public void onViewDetachedFromWindow(View v){window.dispose();}
         });
         host.getViewTreeObserver().addOnGlobalLayoutListener(window::sync);
         host.setOnApplyWindowInsetsListener((v,insets)->{v.post(window::sync);return insets;});
+        // 注意：这里不 show —— 必须在宿主的窗口真正挂上之后（onViewAttachedToWindow）再挂底栏窗口，
+        // 否则窗口层级会排在页面下面，切页那几帧底栏会被新页面盖住（看起来像「后面一页露出来」）。
         host.post(window::sync);
     }
     private static LiveNavWindow find(Activity a){WeakReference<LiveNavWindow> ref=windows.get(a);return ref==null?null:ref.get();}
@@ -85,11 +87,19 @@ final class LiveNavWindow {
     private void appearance(boolean blur) {
         if(destroyed)return;
         Window w=dialog.getWindow();
-        boolean gpu=nav instanceof FloatingNav&&((FloatingNav)nav).gpuGlass();
         FloatingNav dock=(FloatingNav)nav;boolean glass=dock.hasGlass();
         int color=glass?(ui.palette.glassTint&0x00FFFFFF)|(blur?(ui.dark?0x78000000:0x93000000):0xD9000000):ui.surface();
-        w.setBackgroundDrawable(gpu?new ColorDrawable(0):new InsetDrawable(ui.round(color,dock.floating()?31:0),ui.dp(dock.shadowRoomDp())));
-        if(Build.VERSION.SDK_INT>=31)w.setBackgroundBlurRadius(blur&&!gpu&&glass?ui.dp(15.6f):0);
+        // 没有玻璃时由 FloatingNav 的 Material 自己画那一层底；窗口背景再画一层就会变成双层药丸
+        w.setBackgroundDrawable(!glass?new ColorDrawable(0):capsuleBackground(color));
+        // 与窗口同尺寸的圆角背景同时定义系统模糊边界，不再在胶囊外预留窗口区域。
+        w.getDecorView().setPadding(0,0,0,0);
+        // Blur this small window's live backdrop, never the activity's full-page RenderNode.
+        if(Build.VERSION.SDK_INT>=31)w.setBackgroundBlurRadius(blur&&glass?ui.dp(15.6f):0);
+    }
+    private android.graphics.drawable.GradientDrawable capsuleBackground(int color){
+        // Ui.round会把简洁风格的大圆角压到16dp；底栏必须保留31dp的真实胶囊轮廓。
+        android.graphics.drawable.GradientDrawable background=new android.graphics.drawable.GradientDrawable();
+        background.setColor(color);background.setCornerRadius(ui.dp(((FloatingNav)nav).floating()?31:0));return background;
     }
     private boolean keyboardVisible() {
         if(Build.VERSION.SDK_INT>=30) {
@@ -101,7 +111,13 @@ final class LiveNavWindow {
     }
     private void sync() {
         if(destroyed || activity.isFinishing() || activity.isDestroyed())return;
-        if(resumed.get()!=activity || !activity.hasWindowFocus() || !host.isAttachedToWindow() || host.getWindowVisibility()!=View.VISIBLE || keyboardVisible()){hide();return;}
+        boolean focused=activity.hasWindowFocus();
+        if(resumed.get()!=activity || !focused || !host.isAttachedToWindow() || host.getWindowVisibility()!=View.VISIBLE || keyboardVisible()){
+            // 入场那一下还没拿到焦点：别把刚挂上去的底栏又藏了，否则切页会闪一下
+            if(pendingShow && host.isAttachedToWindow() && !keyboardVisible())return;
+            hide();return;
+        }
+        pendingShow=false;
         FloatingNav dock=(FloatingNav)nav;int room=ui.dp(dock.shadowRoomDp());
         int width=host.getWidth()-(dock.floating()?ui.dp(42)-room*2:0),bottom=dock.floating()?ui.dp(21):0; if(width<=0)return;
         int safe=0;
@@ -116,9 +132,42 @@ final class LiveNavWindow {
         View decor=dialog.getWindow().getDecorView();if(decor.getVisibility()!=View.VISIBLE)decor.setVisibility(View.VISIBLE);
         if(nav instanceof FloatingNav)((FloatingNav)nav).glassVisible(true);
     }
-    private void hide(){if(nav instanceof FloatingNav)((FloatingNav)nav).glassVisible(false);if(dialog.isShowing())dialog.hide();}
+    /**
+     * 在 Activity 的窗口还没画出来之前先把底栏窗口挂上：切页时旧页面的底栏会被新页面窗口盖住，
+     * 如果等 resume 再 show，就会有一段「页面在动、底栏没了」的间隙。这里用屏幕宽高先摆到
+     * 底部（resume 后的 sync 再按真实 inset 校正一次）。
+     */
+    private void showImmediately() {
+        if(destroyed || dialog.isShowing())return;
+        pendingShow=true;
+        boolean floating=nav instanceof FloatingNav && ((FloatingNav)nav).floating();
+        int room=nav instanceof FloatingNav?ui.dp(((FloatingNav)nav).shadowRoomDp()):ui.dp(16);
+        int screen=activity.getResources().getDisplayMetrics().widthPixels;
+        int width=Math.max(1,screen-(floating?ui.dp(42)-room*2:0));
+        int safe=0;
+        if(Build.VERSION.SDK_INT>=30){
+            WindowInsets insets=activity.getWindow().getDecorView().getRootWindowInsets();
+            if(insets!=null)safe=insets.getInsets(WindowInsets.Type.navigationBars()).bottom;
+        }
+        int bottom=floating?Math.max(ui.dp(21),safe):0;
+        Window w=dialog.getWindow();WindowManager.LayoutParams lp=w.getAttributes();
+        lp.width=width;lp.height=ui.dp(62)+room*2+(floating?0:safe);
+        lp.y=Math.max(0,bottom-room);lp.gravity=Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL;
+        w.setAttributes(lp);lastWidth=width;lastBottom=bottom;
+        if(nav instanceof FloatingNav){
+            FloatingNav dock=(FloatingNav)nav;
+            // 玻璃关闭时 Material 自己会画底层，这里不能再叠一层窗口背景
+            w.setBackgroundDrawable(dock.hasGlass()
+                    ? capsuleBackground(ui.surface())
+                    : new ColorDrawable(0));
+        }
+        w.getDecorView().setPadding(0,0,0,0);
+        try{dialog.show();appearance(Build.VERSION.SDK_INT>=31&&manager.isCrossWindowBlurEnabled());}
+        catch(RuntimeException ignored){pendingShow=false;}
+    }
+    private void hide(){pendingShow=false;if(nav instanceof FloatingNav)((FloatingNav)nav).glassVisible(false);if(dialog.isShowing())dialog.hide();}
     private void dispose() {
-        if(destroyed)return;destroyed=true;
+        if(destroyed)return;destroyed=true;pendingShow=false;
         if(nav instanceof FloatingNav)((FloatingNav)nav).glassVisible(false);
         if(Build.VERSION.SDK_INT>=31 && blurListener!=null)manager.removeCrossWindowBlurEnabledListener(blurListener);
         dialog.dismiss();

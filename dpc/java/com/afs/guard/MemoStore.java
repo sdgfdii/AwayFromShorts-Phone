@@ -31,6 +31,7 @@ public final class MemoStore {
 
     private static final String SP = "afs_guard";
     private static final String KEY = "memos_v1";
+    private static final String TRASH = "memos_trash_v1";
     private static final int EXCERPT_LENGTH = 80;
     private static final int FALLBACK_TITLE = 40;
     private static final String UNTITLED = "无标题";
@@ -41,6 +42,7 @@ public final class MemoStore {
         public String body;
         public long updated;
         public boolean pinned;
+        public long remindAt,remindedAt;
 
         public Note(String id, String title, String body, long updated, boolean pinned) {
             this.id = id;
@@ -51,7 +53,7 @@ public final class MemoStore {
         }
 
         public Note copy() {
-            return new Note(id, title, body, updated, pinned);
+            Note copy=new Note(id,title,body,updated,pinned);copy.remindAt=remindAt;copy.remindedAt=remindedAt;return copy;
         }
     }
 
@@ -143,11 +145,11 @@ public final class MemoStore {
     public static String formatTime(long millis, long now) {
         long delta = now - millis;
         if (delta < 60000L) {          // 也覆盖时钟偏差导致的"未来"时间
-            return "刚刚";
+            return T.s("刚刚");
         }
         long minutes = delta / 60000L;
         if (minutes < 60L) {
-            return minutes + "分钟前";
+            return minutes + T.s("分钟前");
         }
         Calendar today = Calendar.getInstance();
         today.setTimeInMillis(now);
@@ -160,16 +162,17 @@ public final class MemoStore {
         int noteDay = when.get(Calendar.DAY_OF_MONTH);
         String clock = new SimpleDateFormat("HH:mm", Locale.CHINA).format(new Date(millis));
         if (today.equals(when)) {
-            return "今天 " + clock;
+            return T.s("今天 ") + clock;
         }
         when.add(Calendar.DAY_OF_MONTH, 1);
         if (today.equals(when)) {
-            return "昨天 " + clock;
+            return T.s("昨天 ") + clock;
         }
-        if (today.get(Calendar.YEAR) == noteYear) {
-            return noteMonth + "月" + noteDay + "日";
-        }
-        return noteYear + "年" + noteMonth + "月" + noteDay + "日";
+        // 年月日交给格式化串：拼「月」「日」会在英文下变成 "10 23"，
+        // 而这两个字本身又会被别处的日期格式当成虚词翻成空串。
+        java.text.SimpleDateFormat day = new java.text.SimpleDateFormat(
+                today.get(Calendar.YEAR) == noteYear ? T.s("M月d日") : T.s("yyyy年M月d日"), T.locale());
+        return day.format(new Date(millis));
     }
 
     /* ==================== 纯函数：JSON ==================== */
@@ -187,6 +190,7 @@ public final class MemoStore {
                 object.put("body", note.body == null ? "" : note.body);
                 object.put("updated", note.updated);
                 object.put("pinned", note.pinned);
+                object.put("remindAt",note.remindAt);object.put("remindedAt",note.remindedAt);
                 array.put(object);
             }
         } catch (Exception ignored) {
@@ -222,9 +226,10 @@ public final class MemoStore {
                     continue;
                 }
                 seen.add(id);
-                out.add(new Note(id, title, body,
+                Note note=new Note(id, title, body,
                         object.optLong("updated", 0L),
-                        object.optBoolean("pinned", false)));
+                        object.optBoolean("pinned", false));
+                note.remindAt=Math.max(0,object.optLong("remindAt",0));note.remindedAt=Math.max(0,object.optLong("remindedAt",0));out.add(note);
             }
         } catch (Exception ignored) {
             // 整段坏掉就当没有备忘录，页面还能正常新建
@@ -256,17 +261,7 @@ public final class MemoStore {
         if (blank(cleanTitle, cleanBody)) {
             return null;
         }
-        while (notes.size() >= MAX_NOTES) {
-            List<Note> ordered = order(notes);
-            if (ordered.isEmpty()) {
-                break;
-            }
-            int victim = indexOf(notes, ordered.get(ordered.size() - 1).id);
-            if (victim < 0) {
-                break;
-            }
-            notes.remove(victim);
-        }
+        if (notes.size() >= MAX_NOTES) throw new IllegalStateException(T.s("备忘录已满，请先导出或整理已有记录"));
         String storedTitle = cleanTitle.isEmpty()
                 ? displayTitle(new Note("", "", cleanBody, now, false))
                 : cleanTitle;
@@ -353,13 +348,47 @@ public final class MemoStore {
         return changed;
     }
 
-    public static synchronized boolean remove(Context context, String id) {
-        List<Note> notes = load(context);
-        boolean changed = drop(notes, id);
-        if (changed) {
-            save(context, notes);
-        }
+    /** Persist content and reminder together before scheduling any side effect. */
+    public static synchronized Note saveDraft(Context context,String id,String title,String body,long remindAt){
+        List<Note> notes=load(context);Note note;
+        if(id==null){note=add(notes,title,body,System.currentTimeMillis());if(note==null)return null;}
+        else{note=find(notes,id);if(note==null)throw new IllegalStateException(T.s("这条备忘录已删除，请先复制当前内容"));edit(notes,id,title,body,System.currentTimeMillis());}
+        if(note.remindAt!=remindAt){note.remindAt=Math.max(0,remindAt);note.remindedAt=0;}
+        if(!context.getSharedPreferences(SP,0).edit().putString(KEY,toJson(notes)).commit())throw new IllegalStateException(T.s("保存失败，请保留当前内容后重试"));
+        MemoReminder.schedule(context,note);return note.copy();
+    }
+    public static boolean reminderDue(Note note,long expected,long now){return note!=null&&expected>0&&note.remindAt==expected&&note.remindedAt!=expected&&now>=expected;}
+    public static synchronized Note claimReminder(Context context,String id,long expected,long now){
+        List<Note> notes=load(context);Note note=find(notes,id);if(!reminderDue(note,expected,now))return null;
+        note.remindedAt=expected;
+        if(!context.getSharedPreferences(SP,0).edit().putString(KEY,toJson(notes)).commit())return null;
+        return note.copy();
+    }
+
+    /** Move whole records, retaining id, pin and timestamps. Validate before mutating either list. */
+    public static boolean move(List<Note> from,List<Note> to,String id) {
+        Note note=find(from,id);if(note==null)return false;
+        if(find(to,id)!=null)throw new IllegalStateException(T.s("存在同编号记录，未覆盖任何内容"));
+        if(to.size()>=MAX_NOTES)throw new IllegalStateException(T.s("目标列表已满，请先导出或整理记录"));
+        to.add(note.copy());drop(from,id);return true;
+    }
+    public static synchronized List<Note> trash(Context context) {
+        return order(fromJson(context.getSharedPreferences(SP,0).getString(TRASH,"[]")));
+    }
+    public static synchronized boolean remove(Context context, String id) { return transfer(context,id,false); }
+    public static synchronized boolean restore(Context context, String id) { return transfer(context,id,true); }
+    private static boolean transfer(Context context,String id,boolean restore) {
+        List<Note> active=load(context),deleted=trash(context);
+        boolean changed=restore?move(deleted,active,id):move(active,deleted,id);
+        if(changed&&!context.getSharedPreferences(SP,0).edit().putString(KEY,toJson(active)).putString(TRASH,toJson(deleted)).commit())
+            throw new IllegalStateException(T.s("保存失败，请保留当前内容后重试"));
+        if(changed){if(restore){Note note=find(active,id);if(note!=null)MemoReminder.schedule(context,note);}else MemoReminder.cancel(context,id);}
         return changed;
+    }
+    public static synchronized void erase(Context context,String id) {
+        List<Note> deleted=trash(context);if(drop(deleted,id))
+            if(!context.getSharedPreferences(SP,0).edit().putString(TRASH,toJson(deleted)).commit())
+                throw new IllegalStateException(T.s("删除未保存，请重试"));
     }
 
     public static synchronized boolean setPinned(Context context, String id, boolean pinned) {

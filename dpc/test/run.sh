@@ -43,7 +43,7 @@ EOF
 
 find java test/java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
 if ! "$JAVAC" -encoding UTF-8 -nowarn --release 8 \
-  -classpath "$ANDROID_JAR" -d "$OUT" @"$OUT/sources.txt" > "$OUT/javac.log" 2>&1; then
+  -classpath "$ANDROID_JAR${SEP}libs/pdfbox-android-2.0.27.0.jar" -d "$OUT" @"$OUT/sources.txt" > "$OUT/javac.log" 2>&1; then
   cat "$OUT/javac.log" >&2
   exit 1
 fi
@@ -63,6 +63,6 @@ fi
 "$JAVA" -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 \
   -cp "$RUN_CP" com.afs.guard.GuardTest
 
-for TEST in FreezeRuleTest LedgerMergeTest MemoryTest MemoryFlashcardsTest FreezeSlotTest QuizTest DockSpringTest AppearanceTest MemoTest ToolboxTest; do
+for TEST in ScreenLockTest PageRuleTest CheckinPenaltyTest RestReminderTest LockPlanTest UnlockCodeTest KeywordRuleTest KeyGateTest CapabilityTest PenaltyTimingTest AppUsageQuotaTest DailyQuotaTest PercentTextTest DayBoundaryTest FocusPlanTest UpdateCheckTest CalendarDataTest FreezeRuleTest LedgerMergeTest MemoryTest MemoryFlashcardsTest MemorySwipeTest MemoryAuthoringTest TabOrderTest FreezeSlotTest QuizTest QuizImportTest DockSpringTest AppearanceTest MemoTest MemoEditorTest MemoChecklistTest MemoLibraryTest MemoBackupTest MemoTextFormatTest MemoBlocksTest MemoTableTest MemoSketchTest LearningPolicyTest CardDataTest SyncTargetTest LocalArchiveTest TranslationTest; do
   "$JAVA" -Dfile.encoding=UTF-8 -cp "$RUN_CP" "com.afs.guard.$TEST"
 done

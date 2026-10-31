@@ -99,6 +99,27 @@ public final class FreezeSlotStore {
     }
     public static Rule withoutSchedule() { return new Rule(0, new int[0][2], true, true); }
 
+    /**
+     * 删掉与给定时段相同、且已经没有任何应用的空格。
+     *
+     * 只在一次性迁移里用：整格改时段后，旧时段会留下一个"0 个应用"的壳，
+     * 用户手动拖空的时间格不该被这里顺手删掉，所以不做隐含清理。
+     */
+    static void pruneEmpty(Context c, Rule schedule) {
+        String key = scheduleKey(schedule);
+        java.util.Map<String, Rule> rules = RuleStore.all(c);
+        List<Slot> out = new ArrayList<>();
+        boolean changed = false;
+        for (Slot slot : all(c)) {
+            if (key.equals(scheduleKey(slot.rule)) && members(slot, rules).isEmpty()) {
+                changed = true;
+                continue;
+            }
+            out.add(slot);
+        }
+        if (changed) save(c, out);
+    }
+
     /** Frozen portions of the displayed local day; end=1440 is the right edge of the rail. */
     static int[][] frozenSegments(Rule rule, java.util.Calendar day) {
         // A schedule changes only at its window boundaries. Build their union once,

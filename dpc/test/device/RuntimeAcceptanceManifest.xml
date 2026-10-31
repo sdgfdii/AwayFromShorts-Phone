@@ -1,0 +1,2 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.runtimeacceptanceqa"><application android:label="AFS RuntimeAcceptance QA"/><instrumentation android:name="com.afs.guard.RuntimeAcceptanceDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true"/></manifest>
+

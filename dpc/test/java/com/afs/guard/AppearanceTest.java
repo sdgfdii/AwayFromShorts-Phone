@@ -40,6 +40,23 @@ public final class AppearanceTest {
         restored.pureBlack=true;check(new AppearancePalette(restored,true,0).bg==0xFF000000,"Amap honors pure black mode");
         restored.selectColor(0);check(new AppearancePalette(restored,false,0xFFFF0000).accent!=new AppearancePalette(restored,false,0xFF0000FF).accent,"Amap also supports system accent");
         check(AppearanceConfig.parse("{\"skin\":\"unknown\"}").skin.equals("classic"),"unknown skins recover classic without corrupting preferences");
+        /* ---- 涟漪风格：中性色是参考稿采样值，强调色跟种子走 ---- */
+        AppearanceConfig ripple=new AppearanceConfig();ripple.skin="ripple";ripple.seed=0xFFFFCC00;
+        check(ripple.ripple()&&ripple.selectedSeed()==AppearanceConfig.RIPPLE_COLOR,"ripple starts with its own blue and keeps the classic seed");
+        AppearanceConfig rippleRestored=AppearanceConfig.parse(ripple.json());
+        check(rippleRestored.ripple()&&rippleRestored.selectedSeed()==AppearanceConfig.RIPPLE_COLOR,"ripple skin survives a process restart");
+        AppearancePalette rippleLight=new AppearancePalette(ripple,false,0),rippleDark=new AppearancePalette(ripple,true,0);
+        check(rippleLight.bg==0xFFF9FAFD&&rippleLight.surface==0xFFFFFFFF&&rippleLight.text==0xFF36475A,
+                "ripple light keeps the sampled page, card and text colors");
+        check(rippleLight.accent==AppearanceConfig.RIPPLE_COLOR&&rippleLight.selection==0xFFE3EBF5,
+                "ripple accent is the sampled blue and the selection is the pale pill");
+        check(rippleDark.bg==0xFF1B2432&&rippleDark.text!=rippleLight.text
+                &&Hct.fromInt(rippleDark.accent).getTone()>Hct.fromInt(rippleLight.accent).getTone(),
+                "ripple dark gets its own surfaces and a lifted accent");
+        ripple.selectColor(0xFFFF9500);
+        check(rippleLight.accent==AppearanceConfig.RIPPLE_COLOR&&new AppearancePalette(ripple,false,0).accent==0xFFFF9500,
+                "recoloring ripple rebuilds the palette without mutating the cached one");
+        ripple.skin="classic";check(ripple.selectedSeed()==0xFFFFCC00,"ripple color does not leak into the classic seed");
         System.out.println("Appearance: "+count+" assertions passed");
     }
 }

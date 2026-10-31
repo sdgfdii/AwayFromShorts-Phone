@@ -7,7 +7,7 @@
 #   bash deploy.sh /path/to/xxx.apk    # 指定 APK
 #   ADB=/path/to/adb bash deploy.sh    # adb 不在 PATH 时
 #
-# 注意：这一步不可逆。装完「恢复出厂」会变灰，只能靠 uninstall.sh 拆。
+# 注意：设备所有者可限制恢复出厂；解除管理的方法依赖系统及 APK 配置。
 
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -41,6 +41,35 @@ ok()  { printf '  [OK]   %s\n' "$*"; }
 bad() { printf '  [XX]   %s\n' "$*"; }
 warn(){ printf '  [!!]   %s\n' "$*"; }
 
+# Android 7 的 dpm 没有 list-owners。其 AOSP dumpsys device_policy 会先输出
+# Current Device Policy Manager state，再以 Device Owner: / admin= 表示所有者。
+# 只识别有明确证据的格式；厂商改写或读取失败时停止，不猜测。
+owner_state() {
+  OWN=$("$ADB" shell dpm list-owners 2>&1 | tr -d '\r')
+  if printf '%s\n' "$OWN" | grep -q 'DeviceOwner'; then
+    if printf '%s\n' "$OWN" | grep 'DeviceOwner' | grep -Eq 'com\.afs\.guard/(\.AfsAdmin|com\.afs\.guard\.AfsAdmin)([, }]|$)'; then OWNER_STATE=ours; else OWNER_STATE=other; fi
+    return
+  fi
+  if printf '%s\n' "$OWN" | grep -qx 'no owners'; then OWNER_STATE=none; return; fi
+  if printf '%s\n' "$OWN" | grep -q 'ProfileOwner'; then OWNER_STATE=other; return; fi
+  OWN=$("$ADB" shell dumpsys device_policy 2>&1 | tr -d '\r')
+  OWNER_STATE=unknown
+  printf '%s\n' "$OWN" | grep -q '^Current Device Policy Manager state:' || return
+  printf '%s\n' "$OWN" | grep -q '^  Enabled Device Admins (User ' || return
+  if printf '%s\n' "$OWN" | grep -q '^  Device Owner:'; then
+    OWNER_ADMIN=$(printf '%s\n' "$OWN" | awk '/^  Device Owner:/{getline; print; exit}')
+    if printf '%s\n' "$OWNER_ADMIN" | grep -Eq 'admin=ComponentInfo\{com\.afs\.guard/(\.AfsAdmin|com\.afs\.guard\.AfsAdmin)\}'; then
+      OWNER_STATE=ours
+    elif printf '%s\n' "$OWNER_ADMIN" | grep -q 'admin=ComponentInfo{'; then
+      OWNER_STATE=other
+    fi
+  elif printf '%s\n' "$OWN" | grep -q '^  Profile Owner'; then
+    OWNER_STATE=other
+  else
+    OWNER_STATE=none
+  fi
+}
+
 # ---------- 1. 设备 ----------
 say "1/6 检查设备"
 STATE=$("$ADB" get-state 2>/dev/null)
@@ -62,9 +91,20 @@ fi
 
 # ---------- 2. 已部署过？ ----------
 say "2/6 检查是否已部署"
-OWN=$("$ADB" shell dpm list-owners 2>/dev/null | tr -d '\r')
-if echo "$OWN" | grep -q "DeviceOwner"; then
-  ok "这台设备已经是设备所有者了"
+owner_state
+if [ "$OWNER_STATE" = unknown ]; then
+  bad "无法可靠检查设备所有者；停止部署。系统输出："
+  printf '%s\n' "$OWN" | sed 's/^/    /'
+  echo "  此设备的管理状态格式无法识别，请勿把检查失败当作没有管理者。"
+  exit 1
+fi
+if [ "$OWNER_STATE" = other ]; then
+    bad "设备已有其他设备所有者；停止部署，未更改设备。"
+    echo "$OWN" | sed 's/^/      /'
+    exit 1
+fi
+if [ "$OWNER_STATE" = ours ]; then
+  ok "本应用已是设备所有者"
   echo "$OWN" | sed 's/^/      /'
   echo ""
   echo "  跳过用户 / 账号检查 —— 那些限制只对首次部署生效，"
@@ -78,6 +118,10 @@ else
   USERS=$("$ADB" shell pm list users 2>/dev/null | tr -d '\r')
   echo "$USERS" | sed 's/^/    /'
   USER_COUNT=$(echo "$USERS" | grep -c "UserInfo{" || true)
+  if [ "$USER_COUNT" -eq 0 ]; then
+    bad "无法读取用户列表，停止部署。"
+    exit 1
+  fi
   if [ "$USER_COUNT" -gt 1 ]; then
     bad "有 $USER_COUNT 个用户，Device Owner 装不上"
     echo ""
@@ -95,7 +139,16 @@ else
 
   # ---------- 4. 账号 ----------
   say "4/6 检查账号（首次部署必须一个都没有）"
-  ACCS=$("$ADB" shell dumpsys account 2>/dev/null | grep "Account {" | tr -d '\r')
+  ACCOUNT_DUMP=$("$ADB" shell dumpsys account 2>&1 | tr -d '\r')
+  if ! printf '%s\n' "$ACCOUNT_DUMP" | grep -Eq '^[[:space:]]*Accounts: [0-9]+'; then
+    bad "无法可靠读取账号状态，停止部署。"
+    exit 1
+  fi
+  ACCS=$(printf '%s\n' "$ACCOUNT_DUMP" | grep 'Account {' || true)
+  if printf '%s\n' "$ACCOUNT_DUMP" | grep -Eq '^[[:space:]]*Accounts: [1-9][0-9]*'; then
+    bad "设备上仍有账号，请先检查系统账号设置。"
+    exit 1
+  fi
   if [ -n "$ACCS" ]; then
     bad "设备上还有账号："
     echo "$ACCS" | sed 's/^/      /'
@@ -158,16 +211,16 @@ if [ "${ALREADY:-0}" = "1" ]; then
 fi
 OUT=$("$ADB" shell dpm set-device-owner "$ADMIN" 2>&1 | tr -d '\r')
 echo "$OUT" | sed 's/^/    /'
-OWN=$("$ADB" shell dpm list-owners 2>/dev/null | tr -d '\r')
-if echo "$OWN" | grep -q "DeviceOwner"; then
+owner_state
+if [ "$OWNER_STATE" = ours ]; then
   ok "成功"
   echo "$OWN" | sed 's/^/      /'
   echo ""
   echo "  下一步：在手机上打开 AwayFromShorts，有 10 分钟配置宽限，"
   echo "  把放行星期、时段、要冻结的 App 设好，点「立即应用」。"
   echo ""
-  echo "  ⚠ 之后「恢复出厂设置」会被禁用。要拆只有一条路："
-  echo "     bash uninstall.sh"
+  echo "  ⚠ 之后「恢复出厂设置」可能被禁用。当前 APK 未声明 testOnly，"
+  echo "     uninstall.sh 的 ADB 解除方法不保证可用；请先核实可行的恢复方案。"
 else
   bad "设置失败"
   echo "  常见原因按出现频率排序："

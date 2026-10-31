@@ -9,6 +9,11 @@ checkin/build/
 blocker/build/
 .workbuddy/
 afs-guard-*.apk
+__pycache__/
 
 # Local inspection, device captures and temporary QA packages
 .codex-fix/
+/dist/
+/build/
+/archive/
+/*.png

@@ -1,0 +1,94 @@
+package com.afs.guard;
+
+import java.util.List;
+
+public final class MemoChecklistTest {
+    private static int checks;
+    private static void check(boolean value,String label){checks++;if(!value)throw new AssertionError(label);}
+    private static void eq(String expected,String actual,String label){check(expected.equals(actual),label+" expected="+expected+" actual="+actual);}
+    public static void main(String[] args){
+        String mixed="正文\n- [ ] 第一项\n- [X] 第二项\n  * [x] 子项\n+ [ ] 另一项";
+        List<MemoChecklist.Item> items=MemoChecklist.items(mixed);
+        check(items.size()==4,"task markers, indentation and alternate bullets");
+        check(!items.get(0).checked&&items.get(1).checked&&items.get(2).checked,"checked state");
+        eq("第一项",mixed.substring(items.get(0).content,items.get(0).end),"content bounds");
+        String done=MemoChecklist.toggle(mixed,items.get(0).marker).body;
+        eq(mixed.replace("第一项","第一项").replace("- [ ] 第一项","- [x] 第一项"),done,"toggle only selected marker");
+        eq(mixed,MemoChecklist.toggle(done,items.get(0).marker).body,"toggle restores original order and content");
+        eq(mixed,MemoChecklist.toggle(mixed,0).body,"ordinary paragraph unaffected");
+        check(MemoChecklist.items("```md\n- [ ] code\n```\n- [ ] real").size()==1,"ignore fenced code");
+        check(MemoChecklist.items("~~~~\n- [x] code\n~~~\n- [ ] still code\n~~~~\n- [ ] real").size()==1,"fence closing length respected");
+        check(MemoChecklist.items("something - [ ] inline\n- [ ]no space").isEmpty(),"ignore inline and malformed markers");
+        eq("- [ ] ",MemoChecklist.convert("",0,0).body,"empty note creates task");
+        eq("- [ ] abc\ndef",MemoChecklist.convert("abc\ndef",1,1).body,"convert current paragraph");
+        eq("- [ ] abc\n- [ ] def",MemoChecklist.convert("abc\ndef",0,7).body,"convert selection");
+        eq("- [ ] abc\ndef",MemoChecklist.convert("abc\ndef",0,4).body,"terminal newline excludes following paragraph");
+        eq("- [ ] abc\n- [x] def",MemoChecklist.convert("abc\n- [x] def",0,13).body,"mixed selection retains existing completion");
+        eq("abc\ndef",MemoChecklist.convert("- [ ] abc\n- [x] def",0,19).body,"all-task selection removes boxes");
+        eq("  abc",MemoChecklist.convert("  - [ ] abc",5,5).body,"remove marker preserves indentation");
+        check(MemoChecklist.convert("abc",3,3).cursor==9,"cursor follows added marker");
+        check(MemoChecklist.convert("- [ ] abc",3,3).cursor==0,"cursor within removed prefix clamps to text");
+        MemoChecklist.Change enter=MemoChecklist.enter("- [ ] abc",9,"\n");
+        eq("- [ ] abc\n- [ ] ",enter.body,"return continues unchecked checklist");
+        check(enter.cursor==16,"return cursor after new marker");
+        eq("- [x] abc\n- [ ] ",MemoChecklist.enter("- [x] abc",9,"\n").body,"completed item continues with unchecked item");
+        eq("- [ ] ab\n- [ ] c",MemoChecklist.enter("- [ ] abc",8,"\n").body,"split current item");
+        eq("- [ ] abc\n",MemoChecklist.enter("- [ ] abc\n- [ ] ",16,"\n").body,"empty task return exits checklist");
+        eq("- [ ] abc\n\n尾段",MemoChecklist.enter("- [ ] abc\n- [ ] \n尾段",16,"\n").body,"exit preserves following paragraph");
+        eq("",MemoChecklist.enter("- [ ] ",6,"\n").body,"first empty task exits without leftover syntax");
+        eq("",MemoChecklist.enter("- [ ]   ",6,"\n").body,"empty exit also removes trailing whitespace");
+        eq("  - [ ] abc\n  - [ ] ",MemoChecklist.enter("  - [ ] abc",11,"\n").body,"continue indentation");
+        eq("- [ ] abc\r\n- [ ] ",MemoChecklist.enter("- [ ] abc",9,"\r\n").body,"CRLF continuation");
+        check(MemoChecklist.enter("plain",5,"\n")==null,"normal paragraph return unchanged");
+        check(MemoChecklist.enter("- [ ] abc",9,"\ntext")==null,"paste never automatically rewritten");
+        check(MemoChecklist.enter("```\n- [ ] abc",13,"\n")==null,"code return unchanged");
+        check(MemoChecklist.items("- [x] abc\r\n- [ ] def").get(0).end==9,"CRLF excludes carriage return");
+        MemoEditor.History history=new MemoEditor.History(new MemoEditor.State("title",mixed));
+        history.record(new MemoEditor.State("title",done));eq(mixed,history.undo().body,"completion undo");eq(done,history.redo().body,"completion redo");
+        String encoded=MemoStore.toJson(java.util.Arrays.asList(new MemoStore.Note("qa","title",done,123,true)));
+        eq(done,MemoStore.fromJson(encoded).get(0).body,"existing store preserves task state");
+        check(MemoEditor.preview("  - [x] 完成",0).contains("☑"),"indented preview");
+        String linked=MemoEditor.preview("☐ ordinary text\n- [ ] real task",0,"afs-task:test:");
+        check(linked.contains("href='afs-task:test:0'")&&!linked.contains("href='afs-task:test:1'"),"preview links identify real tasks instead of literal box text");
+        String taskBody="正文\n- [ ] 一\n- [x] 二\n尾段";
+        check(MemoChecklist.selected(taskBody,3,11).size()==1,"selection ending at next paragraph excludes it");
+        check(MemoChecklist.selected(taskBody,taskBody.length(),3).size()==2,"reverse range selects both tasks");
+        eq("正文\n- [x] 一\n- [x] 二\n尾段",MemoChecklist.setChecked(taskBody,0,taskBody.length(),true).body,"complete all leaves ordinary paragraphs intact");
+        eq("正文\n- [ ] 一\n- [ ] 二\n尾段",MemoChecklist.setChecked(taskBody,0,taskBody.length(),false).body,"restore all");
+        eq("正文\n  - [ ] 一\n- [x] 二\n尾段",MemoChecklist.indent(taskBody,5,5,true).body,"indent current task only");
+        String indented=MemoChecklist.indent(taskBody,0,taskBody.length(),true).body;
+        eq(taskBody,MemoChecklist.indent(indented,0,indented.length(),false).body,"indent and outdent preserve content");
+        String maximum="            - [ ] max";eq(maximum,MemoChecklist.indent(maximum,0,0,true).body,"six-level indentation limit");
+        eq(taskBody,MemoChecklist.indent(taskBody,0,taskBody.length(),false).body,"outdent top-level is no-op");
+        eq("正文\n一\n- [x] 二\n尾段",MemoChecklist.removeMarkers(taskBody,4,4).body,"remove only selected box");
+        eq("正文\n- [x] 二\n尾段",MemoChecklist.deleteItems(taskBody,4,4).body,"delete only selected item");
+        eq("正文\n尾段",MemoChecklist.deleteItems(taskBody,0,taskBody.length()).body,"delete all tasks preserves ordinary text");
+        eq("- [ ] 一\n正文\n- [x] 二\n尾段",MemoChecklist.move(taskBody,4,4,false).body,"move task up over previous paragraph");
+        eq("正文\n- [x] 二\n- [ ] 一\n尾段",MemoChecklist.move(taskBody,4,4,true).body,"move task down retains checked state");
+        String crlf="- [ ] 一\r\n- [x] 二\r\n尾段";
+        eq("- [x] 二\r\n- [ ] 一\r\n尾段",MemoChecklist.move(crlf,0,0,true).body,"move down preserves CRLF");
+        eq("- [x] 二\r\n- [ ] 一\r\n尾段",MemoChecklist.move(crlf,10,10,false).body,"move up preserves CRLF");
+        eq("- [ ] 一",MemoChecklist.move("- [ ] 一",0,0,true).body,"last item down is no-op");
+        eq("- [ ] 一",MemoChecklist.move("- [ ] 一",0,0,false).body,"first item up is no-op");
+        eq("代码\n```\n- [ ] 示例\n```",MemoChecklist.setChecked("代码\n```\n- [ ] 示例\n```",0,100,true).body,"batch completion excludes fenced example");
+        java.util.List<MemoEditor.Match> matches=MemoEditor.find("Alpha","alpha ALPHA 中文 alpha","alpha");
+        check(matches.size()==4&&matches.get(0).title&&!matches.get(1).title,"find across both fields ignores case");
+        check(matches.get(2).start==6&&matches.get(2).end==11,"find preserves UTF16 source offsets");
+        check(MemoEditor.find("a","aa","").isEmpty(),"empty find produces no matches");
+        check(MemoEditor.find("","aaaa","aa").size()==2,"find uses non-overlapping matches");
+        check(MemoEditor.preview("~~完成~~",0).contains("<s>完成</s>"),"strikethrough is visible in preview");
+        MemoStore.Note reminderNote=new MemoStore.Note("reminder","标题","正文",1,false);reminderNote.remindAt=500;reminderNote.remindedAt=0;
+        check(!MemoStore.reminderDue(reminderNote,500,499),"reminder cannot fire early");
+        check(MemoStore.reminderDue(reminderNote,500,500),"reminder due boundary");
+        check(!MemoStore.reminderDue(reminderNote,400,600),"stale rescheduled alarm ignored");
+        reminderNote.remindedAt=500;check(!MemoStore.reminderDue(reminderNote,500,600),"duplicate delivery ignored");
+        check(reminderNote.copy().remindAt==500&&reminderNote.copy().remindedAt==500,"copy retains reminder metadata");
+        MemoStore.Note roundtrip=MemoStore.fromJson(MemoStore.toJson(java.util.Arrays.asList(reminderNote))).get(0);
+        check(roundtrip.remindAt==500&&roundtrip.remindedAt==500,"JSON preserves reminder and delivered state");
+        java.util.List<MemoStore.Note> active=new java.util.ArrayList<>(),deleted=new java.util.ArrayList<>();active.add(roundtrip);
+        MemoStore.edit(active,"reminder","改标题","改正文",3);check(active.get(0).remindAt==500,"content edit retains reminder");
+        MemoStore.move(active,deleted,"reminder");MemoStore.move(deleted,active,"reminder");check(active.get(0).remindAt==500&&active.get(0).remindedAt==500,"trash restore retains reminder metadata");
+        check(MemoStore.fromJson("[{\"id\":\"legacy\",\"title\":\"旧记录\"}]").get(0).remindAt==0,"old JSON defaults to no reminder");
+        System.out.println("Memo checklist: "+checks+" checks passed");
+    }
+}

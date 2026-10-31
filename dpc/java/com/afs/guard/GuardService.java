@@ -37,6 +37,31 @@ public class GuardService extends Service {
     private PowerManager.WakeLock wakeLock;
     private int tickCount;
     private String lastNoticeText;
+    private final java.util.concurrent.ExecutorService quotaWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
+    private volatile boolean quotaBusy;
+    private final Runnable quotaTick=new Runnable(){public void run(){
+        if(!quotaBusy){quotaBusy=true;quotaWorker.execute(()->{try{if(DailyQuotaStore.enforcementChanged(GuardService.this))Guard.apply(GuardService.this);}catch(Throwable error){Log.e(Guard.TAG,"daily quota tick failed",error);}finally{quotaBusy=false;}Guard.kickQuotaExceeded(GuardService.this);});}
+        handler.postDelayed(this,5000);
+    }};
+
+    /**
+     * 锁机节拍：5 秒问一次「现在该不该锁」。
+     *
+     * 单开一条，不塞进 30 秒的状态 tick —— 那一条里面有 setPackagesSuspended 和
+     * 使用记录查询，偶尔要几百毫秒；锁机要的是"到点就弹"，不能被它拖住。
+     */
+    private final Runnable lockTick = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                LockEnforcer.tick(GuardService.this);
+                RestAlert.tick(GuardService.this);
+            } catch (Throwable error) {
+                Log.e(Guard.TAG, "lock tick failed", error);
+            }
+            handler.postDelayed(this, 5000L);
+        }
+    };
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -48,6 +73,8 @@ public class GuardService extends Service {
                 }
                 tickCount++;
                 Hub.kick(GuardService.this);
+                // 20:00 判断点：今天打卡没打完 → 各应用本次冻结再延 30 分钟（一天只入账一次）
+                CheckinPenalty.tick(GuardService.this);
                 Guard.apply(GuardService.this);   // 内部只有状态变化时才调 setPackagesSuspended
                 updateNotice();
             } catch (Throwable t) {
@@ -63,6 +90,8 @@ public class GuardService extends Service {
         startForeground(NOTI_ID, buildNotification());
         acquireWakeLock();
         handler.post(tick);
+        handler.post(quotaTick);
+        handler.post(lockTick);
         Log.i(Guard.TAG, "service started");
     }
 
@@ -71,6 +100,8 @@ public class GuardService extends Service {
         // 被系统杀掉后自动拉起；onCreate 里已经挂了 tick，这里只需保证不重复挂
         handler.removeCallbacks(tick);
         handler.post(tick);
+        handler.removeCallbacks(quotaTick);handler.post(quotaTick);
+        handler.removeCallbacks(lockTick);handler.post(lockTick);
         // 上一条 START_STICKY 的实例可能没走 onDestroy，锁要补上
         acquireWakeLock();
         return START_STICKY;
@@ -79,6 +110,8 @@ public class GuardService extends Service {
     @Override
     public void onDestroy() {
         handler.removeCallbacks(tick);
+        handler.removeCallbacks(lockTick);
+        handler.removeCallbacks(quotaTick);quotaWorker.shutdownNow();
         releaseWakeLock();
         Log.w(Guard.TAG, "service destroyed");
         super.onDestroy();
@@ -163,7 +196,7 @@ public class GuardService extends Service {
             NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm != null) {
                 NotificationChannel ch = new NotificationChannel(
-                        CHANNEL, "时间表守护", NotificationManager.IMPORTANCE_MIN);
+                        CHANNEL, T.s("时间表守护"), NotificationManager.IMPORTANCE_MIN);
                 ch.setShowBadge(false);
                 ch.setSound(null, null);
                 nm.createNotificationChannel(ch);
@@ -176,7 +209,7 @@ public class GuardService extends Service {
         boolean warn = StudyGate.noticeWarn(this, now);
         String text = StudyGate.noticeLine(this, now);
         lastNoticeText = text;
-        b.setContentTitle(warn ? "AwayFromShorts · 今天还没学完" : "按时间表工作")
+        b.setContentTitle(warn ? T.s("AwayFromShorts · 今天还没学完") : T.s("按时间表工作"))
          .setContentText(text)
          .setSmallIcon(android.R.drawable.ic_lock_lock)
          .setOngoing(true);

@@ -151,14 +151,14 @@ public class AppListActivity extends ThemedActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         title = new TextView(this);
-        title.setText("冻结应用");
+        title.setText(T.s("冻结应用"));
         title.setTextSize(22);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(TEXT);
         root.addView(title);
 
         hint = new TextView(this);
-        hint.setText("点一行改它的冻结时间，长按从冻结应用移除。");
+        hint.setText(T.s("点一行改它的冻结时间，长按从冻结应用移除。"));
         hint.setTextSize(12);
         hint.setTextColor(TEXT2);
         hint.setPadding(0, dp(4), 0, dp(12));
@@ -170,7 +170,7 @@ public class AppListActivity extends ThemedActivity {
         root.addView(list);
 
         empty = new TextView(this);
-        empty.setText("冻结应用是空的。点下面的「添加应用」选一个。");
+        empty.setText(T.s("冻结应用是空的。点下面的「添加应用」选一个。"));
         empty.setTextSize(13);
         empty.setTextColor(TEXT2);
         empty.setPadding(dp(2), dp(12), 0, dp(12));
@@ -179,7 +179,7 @@ public class AppListActivity extends ThemedActivity {
         root.addView(empty);
 
         addBtn = new Button(this);
-        addBtn.setText("＋ 添加应用");
+        addBtn.setText(T.s("＋ 添加应用"));
         addBtn.setAllCaps(false);
         addBtn.setTextSize(14);
         addBtn.setTextColor(BRAND);
@@ -187,7 +187,7 @@ public class AppListActivity extends ThemedActivity {
         addBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 if (!canAdd()) {
-                    toast("全部应用都在屏蔽中，等某一应用进入自己的放行时段再加");
+                    toast(T.s("全部应用都在屏蔽中，等某一应用进入自己的放行时段再加"));
                     return;
                 }
                 startActivityForResult(new Intent(AppListActivity.this, AppPickerActivity.class), REQ_PICK);
@@ -200,7 +200,7 @@ public class AppListActivity extends ThemedActivity {
 
         // 按包名加：还没装的应用也能先进冻结应用，装上之后自动被管
         pkgBtn = new Button(this);
-        pkgBtn.setText("＋ 按包名添加");
+        pkgBtn.setText(T.s("＋ 按包名添加"));
         pkgBtn.setAllCaps(false);
         pkgBtn.setTextSize(14);
         pkgBtn.setTextColor(TEXT2);
@@ -208,7 +208,7 @@ public class AppListActivity extends ThemedActivity {
         pkgBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 if (!canAdd()) {
-                    toast("全部应用都在屏蔽中，等某一应用进入自己的放行时段再加");
+                    toast(T.s("全部应用都在屏蔽中，等某一应用进入自己的放行时段再加"));
                     return;
                 }
                 promptPackage();
@@ -221,7 +221,7 @@ public class AppListActivity extends ThemedActivity {
 
         // 批量设时段：十几个应用要同一个规则时，逐个点进去改太反人类
         batchBtn = new Button(this);
-        batchBtn.setText("⏱ 批量设时段");
+        batchBtn.setText(T.s("⏱ 批量设时段"));
         batchBtn.setAllCaps(false);
         batchBtn.setTextSize(14);
         batchBtn.setTextColor(BRAND);
@@ -239,7 +239,7 @@ public class AppListActivity extends ThemedActivity {
         // 关键应用名单：由用户自己列，不做任何自动猜测。
         // 名单里的应用在学习目标没完成时只按自己的放行时段走，不会被闸门延长冻结。
         keyBtn = new Button(this);
-        keyBtn.setText("🔒 关键应用名单");
+        keyBtn.setText(T.s("🔒 关键应用名单"));
         keyBtn.setAllCaps(false);
         keyBtn.setTextSize(14);
         keyBtn.setTextColor(0xFF4CAF50);
@@ -258,7 +258,7 @@ public class AppListActivity extends ThemedActivity {
         // 不用再退回主页找按钮）。★ 已与「立即检测」合并：先拉一次最新的学习台数据
         // （绕过 10 分钟节流），再执行 Guard.apply —— 打完结怎么还冻着，点这一下就够。
         applyBtn = new Button(this);
-        applyBtn.setText("立即应用");
+        applyBtn.setText(T.s("立即应用"));
         applyBtn.setAllCaps(false);
         applyBtn.setTextSize(14);
         applyBtn.setTextColor(BRAND);
@@ -266,7 +266,7 @@ public class AppListActivity extends ThemedActivity {
         applyBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 applyBtn.setEnabled(false);
-                applyBtn.setText("检测并应用中…");
+                applyBtn.setText(T.s("检测并应用中…"));
                 Config.arm(AppListActivity.this);   // 确认过了，宽限立即结束
                 new Thread(new Runnable() {
                     public void run() {
@@ -280,11 +280,11 @@ public class AppListActivity extends ThemedActivity {
                         runOnUiThread(new Runnable() {
                             public void run() {
                                 applyBtn.setEnabled(true);
-                                applyBtn.setText("立即应用");
+                                applyBtn.setText(T.s("立即应用"));
                                 int nl = msg.indexOf('\n');
                                 // 明细太长，只弹摘要行
                                 toast((nl > 0 ? msg.substring(0, nl) : msg)
-                                        + " · 已重新检测");
+                                        + T.s(" · 已重新检测"));
                                 rebuild();
                             }
                         });
@@ -376,7 +376,7 @@ public class AppListActivity extends ThemedActivity {
             }
         }
         if (refused > 0) {
-            toast(refused + " 个应用加入已超过 10 分钟，按「只进不出」不能移出冻结应用");
+            toast(refused + T.s(" 个应用加入已超过 10 分钟，按「只进不出」不能移出冻结应用"));
         }
         rebuild();
         applyInBackground();
@@ -461,7 +461,7 @@ public class AppListActivity extends ThemedActivity {
         left.setOrientation(LinearLayout.VERTICAL);
 
         g.title = new TextView(this);
-        g.title.setText(pkgs.size() + " 个应用");
+        g.title.setText(pkgs.size() + T.s(" 个应用"));
         g.title.setTextSize(15);
         g.title.setTypeface(Typeface.DEFAULT_BOLD);
         left.addView(g.title);
@@ -514,7 +514,7 @@ public class AppListActivity extends ThemedActivity {
         // 折起来之后还给了"改这一组"：这些应用本来就是一伙的，
         // 没必要再回到顶部走「批量设时段」重选一遍。
         TextView editAll = new TextView(this);
-        editAll.setText("改这一组的时段");
+        editAll.setText(T.s("改这一组的时段"));
         editAll.setTextSize(12);
         editAll.setTextColor(BRAND);
         editAll.setPadding(dp(16), dp(10), dp(16), dp(12));
@@ -561,7 +561,7 @@ public class AppListActivity extends ThemedActivity {
             sb.append(Guard.labelOf(getPackageManager(), pkgs.get(i)));
         }
         if (pkgs.size() > show) {
-            sb.append(" 等");
+            sb.append(T.s(" 等"));
         }
         return sb.toString();
     }
@@ -678,11 +678,11 @@ public class AppListActivity extends ThemedActivity {
             return "";
         }
         if (min < 60) {
-            return "· " + min + "分";
+            return "· " + min + T.s("分");
         }
         long h = min / 60;
         long m = min % 60;
-        return m == 0 ? "· " + h + "时" : "· " + h + "时" + m + "分";
+        return m == 0 ? "· " + h + T.s("时") : "· " + h + T.s("时") + m + T.s("分");
     }
 
     /** 冰壳 + 冰块 + 积雪。位置用相对坐标，跟着格子大小走，不挑行高。 */
@@ -941,7 +941,7 @@ public class AppListActivity extends ThemedActivity {
                 r.frost = null;
                 frostClear(this, r.pkg);
                 stopIce(r.box);
-                r.state.setText("未安装");
+                r.state.setText(T.s("未安装"));
                 r.state.setTextColor(text2);
                 r.state.setTypeface(Typeface.DEFAULT);
                 r.box.setBackgroundColor(r.child ? childSurface : surface);
@@ -954,7 +954,7 @@ public class AppListActivity extends ThemedActivity {
                 }
                 boolean scheduled = Guard.blocked(RuleStore.get(this, r.pkg),
                         java.util.Calendar.getInstance());
-                r.state.setText((scheduled ? "🧊 冻结中 " : "学习闸门冻结 ")
+                r.state.setText((scheduled ? T.s("🧊 冻结中 ") : T.s("学习闸门冻结 "))
                         + frostDur(now - since));
                 r.state.setTextColor(iceText);
                 r.state.setTypeface(Typeface.DEFAULT_BOLD);
@@ -972,7 +972,7 @@ public class AppListActivity extends ThemedActivity {
                 r.frost = null;
                 frostClear(this, r.pkg);
                 stopIce(r.box);
-                r.state.setText("放行中");
+                r.state.setText(T.s("放行中"));
                 r.state.setTextColor(green);
                 r.state.setTypeface(Typeface.DEFAULT);
                 r.box.setBackgroundColor(r.child ? childSurface : surface);
@@ -999,7 +999,7 @@ public class AppListActivity extends ThemedActivity {
                 stopFrost(g.state, g.frost);
                 g.frost = null;
                 stopIce(g.card);
-                g.state.setText("未安装");
+                g.state.setText(T.s("未安装"));
                 g.state.setTextColor(text2);
                 g.state.setTypeface(Typeface.DEFAULT);
                 g.card.setBackgroundColor(surface);
@@ -1016,7 +1016,7 @@ public class AppListActivity extends ThemedActivity {
                         earliest = s;
                     }
                 }
-                g.state.setText("🧊 全部冻结"
+                g.state.setText(T.s("🧊 全部冻结")
                         + (earliest > 0 ? " " + frostDur(now - earliest) : ""));
                 g.state.setTextColor(iceText);
                 g.state.setTypeface(Typeface.DEFAULT_BOLD);
@@ -1035,10 +1035,10 @@ public class AppListActivity extends ThemedActivity {
                 stopIce(g.card);
                 g.state.setTypeface(Typeface.DEFAULT);
                 if (b == 0) {
-                    g.state.setText("全部放行");
+                    g.state.setText(T.s("全部放行"));
                     g.state.setTextColor(green);
                 } else {
-                    g.state.setText(b + "/" + n + " 冻结");
+                    g.state.setText(b + "/" + n + T.s(" 冻结"));
                     g.state.setTextColor(red);
                 }
                 g.card.setBackgroundColor(surface);
@@ -1057,13 +1057,13 @@ public class AppListActivity extends ThemedActivity {
         batchBtn.setTextColor(BRAND);
         batchBtn.setBackgroundColor(surface);
         batchBtn.setAlpha(1f);
-        keyBtn.setText("🔒 关键应用名单 · " + RuleStore.keyApps(this).size() + " 个");
+        keyBtn.setText(T.s("🔒 关键应用名单 · ") + RuleStore.keyApps(this).size() + T.s(" 个"));
         keyBtn.setTextColor(0xFF4CAF50);
         keyBtn.setBackgroundColor(surface);
         keyBtn.setAlpha(1f);
 
-        hint.setText("点一行改它的冻结时间。时段相同的一批应用会折成一张卡，点卡片展开明细。"
-                + "只进不出：加入后不能移出（刚加的 10 分钟内除外）。");
+        hint.setText(T.s("点一行改它的冻结时间。时段相同的一批应用会折成一张卡，点卡片展开明细。")
+                + T.s("只进不出：加入后不能移出（刚加的 10 分钟内除外）。"));
         hint.setTextColor(text2);
         empty.setTextColor(text2);
     }
@@ -1149,11 +1149,11 @@ public class AppListActivity extends ThemedActivity {
             daysText = new TextView(AppListActivity.this);
             daysText.setTextSize(12);
             daysText.setTextColor(TEXT2);
-            daysText.setText("冻结星期（未选中的日子不定时冻结）");
+            daysText.setText(T.s("冻结星期（未选中的日子不定时冻结）"));
             box.addView(daysText);
             if (legacy != null) {
                 TextView note = new TextView(AppListActivity.this);
-                note.setText("现有规则保持生效：" + legacy.freezeSummary() + "\n设置新的冻结星期和时间后保存，才会替换原规则。未修改时间则保留原规则。");
+                note.setText(T.s("现有规则保持生效：") + legacy.freezeSummary() + T.s("\n设置新的冻结星期和时间后保存，才会替换原规则。未修改时间则保留原规则。"));
                 note.setTextColor(TEXT2);
                 note.setTextSize(12);
                 box.addView(note);
@@ -1166,7 +1166,7 @@ public class AppListActivity extends ThemedActivity {
             LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             qlp.topMargin = dp(8);
-            String[] qLabels = { "每天冻 22-23", "每天冻 21-23", "全天冻结" };
+            String[] qLabels = { T.s("每天冻 22-23"), T.s("每天冻 21-23"), T.s("全天冻结") };
             for (int i = 0; i < qLabels.length; i++) {
                 final int which = i;
                 Button qb = new Button(AppListActivity.this);
@@ -1195,7 +1195,7 @@ public class AppListActivity extends ThemedActivity {
             for (int i = 0; i < 7; i++) {
                 final int idx = i;
                 Button b = new Button(AppListActivity.this);
-                b.setText(Rule.DAY_NAMES[i]);
+                b.setText(T.s(Rule.DAY_NAMES[i]));
                 b.setTextSize(13);
                 b.setAllCaps(false);
                 b.setPadding(0, 0, 0, 0);
@@ -1229,14 +1229,14 @@ public class AppListActivity extends ThemedActivity {
             // 是否受学习闸门牵连。默认值按放行时长自动判断（≤6 小时/天算娱乐），
             // 这里让用户能改 —— 不然微信这种每天放行 18 小时的工具也会被锁。
             gateCb = new android.widget.CheckBox(AppListActivity.this);
-            gateCb.setText("参与学习闸门（只有关键应用可豁免）");
+            gateCb.setText(T.s("参与学习闸门（只有关键应用可豁免）"));
             gateCb.setTextSize(13);
             gateCb.setTextColor(TEXT);
             gateCb.setChecked(start.gate);
             gateCb.setPadding(0, dp(12), 0, 0);
             if (allowGateEdit) {
                 TextView gateHint = new TextView(AppListActivity.this);
-                gateHint.setText("只有关键应用不受学习闸门影响；其他应用在 20:00 检查后可能延长冻结。");
+                gateHint.setText(T.s("只有关键应用不受学习闸门影响；其他应用在 20:00 检查后可能延长冻结。"));
                 gateHint.setTextSize(11);
                 gateHint.setTextColor(TEXT2);
                 gateHint.setPadding(0, dp(4), 0, 0);
@@ -1257,7 +1257,7 @@ public class AppListActivity extends ThemedActivity {
                 dayBtns[k].setTextColor(on ? 0xFFFFFFFF : TEXT2);
                 dayBtns[k].setBackgroundColor(on ? BRAND : LINE);
             }
-            daysText.setText("冻结星期 " + Rule.daysText(mask[0]));
+            daysText.setText(T.s("冻结星期 ") + Rule.daysText(mask[0]));
         }
 
         /** 0=每天 22-23 / 1=每天 21-23 / 2=全天冻结（一天都不选）。 */
@@ -1284,7 +1284,7 @@ public class AppListActivity extends ThemedActivity {
             winBox.removeAllViews();
             if (wins.isEmpty()) {
                 TextView none = new TextView(AppListActivity.this);
-                none.setText("没有冻结时段 = 不定时冻结（学习闸门仍可生效）");
+                none.setText(T.s("没有冻结时段 = 不定时冻结（学习闸门仍可生效）"));
                 none.setTextSize(12);
                 none.setTextColor(TEXT2);
                 winBox.addView(none);
@@ -1295,7 +1295,7 @@ public class AppListActivity extends ThemedActivity {
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setGravity(Gravity.CENTER_VERTICAL);
                 TextView tv = new TextView(AppListActivity.this);
-                tv.setText((i + 1) + ".　" + Rule.hm(wins.get(i)[0] / 60, wins.get(i)[0] % 60)
+                tv.setText((i + 1) + T.s(".　") + Rule.hm(wins.get(i)[0] / 60, wins.get(i)[0] % 60)
                         + " - " + Rule.hm(wins.get(i)[1] / 60, wins.get(i)[1] % 60));
                 tv.setTextSize(14);
                 tv.setTextColor(TEXT);
@@ -1303,7 +1303,7 @@ public class AppListActivity extends ThemedActivity {
                         ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
                 Button chg = new Button(AppListActivity.this);
-                chg.setText("改");
+                chg.setText(T.s("改"));
                 chg.setTextSize(12);
                 chg.setAllCaps(false);
                 chg.setOnClickListener(new View.OnClickListener() {
@@ -1319,7 +1319,7 @@ public class AppListActivity extends ThemedActivity {
                 row.addView(chg, new LinearLayout.LayoutParams(dp(56), dp(38)));
 
                 Button del = new Button(AppListActivity.this);
-                del.setText("删");
+                del.setText(T.s("删"));
                 del.setTextSize(12);
                 del.setAllCaps(false);
                 del.setOnClickListener(new View.OnClickListener() {
@@ -1337,7 +1337,7 @@ public class AppListActivity extends ThemedActivity {
             }
 
             Button add = new Button(AppListActivity.this);
-            add.setText("＋ 加一段");
+            add.setText(T.s("＋ 加一段"));
             add.setTextSize(12);
             add.setAllCaps(false);
             add.setOnClickListener(new View.OnClickListener() {
@@ -1354,7 +1354,7 @@ public class AppListActivity extends ThemedActivity {
                     ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
             alp2.topMargin = dp(6);
             winBox.addView(add, alp2);
-            winText.setText("冻结时间　" + joinWins(wins));
+            winText.setText(T.s("冻结时间　") + joinWins(wins));
         }
 
         Rule result() {
@@ -1372,7 +1372,7 @@ public class AppListActivity extends ThemedActivity {
 
     private void edit(final String pkg) {
         if (Guard.lockedNow(this, pkg)) {
-            toast("它正在自己的屏蔽时间里，等它的放行时段才能改");
+            toast(T.s("它正在自己的屏蔽时间里，等它的放行时段才能改"));
             return;
         }
 
@@ -1381,22 +1381,22 @@ public class AppListActivity extends ThemedActivity {
         ThemeStore.dialog(this)
                 .setTitle(Guard.labelOf(getPackageManager(), pkg))
                 .setView(ed.view)
-                .setPositiveButton("保存", new DialogInterface.OnClickListener() {
+                .setPositiveButton(T.s("保存"), new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         Rule r = ed.result();
                         if (r.days == 0) {
-                            toast("未选择冻结星期，不定时冻结，已保存");
+                            toast(T.s("未选择冻结星期，不定时冻结，已保存"));
                         }
                         RuleStore.put(AppListActivity.this, pkg, r);
                         rebuild();
                         applyInBackground();
                     }
                 })
-                .setNegativeButton("取消", null)
-                .setNeutralButton("移除", new DialogInterface.OnClickListener() {
+                .setNegativeButton(T.s("取消"), null)
+                .setNeutralButton(T.s("移除"), new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         if (!Guard.canRemove(AppListActivity.this, pkg)) {
-                            toast("只进不出：已加入的应用不能移出冻结应用（刚加的 10 分钟内除外）");
+                            toast(T.s("只进不出：已加入的应用不能移出冻结应用（刚加的 10 分钟内除外）"));
                             return;
                         }
                         RuleStore.remove(AppListActivity.this, pkg);
@@ -1434,7 +1434,7 @@ public class AppListActivity extends ThemedActivity {
         scroll.addView(box);
 
         TextView hint = new TextView(this);
-        hint.setText("选中的应用只按各自的冻结时间执行，不受学习闸门延长。冻结时间仍可在应用列表中修改。");
+        hint.setText(T.s("选中的应用只按各自的冻结时间执行，不受学习闸门延长。冻结时间仍可在应用列表中修改。"));
         hint.setTextSize(13);
         hint.setTextColor(TEXT2);
         hint.setPadding(0, 0, 0, dp(12));
@@ -1442,7 +1442,7 @@ public class AppListActivity extends ThemedActivity {
 
         if (pkgs.isEmpty()) {
             TextView emptyHint = new TextView(this);
-            emptyHint.setText("冻结应用为空，请先添加应用。");
+            emptyHint.setText(T.s("冻结应用为空，请先添加应用。"));
             emptyHint.setTextSize(14);
             emptyHint.setTextColor(TEXT);
             box.addView(emptyHint);
@@ -1472,23 +1472,23 @@ public class AppListActivity extends ThemedActivity {
             box.addView(row);
         }
         ThemeStore.dialog(this)
-                .setTitle("关键应用名单")
+                .setTitle(T.s("关键应用名单"))
                 .setView(scroll)
-                .setPositiveButton("保存", new DialogInterface.OnClickListener() {
+                .setPositiveButton(T.s("保存"), new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         RuleStore.setKeyApps(AppListActivity.this, selected);
                         rebuild();
                         applyInBackground();
                     }
                 })
-                .setNegativeButton("取消", null)
+                .setNegativeButton(T.s("取消"), null)
                 .show();
     }
     private void batchSetRule() {
         final java.util.List<String> pkgs =
                 new java.util.ArrayList<>(RuleStore.packages(this));
         if (pkgs.isEmpty()) {
-            toast("冻结应用是空的，先添加应用");
+            toast(T.s("冻结应用是空的，先添加应用"));
             return;
         }
         final String[] labels = new String[pkgs.size()];
@@ -1498,7 +1498,7 @@ public class AppListActivity extends ThemedActivity {
             String p = pkgs.get(i);
             String name = Guard.labelOf(getPackageManager(), p);
             locked[i] = Guard.lockedNow(this, p);
-            labels[i] = locked[i] ? (name + "（屏蔽中，跳过）") : name;
+            labels[i] = locked[i] ? (name + T.s("（屏蔽中，跳过）")) : name;
         }
 
         // ★ 自己画行，不用 setMultiChoiceItems：
@@ -1540,9 +1540,9 @@ public class AppListActivity extends ThemedActivity {
                 };
 
         ThemeStore.dialog(this)
-                .setTitle("选要一起设时段的 " + pkgs.size() + " 个应用")
+                .setTitle(T.s("选要一起设时段的 ") + pkgs.size() + T.s(" 个应用"))
                 .setAdapter(ad, null)
-                .setPositiveButton("下一步", new DialogInterface.OnClickListener() {
+                .setPositiveButton(T.s("下一步"), new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         java.util.List<String> picked = new java.util.ArrayList<>();
                         for (int i = 0; i < pkgs.size(); i++) {
@@ -1551,13 +1551,13 @@ public class AppListActivity extends ThemedActivity {
                             }
                         }
                         if (picked.isEmpty()) {
-                            toast("没选应用（屏蔽中的会被跳过）");
+                            toast(T.s("没选应用（屏蔽中的会被跳过）"));
                             return;
                         }
                         applyRuleTo(picked);
                     }
                 })
-                .setNegativeButton("取消", null)
+                .setNegativeButton(T.s("取消"), null)
                 .show();
     }
 
@@ -1567,9 +1567,9 @@ public class AppListActivity extends ThemedActivity {
         // 十个应用一次套用，gate 统一成同一个值时，微信这类会被悄悄拉回闸门。
         final RuleEditor ed = new RuleEditor(RuleStore.defaultRule(this), false);
         ThemeStore.dialog(this)
-                .setTitle("给这 " + picked.size() + " 个应用套用")
+                .setTitle(T.s("给这 ") + picked.size() + T.s(" 个应用套用"))
                 .setView(ed.view)
-                .setPositiveButton("套用", new DialogInterface.OnClickListener() {
+                .setPositiveButton(T.s("套用"), new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         Rule base = ed.result();
                         // 跟单个编辑同一条规矩：正在自己屏蔽时段里的不能改，
@@ -1586,17 +1586,17 @@ public class AppListActivity extends ThemedActivity {
                             done.add(p);
                         }
                         if (done.isEmpty()) {
-                            toast("选中的应用都在自己的屏蔽时段里，改不了");
+                            toast(T.s("选中的应用都在自己的屏蔽时段里，改不了"));
                             return;
                         }
                         rebuild();
                         applyInBackground();
-                        toast("已套用：" + Rule.daysText(base.days) + " " + base.windowText()
-                                + " · " + done.size() + " 个"
-                                + (skipped > 0 ? "（" + skipped + " 个屏蔽中，跳过）" : ""));
+                        toast(T.s("已套用：") + Rule.daysText(base.days) + " " + base.windowText()
+                                + " · " + done.size() + T.s(" 个")
+                                + (skipped > 0 ? T.s("（") + skipped + T.s(" 个屏蔽中，跳过）") : ""));
                     }
                 })
-                .setNegativeButton("取消", null)
+                .setNegativeButton(T.s("取消"), null)
                 .show();
     }
 
@@ -1609,22 +1609,22 @@ public class AppListActivity extends ThemedActivity {
         int show = Math.min(added.size(), 3);
         for (int i = 0; i < show; i++) {
             if (i > 0) {
-                names.append("、");
+                names.append(T.s("、"));
             }
             names.append(Guard.labelOf(getPackageManager(), added.get(i)));
         }
         if (added.size() > show) {
-            names.append(" 等 ").append(added.size()).append(" 个");
+            names.append(T.s(" 等 ")).append(added.size()).append(T.s(" 个"));
         }
         ThemeStore.dialog(this)
-                .setTitle("新加了 " + added.size() + " 个应用")
-                .setMessage(names + "\n\n现在统一设置冻结时间？之后也可以单独改。")
-                .setPositiveButton("现在设", new DialogInterface.OnClickListener() {
+                .setTitle(T.s("新加了 ") + added.size() + T.s(" 个应用"))
+                .setMessage(names + T.s("\n\n现在统一设置冻结时间？之后也可以单独改。"))
+                .setPositiveButton(T.s("现在设"), new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
                         applyRuleTo(added);
                     }
                 })
-                .setNegativeButton("用默认的", null)
+                .setNegativeButton(T.s("用默认的"), null)
                 .show();
     }
 
@@ -1639,7 +1639,7 @@ public class AppListActivity extends ThemedActivity {
               .append('-')
               .append(Rule.hm(wins.get(i)[1] / 60, wins.get(i)[1] % 60));
         }
-        return sb.length() == 0 ? "无" : sb.toString();
+        return sb.length() == 0 ? T.s("无") : sb.toString();
     }
 
     /**
@@ -1656,7 +1656,7 @@ public class AppListActivity extends ThemedActivity {
                     public void onTimeSet(TimePicker view, int h2, int m2) {
                         int e = h2 * 60 + m2;
                         if (s == e) {
-                            toast("起点和终点不能相同");
+                            toast(T.s("起点和终点不能相同"));
                             return;
                         }
                         int[] seg = { s, e };
@@ -1686,17 +1686,17 @@ public class AppListActivity extends ThemedActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         ThemeStore.dialog(this)
-                .setTitle("按包名添加到冻结应用")
-                .setMessage("应用还没装也可以先加：装上之后它会被自动冻结。\n包名必须完全一致，填错了这条规则不会匹配任何东西。")
+                .setTitle(T.s("按包名添加到冻结应用"))
+                .setMessage(T.s("应用还没装也可以先加：装上之后它会被自动冻结。\n包名必须完全一致，填错了这条规则不会匹配任何东西。"))
                 .setView(wrap)
-                .setPositiveButton("添加", new DialogInterface.OnClickListener() {
+                .setPositiveButton(T.s("添加"), new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         String pkg = input.getText().toString().trim();
                         if (pkg.length() == 0) {
                             return;
                         }
                         if (RuleStore.packages(AppListActivity.this).contains(pkg)) {
-                            toast("它已经在冻结应用里");
+                            toast(T.s("它已经在冻结应用里"));
                             return;
                         }
                         RuleStore.put(AppListActivity.this, pkg, RuleStore.defaultRule(AppListActivity.this));
@@ -1704,26 +1704,26 @@ public class AppListActivity extends ThemedActivity {
                         applyInBackground();
                     }
                 })
-                .setNegativeButton("取消", null)
+                .setNegativeButton(T.s("取消"), null)
                 .show();
     }
 
     private void confirmRemove(final String pkg) {
         if (!Guard.canRemove(this, pkg)) {
-            toast("只进不出：已加入的应用不能移出冻结应用（刚加的 10 分钟内除外）");
+            toast(T.s("只进不出：已加入的应用不能移出冻结应用（刚加的 10 分钟内除外）"));
             return;
         }
         ThemeStore.dialog(this)
-                .setTitle("移出冻结应用")
-                .setMessage(Guard.labelOf(getPackageManager(), pkg) + " 将不再被管理（立刻解冻）。")
-                .setPositiveButton("移除", new DialogInterface.OnClickListener() {
+                .setTitle(T.s("移出冻结应用"))
+                .setMessage(Guard.labelOf(getPackageManager(), pkg) + T.s(" 将不再被管理（立刻解冻）。"))
+                .setPositiveButton(T.s("移除"), new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int which) {
                         RuleStore.remove(AppListActivity.this, pkg);
                         rebuild();
                         applyInBackground();
                     }
                 })
-                .setNegativeButton("取消", null)
+                .setNegativeButton(T.s("取消"), null)
                 .show();
     }
 

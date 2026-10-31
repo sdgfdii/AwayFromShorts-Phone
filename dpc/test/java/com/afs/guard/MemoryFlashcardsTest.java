@@ -24,8 +24,67 @@ public final class MemoryFlashcardsTest {
     }
     public static void main(String[] args) {
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
-        sequence(); random(); changes(); validation();
+        sequence(); random(); changes(); validation(); pool();
         System.out.println("Memory flashcards: " + count + " assertions passed");
+    }
+    private static void due(MemoryData m, String id, long when) {
+        JSONObject c = m.card(id);
+        MemoryData.put(c, "reps", 1); MemoryData.put(c, "state", MemoryScheduler.REVIEW);
+        MemoryData.put(c, "stability", 3); MemoryData.put(c, "difficulty", 5);
+        MemoryData.put(c, "last", when - MemoryScheduler.DAY); MemoryData.put(c, "due", when);
+    }
+    private static void pool() {
+        MemoryData m = new MemoryData(); String d = deck(m, 0);
+        add(m, d, "new card");
+        String late = add(m, d, "due later"), early = add(m, d, "due early"), future = add(m, d, "future");
+        due(m, early, NOW - 2 * 3600000L); due(m, late, NOW - 3600000L); due(m, future, NOW + 3 * MemoryScheduler.DAY);
+        MemoryFlashcards.configure(m, selected(d), 20, "sequence", MemoryFlashcards.POOL_DUE, NOW);
+        check(MemoryFlashcards.POOL_DUE.equals(MemoryFlashcards.pool(m)), "due pool stored");
+        JSONArray ids = MemoryFlashcards.session(m, NOW).optJSONArray("ids");
+        check(ids.length() == 2, "due pool excludes new and future cards");
+        check(early.equals(ids.optString(0)) && late.equals(ids.optString(1)), "due pool is ascending by due");
+        check(early.equals(MemoryFlashcards.next(m, NOW).optString("id")), "oldest due comes first");
+        rate(m, 3, NOW);
+        check(late.equals(MemoryFlashcards.next(m, NOW).optString("id")), "graded card leaves the due queue");
+        rate(m, 3, NOW);
+        check(MemoryFlashcards.next(m, NOW) == null, "due queue finishes");
+
+        MemoryData r = new MemoryData(); String dr = deck(r, 0);
+        String[] order = new String[5];
+        for (int i = 0; i < order.length; i++) {
+            order[i] = add(r, dr, "due " + i);
+            due(r, order[i], NOW - (order.length - i) * 60000L);
+        }
+        MemoryFlashcards.configure(r, selected(dr), 5, "random", MemoryFlashcards.POOL_DUE, NOW);
+        JSONArray rid = MemoryFlashcards.session(r, NOW).optJSONArray("ids");
+        check(rid.length() == 5, "due pool keeps all due cards");
+        boolean ascending = true;
+        for (int i = 1; i < rid.length(); i++)
+            if (r.card(rid.optString(i)).optLong("due") < r.card(rid.optString(i - 1)).optLong("due")) ascending = false;
+        check(ascending, "due pool ignores the random shuffle");
+
+        MemoryData empty = new MemoryData(); String de = deck(empty, 0); add(empty, de, "only new");
+        MemoryFlashcards.configure(empty, selected(de), 20, "random", MemoryFlashcards.POOL_DUE, NOW);
+        check(MemoryFlashcards.next(empty, NOW) == null, "empty due pool yields no card");
+        check(MemoryFlashcards.progress(empty, NOW).total == 0, "empty due pool has no progress");
+        MemoryFlashcards.configure(empty, selected(de), 20, "random", MemoryFlashcards.POOL_ALL, NOW);
+        check(MemoryFlashcards.next(empty, NOW) != null, "switching back to all restores cards");
+
+        MemoryData legacy = new MemoryData(); String dl = deck(legacy, 0);
+        String only = add(legacy, dl, "legacy card");
+        MemoryFlashcards.configure(legacy, selected(dl), 20, "random", NOW);
+        check(MemoryFlashcards.POOL_ALL.equals(MemoryFlashcards.pool(legacy)), "default pool is all");
+        check(only.equals(MemoryFlashcards.next(legacy, NOW).optString("id")), "all pool includes new cards");
+        JSONObject stored = MemoryData.copy(legacy.db);
+        stored.optJSONObject("flashcards").optJSONObject("settings").remove("pool");
+        MemoryData old = new MemoryData(stored.toString());
+        check(MemoryFlashcards.POOL_ALL.equals(MemoryFlashcards.pool(old)), "missing pool reads as all");
+        check(MemoryFlashcards.next(old, NOW) != null, "missing pool keeps old behaviour");
+        reject(() -> MemoryFlashcards.configure(legacy, selected(dl), 20, "random", "bad", NOW),
+                "invalid pool rejected on save");
+        JSONObject badPool = MemoryData.copy(legacy.db);
+        MemoryData.put(badPool.optJSONObject("flashcards").optJSONObject("settings"), "pool", "bad");
+        reject(() -> new MemoryData(badPool.toString()), "persisted invalid pool rejected");
     }
     private static void sequence() {
         MemoryData m = new MemoryData(); String en = deck(m, 0), med = deck(m, 1);

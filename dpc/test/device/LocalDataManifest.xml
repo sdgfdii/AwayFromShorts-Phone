@@ -1,0 +1,1 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.localdataqa"><application android:label="AFS Local Data QA"/><instrumentation android:name="com.afs.guard.LocalDataDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true"/></manifest>

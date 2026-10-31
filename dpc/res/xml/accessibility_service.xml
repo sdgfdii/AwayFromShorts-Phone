@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  关键词拦截的无障碍服务配置。
+
+  packageNames 故意留空：要在「目标应用」列表变化时立刻生效，
+  写死在 XML 里就得每次改配置都让用户重开一次服务。
+  真正的过滤在 KeywordGuardService.onAccessibilityEvent 里按包名做。
+
+  typeViewScrolled 必须带上：短视频的标题文案基本不变，只有列表在滚，
+  只听窗口状态变化会漏掉绝大多数翻页。
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/afs_accessibility_desc"
+    android:notificationTimeout="300" />

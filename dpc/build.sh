@@ -56,30 +56,46 @@ OUT="build"
 rm -rf "$OUT"
 mkdir -p "$OUT/flat" "$OUT/gen" "$OUT/classes" "$OUT/dex"
 
-# ---------- 0. 生成 BuildConfig ----------
-# 打卡要写 Gist，得有个 token。但 token 不能进公开仓库 ——
-# APK 里 grep 得到 'gho_' 前缀，推上去等于把凭据公开。
-# 所以默认 **不注入**（产物可以直接发仓库），本机想出"装上就能打卡"的包用：
-#   AFS_PREFILL=1 bash build.sh
-# token 从本机 token.local 读（一行，已在 .gitignore 里）。
-TOKEN=""
-if [ "${AFS_PREFILL:-0}" = "1" ] && [ -f token.local ]; then
-  TOKEN="$(head -1 token.local | tr -d '\r\n')"
+# ---------- 0. Public configuration ----------
+# Credentials are configured per user in the app. Never embed tokens in an APK.
+if [ "${AFS_PREFILL:-0}" != "0" ]; then
+  echo "不再支持注入凭据；请在应用内配置个人同步。" >&2; exit 1
 fi
 mkdir -p "$OUT/gen/com/afs/guard"
 cat > "$OUT/gen/com/afs/guard/BuildConfig.java" <<EOF
 package com.afs.guard;
-
-/** 构建期生成，勿手改（build.sh 和 test/run.sh 各生成一份）。 */
 public final class BuildConfig {
-    /** 预置的 GitHub token（只授 gist 权限）。空串 = 要去打卡页长按标题粘贴。 */
-    public static final String PREFILL_TOKEN = "$TOKEN";
+    public static final String PREFILL_TOKEN = "";
 }
 EOF
-if [ -n "$TOKEN" ]; then
-  echo "[0/7] token 已注入（${#TOKEN} 字符）· 这份 APK 别外传"
-else
-  echo "[0/7] 未注入 token（公开构建）· 首次用打卡要长按标题粘一次"
+VERSION_CODE="${AFS_VERSION_CODE:-2236}"
+VERSION_NAME="${AFS_VERSION_NAME:-1.70.0}"
+if [ "${AFS_RELEASE:-0}" = "1" ]; then
+  : "${AFS_KEYSTORE:?Release requires an external signing keystore}"
+  : "${AFS_STORE_PASS:?Release requires a private signing password}"
+  : "${AFS_KEY_ALIAS:?Release requires a key alias}"
+  : "${AFS_APK_OUTPUT:?Release requires an explicit APK output path}"
+  [ -f "$AFS_KEYSTORE" ] || { echo "发行签名库不存在" >&2; exit 1; }
+fi
+echo "[0/7] 个人同步默认未配置 · 版本 $VERSION_NAME"
+
+MANIFEST=AndroidManifest.xml
+if [ "${AFS_RECOVERY:-0}" = "1" ]; then
+  [ "${AFS_RELEASE:-0}" = "1" ] || { echo "Recovery requires verified release signing" >&2; exit 1; }
+  MANIFEST="$OUT/recovery-manifest.xml"
+  "${AFS_PYTHON:-python3}" - "$MANIFEST" <<'PYRECOVERY'
+import sys, xml.etree.ElementTree as ET
+ns="http://schemas.android.com/apk/res/android"
+ET.register_namespace("android",ns)
+tree=ET.parse("AndroidManifest.xml")
+app=tree.getroot().find("application")
+app.set("{"+ns+"}label","AFS Maintenance")
+ET.SubElement(app,"receiver",{
+    "{"+ns+"}name":".RecoveryReceiver",
+    "{"+ns+"}exported":"true",
+    "{"+ns+"}permission":"android.permission.DUMP"})
+tree.write(sys.argv[1],encoding="utf-8",xml_declaration=True)
+PYRECOVERY
 fi
 
 # ---------- 1. 编译资源 ----------
@@ -88,15 +104,20 @@ echo "[1/7] aapt2 compile"
 
 # ---------- 2. 链接资源 ----------
 echo "[2/7] aapt2 link"
+# 开发构建带 --debug-mode：apk 变成 debuggable，"run-as com.afs.guard" 才进得去，
+# 排查无障碍/规则这类需要看现场的问题有它省事。发行包绝不能带（可调试 = 可被人扒数据）。
+DEBUG_FLAG=""
+if [ "${AFS_RELEASE:-0}" != "1" ]; then DEBUG_FLAG="--debug-mode"; fi
 "$AAPT2" link \
   -o "$OUT/base.apk" \
   -I "$ANDROID_JAR" \
-  --manifest AndroidManifest.xml \
+  --manifest "$MANIFEST" \
   --java "$OUT/gen" \
+  $DEBUG_FLAG \
   --min-sdk-version 24 \
   --target-sdk-version 34 \
-  --version-code 2138 \
-  --version-name 1.49.3 \
+  --version-code "$VERSION_CODE" \
+  --version-name "$VERSION_NAME" \
   "$OUT"/flat/*.flat
 
 # ---------- 2b. 打包 assets（zip 里必须是正斜杠） ----------
@@ -104,7 +125,21 @@ echo "[2/7] aapt2 link"
 # AssetManager 按 "fonts/xiaowei.ttf" 找不到，打卡页选内置字体会直接崩。
 # 所以这里不用 aapt2 的 -A，改用 python 自己打，保证路径分隔符统一。
 echo "[2b/7] pack assets"
-PY="${AFS_PYTHON:-$(command -v python3 || command -v python || true)}"
+# Windows 上 "python" 经常指向应用商店的占位程序（...\WindowsApps\python.exe），
+# 一执行就退出、什么都不干 —— 会让这一步静默失败（从 PowerShell 调构建时就是这样）。
+# 所以逐个候选挑一个真的能跑的解释器。
+pick_python() {
+  for cand in ${AFS_PYTHON:-} "$(command -v python3 || true)" "$(command -v python || true)" \
+              "$HOME"/.workbuddy/binaries/python/versions/*/python; do
+    [ -n "$cand" ] || continue
+    case "$cand" in *WindowsApps/python*) continue ;; esac
+    [ -x "$cand" ] || continue
+    printf '%s' "$cand"
+    return 0
+  done
+  return 1
+}
+PY="$(pick_python || true)"
 if [ -z "$PY" ]; then
   echo "需要 python 来打包 assets（或用 AFS_PYTHON=/path/to/python 指定）。" >&2
   exit 1
@@ -126,13 +161,17 @@ PYEOF
 
 # ---------- 3. 编译 Java ----------
 echo "[3/7] javac"
+CP_SEP=";"
+case "$(uname -s)" in Linux|Darwin) CP_SEP=":" ;; esac
+COMPILE_ANDROID="$ANDROID_JAR"
+if command -v cygpath >/dev/null 2>&1; then COMPILE_ANDROID="$(cygpath -m "$ANDROID_JAR")"; fi
 find java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
 # ★ javac 失败必须让构建死掉：以前管道接 grep || true, 编译错了构建照样走到
 #   打包, 装上的是"没有新代码"的旧 dex（PcStats 漏 import 就这么漏装过一次）。
 # --release supplies Java 8's LambdaMetafactory signatures; Android's boot stubs
 # omit them. d8 below desugars lambdas for minSdk 24.
 if ! javac -encoding UTF-8 -nowarn --release 8 \
-  -classpath "$ANDROID_JAR" \
+  -classpath "$COMPILE_ANDROID${CP_SEP}libs/pdfbox-android-2.0.27.0.jar" \
   -d "$OUT/classes" @"$OUT/sources.txt" 2> "$OUT/javac.log"; then
   grep -v '^warning:' "$OUT/javac.log" >&2 || true
   rm -rf "$OUT/classes"
@@ -144,7 +183,7 @@ grep -v '^warning:' "$OUT/javac.log" || true
 # ---------- 4. dex ----------
 echo "[4/7] d8"
 "$JAR" cf "$OUT/classes.jar" -C "$OUT/classes" .
-"$D8" --lib "$ANDROID_JAR" --min-api 24 --output "$OUT/dex" "$OUT/classes.jar"
+"$D8" --lib "$ANDROID_JAR" --min-api 24 --output "$OUT/dex" "$OUT/classes.jar" libs/pdfbox-android-2.0.27.0.jar
 
 # ---------- 5. 打包 + 对齐 ----------
 echo "[5/7] zip + zipalign"
@@ -170,24 +209,43 @@ fi
 
 # ---------- 6. 签名 ----------
 echo "[6/7] apksigner"
-KS="keystore/afs.keystore"
-mkdir -p keystore
-if [ ! -f "$KS" ]; then
-  keytool -genkeypair -keystore "$KS" -alias afs -keyalg RSA -keysize 2048 \
-    -validity 10000 -storepass afsguard -keypass afsguard \
-    -dname "CN=AFS Guard,O=AFS,C=CN" 2>/dev/null
-  echo "  已生成签名库 $KS（密码 afsguard，务必保留，换 key 就无法覆盖升级）"
+KS="${AFS_KEYSTORE:-keystore/afs.keystore}"
+ALIAS="${AFS_KEY_ALIAS:-afs}"
+if [ "${AFS_RELEASE:-0}" = "1" ]; then
+  # An in-repository key can be accidentally published. Release signing is external.
+  KEY_ABS="$(cd "$(dirname "$KS")" && pwd)/$(basename "$KS")"
+  REPO_ABS="$(cd .. && pwd)"
+  case "$KEY_ABS" in "$REPO_ABS"/*) echo "发行签名必须存放在仓库之外" >&2; exit 1 ;; esac
+else
+  mkdir -p "$(dirname "$KS")"
+  if [ ! -f "$KS" ]; then
+    keytool -genkeypair -keystore "$KS" -alias "$ALIAS" -keyalg RSA -keysize 2048 \
+      -validity 10000 -storepass afsguard -keypass afsguard \
+      -dname "CN=AFS Development,O=AFS,C=CN" 2>/dev/null
+  fi
+  echo "  开发构建：此签名不用于公开发行"
 fi
+export AFS_STORE_PASS="${AFS_STORE_PASS:-afsguard}"
+export AFS_KEY_PASS="${AFS_KEY_PASS:-$AFS_STORE_PASS}"
 "$APKSIGNER" sign \
-  --ks "$KS" --ks-pass pass:afsguard --key-pass pass:afsguard \
+  --ks "$KS" --ks-key-alias "$ALIAS" --ks-pass env:AFS_STORE_PASS --key-pass env:AFS_KEY_PASS \
   --min-sdk-version 24 \
   --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
   --out "$OUT/afs-guard.apk" "$OUT/aligned.apk"
 
 "$APKSIGNER" verify --min-sdk-version 24 "$OUT/afs-guard.apk"
+if [ "${AFS_RELEASE:-0}" = "1" ]; then
+  EXPECTED_CERT="$(tr -d '\r\n ' < release/signing-certificate.sha256)"
+  CERT_INFO="$("$APKSIGNER" verify --print-certs "$OUT/afs-guard.apk")"
+  if ! printf '%s\n' "$CERT_INFO" | grep -qi "certificate SHA-256 digest: $EXPECTED_CERT$"; then
+    echo "发行签名与固定证书不一致，停止输出" >&2; exit 1
+  fi
+fi
 rm -f "$OUT/afs-guard.apk.idsig"
-cp -f "$OUT/afs-guard.apk" ../afs-guard.apk
+DEST="${AFS_APK_OUTPUT:-../afs-guard.apk}"
+mkdir -p "$(dirname "$DEST")"
+cp -f "$OUT/afs-guard.apk" "$DEST"
 
 echo
 echo "完成："
-ls -l ../afs-guard.apk
+ls -l "$DEST"

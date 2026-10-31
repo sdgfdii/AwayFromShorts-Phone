@@ -13,7 +13,7 @@ final class Goal {
 
     String id = "";
     String name = "";
-    String unit = "个";
+    String unit = T.s("个");
     double total;
     double done;
     double suggest;

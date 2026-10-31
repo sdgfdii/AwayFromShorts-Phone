@@ -1,0 +1,1 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.quotaqa"><application android:label="AFS Daily Quota QA"/><instrumentation android:name="com.afs.guard.DailyQuotaDeviceTest" android:targetPackage="com.afs.guard"/></manifest>

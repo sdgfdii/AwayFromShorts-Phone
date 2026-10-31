@@ -1,0 +1,1 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.maincountqa"><application android:label="AFS Home Count QA"/><instrumentation android:name="com.afs.guard.MainCountDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true"/></manifest>

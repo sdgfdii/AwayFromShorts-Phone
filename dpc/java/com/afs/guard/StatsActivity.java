@@ -78,14 +78,14 @@ public class StatsActivity extends ThemedActivity {
         setContentView(scroll);
 
         TextView title = new TextView(this);
-        title.setText("统计");
+        title.setText(T.s("统计"));
         title.setTextSize(23);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(TEXT_DARK);
         body.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("本月应用排行 · 游戏时长 · 娱乐占比趋势");
+        sub.setText(T.s("本月应用排行 · 游戏时长 · 娱乐占比趋势"));
         sub.setTextSize(13);
         sub.setTextColor(TEXT2_DARK);
         sub.setPadding(0, dp(4), 0, dp(14));
@@ -149,16 +149,16 @@ public class StatsActivity extends ThemedActivity {
     private void permCard() {
         LinearLayout card = card();
         TextView tv = new TextView(this);
-        tv.setText("还没有「使用情况访问」权限\n\n"
-                + "统计要读系统的应用使用时长（按 Android 的规矩，这一项必须用户在系统设置里亲手开）。\n"
-                + "点下面去开：找到 AwayFromShorts，允许「使用情况访问」。");
+        tv.setText(T.s("还没有「使用情况访问」权限\n\n")
+                + T.s("统计要读系统的应用使用时长（按 Android 的规矩，这一项必须用户在系统设置里亲手开）。\n")
+                + T.s("点下面去开：找到 AwayFromShorts，允许「使用情况访问」。"));
         tv.setTextSize(13);
         tv.setTextColor(TEXT_DARK);
         tv.setLineSpacing(dp(4), 1f);
         card.addView(tv);
 
         Button go = new Button(this);
-        go.setText("去开启使用情况访问");
+        go.setText(T.s("去开启使用情况访问"));
         go.setAllCaps(false);
         go.setTextColor(0xFFFFFFFF);
         go.setBackgroundColor(BRAND);
@@ -172,7 +172,7 @@ public class StatsActivity extends ThemedActivity {
                     startActivity(new Intent(android.provider.Settings
                             .ACTION_USAGE_ACCESS_SETTINGS));
                 } catch (Throwable t) {
-                    toast("打不开设置页，请在系统设置里手动搜索「使用情况访问」");
+                    toast(T.s("打不开设置页，请在系统设置里手动搜索「使用情况访问」"));
                 }
             }
         });
@@ -183,7 +183,7 @@ public class StatsActivity extends ThemedActivity {
     private void loadingCard() {
         LinearLayout card = card();
         TextView tv = new TextView(this);
-        tv.setText("正在读系统使用数据…");
+        tv.setText(T.s("正在读系统使用数据…"));
         tv.setTextSize(13);
         tv.setTextColor(TEXT2_DARK);
         card.addView(tv);
@@ -371,9 +371,9 @@ public class StatsActivity extends ThemedActivity {
     private void renderData(StatsData d) {
         // —— 本月应用排行 ——
         LinearLayout rank = card();
-        head(rank, "本月应用排行");
+        head(rank, T.s("本月应用排行"));
         if (d.top.isEmpty()) {
-            note(rank, "系统还没攒出本月数据（刚授权 / 刚开机）");
+            note(rank, T.s("系统还没攒出本月数据（刚授权 / 刚开机）"));
         } else {
             long max = Math.max(1, d.top.get(0).getValue());
             int i = 0;
@@ -390,18 +390,18 @@ public class StatsActivity extends ThemedActivity {
 
         // —— 游戏时长 ——
         LinearLayout game = card();
-        head(game, "游戏时长");
-        gameBar(game, "本月合计", d.monthGame, RED_DARK);
-        gameBar(game, "今天", d.todayGame, RED_DARK);
+        head(game, T.s("游戏时长"));
+        gameBar(game, T.s("本月合计"), d.monthGame, RED_DARK);
+        gameBar(game, T.s("今天"), d.todayGame, RED_DARK);
         if (d.monthGame <= 0) {
-            note(game, "本月没有游戏类应用的前台记录");
+            note(game, T.s("本月没有游戏类应用的前台记录"));
         }
         addCard(game);
 
         // —— 娱乐占比趋势 ——
         LinearLayout trend = card();
-        head(trend, "近 7 天娱乐占比");
-        TextView def = note(trend, "娱乐 = 黑名单应用 + 系统游戏类 · 占每天全部前台时长");
+        head(trend, T.s("近 7 天娱乐占比"));
+        TextView def = note(trend, T.s("娱乐 = 黑名单应用 + 系统游戏类 · 占每天全部前台时长"));
         def.setPadding(0, 0, 0, dp(6));
         int days = 0;
         long sumPct = 0;
@@ -414,7 +414,7 @@ public class StatsActivity extends ThemedActivity {
         }
         if (days > 0) {
             TextView avg = new TextView(this);
-            avg.setText("7 天平均 " + (sumPct / days) + "%");
+            avg.setText(T.s("7 天平均 ") + (sumPct / days) + "%");
             avg.setTextSize(13);
             avg.setTypeface(Typeface.DEFAULT_BOLD);
             avg.setTextColor(sumPct / days >= 30 ? RED_DARK : GREEN_DARK);
@@ -425,22 +425,22 @@ public class StatsActivity extends ThemedActivity {
 
         // —— 电脑端应用时长（Gist 同步的 PC 面板采样数据）——
         LinearLayout pc = card();
-        head(pc, "电脑端应用时长");
+        head(pc, T.s("电脑端应用时长"));
         String today = ymd(Calendar.getInstance());
         final List<List<PcStats.Entry>> periods = new ArrayList<>();
         periods.add(PcStats.dayApps(this, today));
         periods.add(PcStats.monthApps(this, today));
         periods.add(PcStats.totalApps(this));
         if (periods.get(2).isEmpty()) {
-            note(pc, "还没拉到电脑数据。电脑开着面板时每 15 分钟推一次，晚点再进来看。");
+            note(pc, T.s("还没拉到电脑数据。电脑开着面板时每 15 分钟推一次，晚点再进来看。"));
         } else {
             String up = PcStats.updatedAt(this);
-            note(pc, "累计自 " + PcStats.since(this) + " 起 · 更新于 " + (up.isEmpty() ? "-" : up));
+            note(pc, T.s("累计自 ") + PcStats.since(this) + T.s(" 起 · 更新于 ") + (up.isEmpty() ? "-" : up));
             LinearLayout tabs = new LinearLayout(this);
             tabs.setOrientation(LinearLayout.HORIZONTAL);
             final LinearLayout detail = new LinearLayout(this);
             detail.setOrientation(LinearLayout.VERTICAL);
-            final String[] labels = {"本日", "本月", "总计"};
+            final String[] labels = {T.s("本日"), T.s("本月"), T.s("总计")};
             final TextView[] buttons = new TextView[3];
             LinearLayout.LayoutParams tabsLp = new LinearLayout.LayoutParams(-1, -2);
             tabsLp.topMargin = dp(12);
@@ -472,8 +472,8 @@ public class StatsActivity extends ThemedActivity {
     }
 
     private void pcRanking(LinearLayout parent, List<PcStats.Entry> apps, String period) {
-        head(parent, period + "应用排行");
-        if (apps.isEmpty()) { note(parent, "这个时段暂时没有同步记录"); return; }
+        head(parent, period + T.s("应用排行"));
+        if (apps.isEmpty()) { note(parent, T.s("这个时段暂时没有同步记录")); return; }
         long max = Math.max(1, apps.get(0).min);
         for (int i = 0; i < Math.min(10, apps.size()); i++) {
             PcStats.Entry e = apps.get(i);
@@ -577,7 +577,7 @@ public class StatsActivity extends ThemedActivity {
         card.addView(track, lpTrack);
         if (total <= 60_000) {
             TextView tiny = new TextView(this);
-            tiny.setText("　（这天数据太少，不算数）");
+            tiny.setText(T.s("　（这天数据太少，不算数）"));
             tiny.setTextSize(11);
             tiny.setTextColor(TEXT2_DARK);
             tiny.setPadding(0, 0, 0, dp(4));
@@ -626,18 +626,18 @@ public class StatsActivity extends ThemedActivity {
 
     static String fmt(long ms) {
         if (ms <= 0) {
-            return "0 分";
+            return T.s("0 分");
         }
         long min = ms / 60000L;
         if (min < 1) {
-            return "<1 分";
+            return T.s("<1 分");
         }
         long h = min / 60;
         long m = min % 60;
         if (h == 0) {
-            return m + " 分";
+            return m + T.s(" 分");
         }
-        return h + " 小时 " + m + " 分";
+        return h + T.s(" 小时 ") + m + T.s(" 分");
     }
 
     private void toast(String t) {

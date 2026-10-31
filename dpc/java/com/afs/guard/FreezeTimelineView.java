@@ -16,7 +16,7 @@ final class FreezeTimelineView extends View {
     private int cachedDay = -1;
     FreezeTimelineView(Context context, Rule rule) {
         super(context); this.look = new Ui(context); this.rule = rule;
-        setContentDescription("24小时冻结时间条，" + rule.freezeSummary());
+        setContentDescription(T.s("24小时冻结时间条，") + rule.freezeSummary());
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
     }
     private float dp(float v) { return look.dp(v); }
@@ -43,7 +43,7 @@ final class FreezeTimelineView extends View {
         canvas.drawCircle(cursor, top - dp(3), dp(2.5f), paint);
         paint.setTextSize(10 * getResources().getDisplayMetrics().scaledDensity);
         paint.setTextAlign(Paint.Align.CENTER);
-        String current = "现在 " + Rule.hm(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
+        String current = T.s("现在 ") + Rule.hm(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
         float half = paint.measureText(current) / 2f;
         canvas.drawText(current, Math.max(left + half, Math.min(right - half, cursor)), dp(14), paint);
         paint.setColor(look.text3());

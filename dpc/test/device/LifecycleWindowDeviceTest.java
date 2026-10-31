@@ -1,0 +1,26 @@
+package com.afs.guard;
+import android.app.*;import android.content.*;import android.os.*;import android.view.*;import android.widget.*;import java.io.*;import java.util.*;import java.util.concurrent.atomic.*;
+/** Owned emulator screen-off/foreground/window checks, without domain fixture submissions. */
+public final class LifecycleWindowDeviceTest extends Instrumentation {
+ int checks;List<Activity> pages=new ArrayList<>();AlertDialog dialog;
+ void check(boolean b,String s){checks++;if(!b)throw new AssertionError(s);}
+ void main(Runnable r){Throwable[] e={null};runOnMainSync(()->{try{r.run();}catch(Throwable t){e[0]=t;}});if(e[0]!=null)throw new AssertionError(e[0]);}
+ void shell(String cmd)throws Exception{try(InputStream in=new ParcelFileDescriptor.AutoCloseInputStream(getUiAutomation().executeShellCommand(cmd))){while(in.read()!=-1){}}}
+ void waitFor(java.util.function.BooleanSupplier test,String label)throws Exception{for(int i=0;i<200;i++){AtomicBoolean ok=new AtomicBoolean();main(()->ok.set(test.getAsBoolean()));if(ok.get()){check(true,label);return;}Thread.sleep(25);}throw new AssertionError(label+" interactive="+((PowerManager)getTargetContext().getSystemService(Context.POWER_SERVICE)).isInteractive()+" locked="+((KeyguardManager)getTargetContext().getSystemService(Context.KEYGUARD_SERVICE)).isKeyguardLocked());}
+ Activity open(Class<?> type)throws Exception{ActivityMonitor m=addMonitor(type.getName(),null,false);main(()->getTargetContext().startActivity(new Intent(getTargetContext(),type).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_MULTIPLE_TASK)));Activity a=waitForMonitorWithTimeout(m,8000);removeMonitor(m);check(a!=null,"opens "+type.getSimpleName());pages.add(a);waitFor(a::hasWindowFocus,"actual window focused");return a;}
+ @Override public void onCreate(Bundle b){super.onCreate(b);start();}
+ @Override public void onStart(){Context c=getTargetContext();PowerManager power=(PowerManager)c.getSystemService(Context.POWER_SERVICE);Bundle result=new Bundle();android.content.SharedPreferences setup=c.getSharedPreferences("afs_setup",0);boolean had=setup.contains("guide_v1_seen"),old=setup.getBoolean("guide_v1_seen",false);setup.edit().putBoolean("guide_v1_seen",true).commit();try{
+  check(Build.MODEL.toLowerCase().contains("sdk"),"owned emulator required");
+  for(Class<?> type:new Class<?>[]{MainActivity.class,MemoryActivity.class,QuizActivity.class,MemoActivity.class}){
+   Activity a=open(type);shell("input keyevent 223");waitFor(()->!power.isInteractive(),"screen actually sleeps");Thread.sleep(150);shell("input keyevent 224");if(Build.VERSION.SDK_INT>=26)shell("wm dismiss-keyguard");if(((KeyguardManager)c.getSystemService(Context.KEYGUARD_SERVICE)).isKeyguardLocked())shell("input swipe 540 1700 540 400 200");waitFor(()->power.isInteractive()&&a.hasWindowFocus(),"screen wakes to original page");
+   main(()->{View decor=a.getWindow().getDecorView();check(!a.isDestroyed()&&decor.isAttachedToWindow(),"same live owner after screen cycle");check(decor.getAlpha()==1&&decor.getTranslationX()==0&&decor.getScaleX()==1,"resume has no partial transition transform");});main(a::finish);
+  }
+  Activity host=open(MemoryActivity.class);EditText input=new EditText(host);AtomicInteger saves=new AtomicInteger(),shows=new AtomicInteger();main(()->{input.setText("validation fixture");dialog=ThemeStore.dialog(host).setTitle("lifecycle validation").setView(input).setPositiveButton("保存",null).setNegativeButton("取消",null).create();dialog.setOnShowListener(d->{shows.incrementAndGet();dialog.getButton(-1).setEnabled(false);dialog.getButton(-1).setOnClickListener(v->saves.incrementAndGet());});dialog.show();input.requestFocus();((android.view.inputmethod.InputMethodManager)host.getSystemService(Context.INPUT_METHOD_SERVICE)).showSoftInput(input,android.view.inputmethod.InputMethodManager.SHOW_FORCED);});Thread.sleep(200);shell("input keyevent 223");waitFor(()->!power.isInteractive(),"dialog screen sleeps");shell("input keyevent 224");if(Build.VERSION.SDK_INT>=26)shell("wm dismiss-keyguard");if(((KeyguardManager)c.getSystemService(Context.KEYGUARD_SERVICE)).isKeyguardLocked())shell("input swipe 540 1700 540 400 200");waitFor(()->power.isInteractive()&&dialog.getWindow().getDecorView().hasWindowFocus(),"dialog returns with window focus");main(()->{check(dialog.isShowing()&&shows.get()==1,"background does not replay dialog show");check(!dialog.getButton(-1).isEnabled()&&saves.get()==0,"disabled validation never submits on resume");check("validation fixture".contentEquals(input.getText()),"dialog input preserved");dialog.getButton(-2).performClick();});waitFor(()->!dialog.isShowing(),"platform cancel processed on next UI loop");
+  result.putString("stream","Lifecycle window device: "+checks+" checks passed\n");
+ }catch(Throwable e){result.putString("stream",android.util.Log.getStackTraceString(e));}
+ finally{try{shell("input keyevent 224");shell("wm dismiss-keyguard");}catch(Exception ignored){}main(()->{if(dialog!=null)dialog.dismiss();for(Activity a:pages)a.finish();});if(had)setup.edit().putBoolean("guide_v1_seen",old).commit();else setup.edit().remove("guide_v1_seen").commit();}
+ finish(result.getString("stream","").startsWith("Lifecycle window device:")?-1:0,result);
+ }
+}
+
+

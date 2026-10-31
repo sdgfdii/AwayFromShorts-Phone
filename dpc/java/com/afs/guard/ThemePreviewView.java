@@ -23,7 +23,7 @@ final class ThemePreviewView extends View {
     private ValueAnimator animator;
     ThemePreviewView(Context c,AppearanceConfig config,Boolean dark,boolean interactive){
         super(c);this.config=config.copy();forceDark=dark;this.interactive=interactive;
-        setContentDescription(interactive?"主题实时预览，点击底栏体验切换":"主题选项预览");
+        setContentDescription(interactive?T.s("主题实时预览，点击底栏体验切换"):T.s("主题选项预览"));
         setImportantForAccessibility(interactive?IMPORTANT_FOR_ACCESSIBILITY_YES:IMPORTANT_FOR_ACCESSIBILITY_NO);
         setFocusable(interactive);setClickable(interactive);
     }
@@ -55,13 +55,14 @@ final class ThemePreviewView extends View {
         if("fade".equals(config.animation)&&progress<1){c.saveLayerAlpha(0,23,96,141,(int)(255*progress));page(c,selected,a);c.restore();}
         else {c.save();if(progress<1)c.translate((previous<selected?1:-1)*96*(1-progress),0);page(c,selected,a);c.restore();}
         c.restore();
-        boolean glass=config.floating&&!"none".equals(config.glass);
+        boolean glass=config.floating&&!"none".equals(config.glass)&&!config.ripple();
         int fill=glass?AppearancePaletteBlend.mix(a.surface,a.bg,.3f):a.surface;
         float x=config.floating?5:0,y=config.floating?139:136,w=config.floating?86:96,h=config.floating?16:24;
         box(c,x,y,w,h,config.floating?8:0,fill);
         if(glass){p.setColor(dark?0x55FFFFFF:0xAFFFFFFF);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(.5f);rect.set(x,y,x+w,y+h);c.drawRoundRect(rect,8,8,p);}
+        if(config.ripple()){p.setColor(a.line);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(.4f);rect.set(x,y,x+w,y+h);c.drawRoundRect(rect,8,8,p);}
         float slot=w/5;box(c,x+selected*slot+1,y+1,slot-2,h-2,7,a.selection);
-        for(int i=0;i<5;i++){int color=i==selected?a.accent:a.text2;if(config.amap()){c.save();c.translate(x+i*slot+slot/2-3,y+2);c.scale(6f/28,6f/28);AmapStyle.glyph(c,p,new String[]{"打卡","记忆","守卫","刷题","冻结"}[i],color,i==selected);c.restore();}else box(c,x+i*slot+slot/2-2.5f,y+3,5,5,2,color);box(c,x+i*slot+slot/2-4,y+h-5,8,1.5f,1,color);}
+        for(int i=0;i<5;i++){int color=i==selected?a.accent:a.text2;if(config.amap()||config.ripple()){c.save();c.translate(x+i*slot+slot/2-3,y+2);c.scale(6f/28,6f/28);AmapStyle.glyph(c,p,new String[]{T.s("打卡"),T.s("记忆"),T.s("守卫"),T.s("刷题"),T.s("冻结")}[i],color,i==selected);c.restore();}else box(c,x+i*slot+slot/2-2.5f,y+3,5,5,2,color);box(c,x+i*slot+slot/2-4,y+h-5,8,1.5f,1,color);}
     }
     private void page(Canvas c,int page,AppearancePalette a){
         if(page==0){
@@ -76,7 +77,7 @@ final class ThemePreviewView extends View {
         }else if(page==2){
             box(c,7,25,82,37,10,a.surface);box(c,13,32,28,4,2,a.text);box(c,66,31,15,6,3,a.selection);
             box(c,13,43,53,3,1.5f,a.text2);box(c,13,51,44,3,1.5f,a.text3);
-            for(int i=0;i<4;i++){float x=7+(i%2)*43,y=69+(i/2)*31;box(c,x,y,39,27,8,a.surface);if(config.amap()){c.save();c.translate(x+14,y+5);c.scale(11f/28,11f/28);AmapStyle.glyph(c,p,new String[]{"目标管理","打卡历史","屏幕统计","守卫"}[i],a.text,false);c.restore();}else box(c,x+14,y+5,11,11,5.5f,a.accent);box(c,x+8,y+20,23,2,1,a.text2);}
+            for(int i=0;i<4;i++){float x=7+(i%2)*43,y=69+(i/2)*31;box(c,x,y,39,27,8,a.surface);if(config.amap()){c.save();c.translate(x+14,y+5);c.scale(11f/28,11f/28);AmapStyle.glyph(c,p,new String[]{T.s("目标管理"),T.s("打卡历史"),T.s("屏幕统计"),T.s("守卫")}[i],a.text,false);c.restore();}else if(config.ripple())box(c,x+14,y+5,11,11,3.5f,AppearancePaletteBlend.mix(a.accent,a.surface,.85f));else box(c,x+14,y+5,11,11,5.5f,a.accent);box(c,x+8,y+20,23,2,1,a.text2);}
         }else if(page==3){
             box(c,7,25,82,27,8,a.surface);box(c,14,32,22,8,2,a.text);box(c,14,44,52,2,1,a.text3);
             box(c,7,57,82,14,7,a.accent);

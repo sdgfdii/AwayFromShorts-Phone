@@ -25,21 +25,21 @@ public class StatusActivity extends ThemedActivity {
         body.setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32));
         scroll.addView(body, new ViewGroup.LayoutParams(-1, -2));
 
-        TextView back = ui.sub("‹ 返回");
+        TextView back = ui.sub(T.s("‹ 返回"));
         back.setTextSize(16);
         back.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View view) { finish(); }
         });
         body.addView(back);
-        TextView title = ui.title("运行状态");
+        TextView title = ui.title(T.s("运行状态"));
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-1, -2);
         titleLp.topMargin = ui.dp(20);
         body.addView(title, titleLp);
 
         android.content.SharedPreferences prefs = getSharedPreferences("afs_status", MODE_PRIVATE);
         long at = prefs.getLong("last_at", 0L);
-        TextView time = ui.sub(at == 0L ? "尚未执行" : "最近一次应用 · "
-                + new SimpleDateFormat("M月d日 HH:mm:ss", Locale.CHINA).format(new Date(at)));
+        TextView time = ui.sub(at == 0L ? T.s("尚未执行") : T.s("最近一次应用 · ")
+                + new SimpleDateFormat(T.s("M月d日 HH:mm:ss"), Locale.CHINA).format(new Date(at)));
         body.addView(time);
 
         LinearLayout card = ui.card();

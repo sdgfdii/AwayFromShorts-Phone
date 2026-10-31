@@ -37,7 +37,7 @@ public final class Hub {
     private Hub() { }
 
     private static SharedPreferences sp(Context c) {
-        return c.getApplicationContext().getSharedPreferences(FILE, Context.MODE_PRIVATE);
+        return c.getApplicationContext().getSharedPreferences(SyncConfig.cacheName(c, FILE), Context.MODE_PRIVATE);
     }
 
     /* ---------- 触发 ---------- */
@@ -67,6 +67,7 @@ public final class Hub {
     }
 
     private static void start(final Context app) {
+        if (!SyncConfig.configured(app)) return;
         synchronized (RUNLOCK) {
             if (running) {
                 return;   // 在跑的这一轮结束前会重读脏标记，不会丢
@@ -82,6 +83,7 @@ public final class Hub {
                 } finally {
                     synchronized (RUNLOCK) {
                         running = false;
+                        RUNLOCK.notifyAll();   // 人工上传正在等这一轮
                     }
                 }
             }
@@ -89,22 +91,27 @@ public final class Hub {
     }
 
     private static boolean sync(final Context c) {
+        if (!SyncConfig.configured(c)) return false;
+        try (SyncConfig.Session session = SyncConfig.acquire(c)) { return sync(c, session); }
+    }
+
+    private static boolean sync(final Context c, SyncConfig.Session session) {
         sp(c).edit().putLong("last_sync", System.currentTimeMillis()).apply();
         boolean allOk = true;
         try {
-            syncLedger(c);       // 打卡台账：hub 的核心
+            syncLedger(c, session);       // 打卡台账：hub 的核心
         } catch (Throwable t) {
             allOk = false;
             Log.w(TAG, "hub ledger: " + t);
         }
         try {
-            syncConfig(c);       // 配置分节
+            syncConfig(c, session);       // 配置分节
         } catch (Throwable t) {
             allOk = false;
             Log.w(TAG, "hub config: " + t);
         }
         try {
-            syncPhoneActivity(c); // 手机端使用统计
+            syncPhoneActivity(c, session); // 手机端使用统计
         } catch (Throwable t) {
             allOk = false;
             Log.w(TAG, "hub activity: " + t);
@@ -119,15 +126,31 @@ public final class Hub {
 
     /**
      * 人工推送（主页按钮）：无视 10 分钟节流，同步等一轮完整 sync 结束，返回是否全成功。
-     * 调用方自己放后台线程，别在主线程等网络。已有同步在跑时不叠加线程，
-     * 本次的脏改动会被那一轮带上，视为已受理。
+     * 调用方自己放后台线程，别在主线程等网络。
+     *
+     * 已经有一轮在跑时不叠加线程：那一轮会带上本次的脏标记，所以这里等它跑完，
+     * 而不是立刻回 false —— 早先直接 return false，界面就会把"正在上传"报成
+     * "上传失败"，用户看到的就是打卡数据传不上去。
      */
     public static boolean pushNowSync(Context c) {
         final Context app = c.getApplicationContext();
+        if (!SyncConfig.configured(app)) {
+            Log.w(TAG, "hub pushNow: sync not configured or paused");
+            return false;
+        }
         sp(app).edit().putBoolean("study_dirty", true).apply();
         synchronized (RUNLOCK) {
+            long deadline = System.currentTimeMillis() + LIVENESS_MS;
+            while (running && System.currentTimeMillis() < deadline) {
+                try {
+                    RUNLOCK.wait(Math.max(50L, deadline - System.currentTimeMillis()));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
             if (running) {
-                return true;
+                return false;   // LIVENESS_MS 还没结束：这一轮确实卡死了
             }
             running = true;
         }
@@ -139,35 +162,31 @@ public final class Hub {
         } finally {
             synchronized (RUNLOCK) {
                 running = false;
+                RUNLOCK.notifyAll();
             }
         }
     }
 
     /* ==================== 打卡台账 ==================== */
 
-    static String ledgerUrl() {
-        return "https://gist.githubusercontent.com/gptdds/" + StudyGate.GIST_ID
-                + "/raw/checkin-ledger.json?t=" + System.currentTimeMillis();
-    }
-
     /**
      * 手机是台账权威：非空库整份直推（无合并）；空库且 hub 有数据 → 整库恢复。
      * 推送条件：脏标记 / hub 还没有台账 / hub rev 和上次推的不一致。
      */
-    private static void syncLedger(Context c) throws Exception {
+    private static void syncLedger(Context c, SyncConfig.Session session) throws Exception {
         String saved = sp(c).getString("ledger_base", "");
         JSONObject base = saved.isEmpty() ? null : new JSONObject(saved);
-        JSONObject hub = Gist.readLedger(c);
+        JSONObject hub = Gist.readLedger(session);
         boolean dirty = sp(c).getBoolean("study_dirty", false);
         JSONObject merged = StudyStore.mergeHub(c, hub, base, dirty);
         if (!LedgerMerge.sameData(merged, hub)) {
             // Re-read before publishing; never replace unseen phone/PC additions.
-            JSONObject latest = Gist.readLedger(c);
+            JSONObject latest = Gist.readLedger(session);
             if (!LedgerMerge.sameData(latest, hub))
                 merged = StudyStore.mergeHub(c, latest, hub, true);
             merged.put("rev", latest.optInt("rev", 0) + 1);
             merged.put("updated", stamp());
-            String err = Gist.patchFiles(Gist.token(c), singleton("checkin-ledger.json", merged.toString()));
+            String err = Gist.patchFiles(session, singleton("checkin-ledger.json", merged.toString()));
             if (err != null) throw new IllegalStateException("ledger sync: " + err);
         }
         // Remember precisely what was sent, not edits made while PATCH was in flight.
@@ -193,16 +212,11 @@ public final class Hub {
 
     /* ==================== 配置分节 ==================== */
 
-    static String hubConfigUrl() {
-        return "https://gist.githubusercontent.com/gptdds/" + StudyGate.GIST_ID
-                + "/raw/hub-config.json?t=" + System.currentTimeMillis();
-    }
-
     /**
      * phone 分节双向：只有本地变 = 推；只有 hub 变 = 拉应用；都变/首次 = 本地赢。
      * phone 配置 = 黑名单规则 + 学习联动时段（这两样在手机上就是全部可配）。
      */
-    private static void syncConfig(Context c) throws Exception {
+    private static void syncConfig(Context c, SyncConfig.Session session) throws Exception {
         JSONObject local = new JSONObject();
         local.put("rules", new JSONObject(RuleStore.exportRules(c)));
         local.put("study", new JSONObject()
@@ -210,13 +224,7 @@ public final class Hub {
                 .put("end", StudyStore.spanEnd(c)));
         String localHash = sha256(local.toString());
 
-        JSONObject hub;
-        try {
-            String raw = StudyGate.fetchRaw(hubConfigUrl());
-            hub = raw != null && raw.trim().startsWith("{") ? new JSONObject(raw) : new JSONObject();
-        } catch (Throwable t) {
-            return;   // 读不到 hub 就不动配置（推也不能推：会盖掉 pc 分节）
-        }
+        JSONObject hub = Gist.readConfig(session);
         JSONObject phone = hub.optJSONObject("phone");
         String hubHash = phone == null ? "" : phone.optString("hash", "");
         String stored = sp(c).getString("cfg_hash", "");
@@ -260,7 +268,7 @@ public final class Hub {
                 .put("config", local));
         hub.put("rev", hub.optInt("rev", 0) + 1);
         hub.put("updated", stamp());
-        String err = Gist.patchFiles(Gist.token(c), singleton("hub-config.json", hub.toString()));
+        String err = Gist.patchFiles(session, singleton("hub-config.json", hub.toString()));
         if (err == null) {
             sp(c).edit().putString("cfg_hash", localHash).putBoolean("cfg_dirty", false).apply();
             Log.i(TAG, "hub config pushed (phone section)");
@@ -275,7 +283,7 @@ public final class Hub {
     private static final int ACT_TOP = 10;
 
     /** 与 PC 的 pc-activity.json 同构：{updated, days:{date:{apps:{pkg:min}}}}。 */
-    private static void syncPhoneActivity(Context c) throws Exception {
+    private static void syncPhoneActivity(Context c, SyncConfig.Session session) throws Exception {
         long last = sp(c).getLong("last_act", 0L);
         long now = System.currentTimeMillis();
         if (now - last < ACT_PUSH_MS) {
@@ -351,7 +359,7 @@ public final class Hub {
             dOut.put(e.getKey(), new JSONObject().put("apps", apps));
         }
         out.put("days", dOut);
-        String err = Gist.patchFiles(Gist.token(c),
+        String err = Gist.patchFiles(session,
                 singleton("phone-activity.json", out.toString()));
         if (err == null) {
             sp(c).edit().putLong("last_act", now).apply();

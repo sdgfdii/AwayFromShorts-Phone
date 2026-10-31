@@ -1,0 +1,1 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.renderefficiencyqa"><application android:label="AFS Render Efficiency QA"/><instrumentation android:name="com.afs.guard.RenderEfficiencyDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true"/></manifest>

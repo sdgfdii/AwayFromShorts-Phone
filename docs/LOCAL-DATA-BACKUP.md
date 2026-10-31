@@ -42,4 +42,4 @@
 - `dpc/test/run-api-smoke-device.ps1`：包含数据入口在内的页面巡检。
 - `dpc/test/run-freeze-device.ps1`：确认原设备所有者冻结和加固能力继续生效。
 
-正式发行 APK：`dist/1.56.0/afs-guard.apk`，版本 `1.56.0`。已在 [GitHub v1.56.0](https://github.com/sdgfdii/AwayFromShorts-Phone/releases/tag/v1.56.0) 发布安装包、完整 Windows 部署包与对应源码。
+正式发行 APK：`dist/1.70.0/afs-guard.apk`，版本 `1.70.0`。已在 [GitHub v1.70.0](https://github.com/sdgfdii/AwayFromShorts-Phone/releases/tag/v1.70.0) 发布安装包、完整 Windows 部署包与对应源码。

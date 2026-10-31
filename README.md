@@ -1,6 +1,6 @@
 # AwayFromShorts · Android 端 📱
 
-**最新正式版：[v1.56.0](https://github.com/sdgfdii/AwayFromShorts-Phone/releases/tag/v1.56.0)**。提供正式签名 APK、含 ADB 与维护包的 Windows 部署 ZIP，以及对应源码。纳入本地完整备份恢复、云端配置入口、当前笔记与学习页面改动；WebDAV / GitHub 私有仓库 / Git 暂只保存配置，实际传输待实现。见 [数据与备份](docs/LOCAL-DATA-BACKUP.md) 和 [发行验证](dpc/release/VERIFICATION.md)。
+**最新正式版：[v1.70.0](https://github.com/sdgfdii/AwayFromShorts-Phone/releases/tag/v1.70.0)**。提供正式签名 APK、含 ADB 与维护包的 Windows 部署 ZIP，以及对应源码。这一版把设置齿轮、备忘录有序列表续号、正念空间节律、首启卡顿、打卡日历合并、成就提级、能力等级切换、应用选择界面重构、朋友圈页面拦截一并做完；打卡未完成会延长冻结 30 分钟。见 [数据与备份](docs/LOCAL-DATA-BACKUP.md) 和 [发行验证](dpc/release/VERIFICATION.md)。
 
 > 到点把短视频 App **真的锁住** —— 不是弹个提醒,是点不开。
 

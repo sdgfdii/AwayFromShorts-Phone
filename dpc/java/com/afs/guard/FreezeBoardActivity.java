@@ -1362,6 +1362,11 @@ public class FreezeBoardActivity extends ThemedActivity {
                 ? T.s("改用冻结这些应用") : T.s("只提示不处理");
     }
 
+    /** 「断网方式」那一行的当前值。 */
+    private String modeLabel() {
+        return NetBlockStore.proxyMode(this) ? T.s("我常开代理（不占 VPN）") : T.s("自动（本 App 用系统 VPN）");
+    }
+
     /** 断网名单、开关和调整时段本身都属于设置，只允许在断网调整时段内修改。 */
     private boolean netEditAllowed() {
         return NetWindow.canEdit(this);
@@ -1380,6 +1385,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         final TextView toggleValue = text("", 13, look.accent());
         final TextView appsValue = text("", 13, look.text2());
         final TextView windowValue = text(NetWindow.label(this), 13, look.accent());
+        final TextView modeValue = text(modeLabel(), 13, look.accent());
         final TextView statusValue = text("", 12, look.text2());
 
         final Runnable paint = () -> {
@@ -1387,6 +1393,7 @@ public class FreezeBoardActivity extends ThemedActivity {
             toggleValue.setText(on ? T.s("开") : T.s("关"));
             toggleValue.setTextColor(on ? look.accent() : look.text3());
             appsValue.setText(T.f("%d 个", NetBlockStore.packages(this).size()));
+            modeValue.setText(modeLabel());
             statusValue.setText(NetBlockStore.status(this));
             statusValue.setTextColor(NetBlockStore.running(this) ? look.green() : look.text2());
         };
@@ -1445,6 +1452,25 @@ public class FreezeBoardActivity extends ThemedActivity {
             });
         });
         box.addView(windowRow);
+
+        // 断网方式：自动（占 VPN）或「我常开代理」（不占 VPN，交给代理规则）。
+        // 后者是给「代理必须一直开着」的人用的：选了以后本 App 一步都不碰 VPN 通道。
+        LinearLayout modeRow = dialogRow(T.s("断网方式"), modeValue);
+        modeRow.setOnClickListener(v -> {
+            if (!netEditAllowed()) return;
+            String[] labels = {T.s("自动（本 App 用系统 VPN）"), T.s("我常开代理（不占 VPN）")};
+            int checked = NetBlockStore.proxyMode(this) ? 1 : 0;
+            ThemeStore.dialog(this).setTitle(T.s("断网方式"))
+                    .setSingleChoiceItems(labels, checked, (d, which) -> {
+                        NetBlockStore.setProxyMode(this, which == 1);
+                        d.dismiss();
+                        paint.run();
+                        updateNetHint();
+                        NetBlockService.reconcile(this);
+                    })
+                    .setNegativeButton(T.s("取消"), null).show();
+        });
+        box.addView(modeRow);
 
         // 系统只允许一个 VPN：代理占着时隧道建不起来，这里决定「断网」怎么退而求其次。
         final TextView fallbackValue = text(fallbackLabel(), 13, look.accent());
@@ -1513,6 +1539,9 @@ public class FreezeBoardActivity extends ThemedActivity {
         TextView fifth = text(T.s("两种用法：不开代理的人什么都不用做 —— 本 App 用系统 VPN 断网；常开代理的人，断网交给代理做 —— 点上面「复制代理拦截规则」，把内容放进代理 App 的覆写/配置 rules:（MATCH 之前），代理照常用、这些应用没网。"), 12, look.text2());
         fifth.setPadding(0, dp(6), 0, 0);
         notes.addView(fifth);
+        TextView sixth = text(T.s("默认「自动」：本 App 用系统 VPN 断网。代理常开的人把「断网方式」改成「我常开代理（不占 VPN）」后，本 App 一步都不碰 VPN 通道、绝不会顶掉你的代理，拦网交给代理里的拒绝规则（用上面「复制代理拦截规则」）。"), 12, look.text2());
+        sixth.setPadding(0, dp(6), 0, 0);
+        notes.addView(sixth);
         box.addView(notes);
 
         paint.run();

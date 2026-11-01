@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <!-- 学习闸门：拉取 PC 推到 secret Gist 的 study-gate.json（secret raw 免鉴权） -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 断网让路：判断 VPN 通道是不是被代理占着（只看自己那条之外有没有 VPN）。
+         不给的话就分不清「代理在用」和「隧道没建」，容易把用户的代理顶掉。 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 系统级灰度（今天没学完 → 全部应用变灰）：写色彩校正的两个 Secure 键。
          签名权限，普通装机拿不到，需要 adb 授权一次（README 有命令）。 -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />

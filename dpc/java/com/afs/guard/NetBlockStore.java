@@ -24,6 +24,8 @@ public final class NetBlockStore {
     private static final String K_WHY_AT = "why_at";
     private static final String K_FALLBACK = "fallback_mode";
     private static final String K_FALLBACK_PKGS = "fallback_pkgs";
+    private static final String K_CONFLICT = "proxy_conflict";
+    private static final String K_PROXY_MODE = "proxy_mode";
 
     /** 系统只允许一个 VPN：别的 VPN（代理）占着时，断网改用「冻结这些应用」顶上。 */
     static final int FALLBACK_FREEZE = 1;
@@ -101,6 +103,34 @@ public final class NetBlockStore {
         sp(c).edit().putLong(K_TRIED, System.currentTimeMillis()).apply();
     }
 
+    /** 清掉退避时间戳：条件变了（比如代理刚关掉）要立刻重试，不等那 60 秒。 */
+    static void clearTried(Context c) {
+        sp(c).edit().putLong(K_TRIED, 0L).apply();
+    }
+
+    /** 是不是「别的 VPN 正在占通道」的状态（上一次 reconcile 的判定）。 */
+    static boolean proxyConflict(Context c) {
+        return sp(c).getBoolean(K_CONFLICT, false);
+    }
+
+    static void setProxyConflict(Context c, boolean value) {
+        sp(c).edit().putBoolean(K_CONFLICT, value).apply();
+    }
+
+    /**
+     * 断网方式：false = 自动（本 App 用系统 VPN），true = 我常开代理（不占 VPN，由代理规则拦）。
+     *
+     * 默认自动：不开代理的人开箱即用。代理常开的人切一次，之后本 App 一步都不碰 VPN 通道，
+     * 不可能出现「代理被顶掉」。
+     */
+    static boolean proxyMode(Context c) {
+        return sp(c).getBoolean(K_PROXY_MODE, false);
+    }
+
+    static void setProxyMode(Context c, boolean value) {
+        sp(c).edit().putBoolean(K_PROXY_MODE, value).apply();
+    }
+
     /** 上一次建隧道失败的原因（空 = 没失败过），见 {@link NetBlockService} 的 WHY_*。 */
     static String why(Context c) {
         String value = sp(c).getString(K_WHY, "");
@@ -166,12 +196,13 @@ public final class NetBlockStore {
         if (!on(c)) return T.s("未开启");
         int n = packages(c).size();
         if (n == 0) return T.s("还没选应用");
+        if (proxyMode(c)) return T.f("%d 个应用 · 由代理负责拦截（本 App 不占 VPN）", n);
         if (NetWindow.inside(c)) return T.f("%d 个应用 · 调整时段 %s 内放开", n, NetWindow.label(c));
         if (running(c)) return T.f("%d 个应用断网中", n);
         if (!fallbackPackages(c).isEmpty()) return T.f("%d 个应用 · 已改用冻结（VPN 被占用）", n);
         String why = why(c);
         if (NetBlockService.WHY_PERMISSION.equals(why)) return T.f("%d 个应用 · 断网没生效：没给 VPN 授权", n);
-        if (NetBlockService.WHY_OTHER_VPN.equals(why)) return T.f("%d 个应用 · 断网没生效：VPN 通道被占用", n);
+        if (NetBlockService.WHY_OTHER_VPN.equals(why)) return T.f("%d 个应用 · 断网让路：VPN 被代理占用（不抢）", n);
         return T.f("%d 个应用待断网（没连上隧道）", n);
     }
 }

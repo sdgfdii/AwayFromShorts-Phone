@@ -1326,6 +1326,36 @@ Android 同一时间只允许一个 VpnService；非 root 设备没有第二套�
 - 离线回归 207 PASS / 0 FAIL；i18n 100%（本版无新文案）；构建 2245/1.75.1 并真机覆盖安装。
 - 证据：`.codex-fix/motion-opt/20261101-jank/frames-defer-before*.txt`、`frames-defer-after*.txt`（本地，不入库）。
 
+## 38 · 1.77.0 开了代理不许把用户的 VPN 顶掉（2026-11-01 晚）
+
+用户原话：「方案二和方案一要兼容，我开了vpn，就不要把我的vpn顶掉了」。即：代理常开的人不能被断网抢通道，不开代理的人保持原样。
+
+### 根因与限制
+
+- Android 同一时间只允许一个 VpnService。断网隧道和代理（FlClash）会互相 revoke，谁先建谁占；我们的周期性重试会在代理占着时反复去试，这就是「抢」的来源。
+- **VPN 网络对非所有者应用不可见**：`NetworkCapabilities#getOwnerUid()` 返回 -1（隐私保护），分应用代理（split tunneling）时连 `TRANSPORT_VPN` 网络都可能看不到。所以「这是谁的 VPN」无法可靠回答；只能回答「看得见的 VPN 网络 + 我们自己的隧道没在跑 → 那一定是别人的」。
+- 「我们自己的隧道活没活」不能用心跳（Doze 下 heartbeat 会过期，会误判成别人的），改用同进程静态标志 `NetBlockService.tunnelAlive`。
+
+### 落点
+
+| 改动 | 文件 |
+|---|---|
+| 新增 `VpnSlot`：可见 VPN 网络探测 + 纯逻辑 `foreignVpn(hasVpn, ownTunnelAlive)` | `VpnSlot` |
+| `NetBlockService`：读这一帧闸门 → 让路时不建隧道；`tunnelAlive` 标志；重试退避按「是否确认被占」分 10 分钟 / 60 秒；`open()` 建隧道前再确认一次 | `NetBlockService` |
+| 新增「断网方式」设置：自动（本 App 用系统 VPN）/ 我常开代理（不占 VPN，一步都不碰通道） | `NetBlockStore`、`FreezeBoardActivity` |
+| 状态文案区分「断网中 / 断网让路：VPN 被代理占用（不抢）/ 由代理负责拦截（本 App 不占 VPN）」 | `NetBlockStore` |
+| 单测：`foreignVpn` 四种组合、让路/该建/退避边界、`retryGap` | `NetSlotTest`（17 checks） |
+
+### 真机验证（本机，FlClash）
+
+- 代理连上后连续观察 90 秒：`dumpsys vpn_management` 的 Active package name **一直是 com.follow.clash**，我们的隧道没有抢、代理没被顶掉；同一时刻 `afs_netblock`：`running=false`、`proxy_conflict=true`、`why=vpn`（说明确实是「让路」而不是「抢失败」）。
+- 关掉代理后：断网自己接回来，状态变成 `running=true`、`why=""`，`vpn_management` 里的是本 App 的 `AFS 断网` 会话。
+- 离线回归 207 PASS / 0 FAIL（NetSlotTest 17 checks）；i18n 2377/2377 = 100%；构建 2247/1.77.0。
+
+### 没解决的 / 边界
+
+- 分应用代理（split tunneling）下，「看得见的 VPN 网络」可能为空，此时本 App 只能靠 `establish()` 返回 null 这条硬证据退避（10 分钟一次），无法提前知道代理在占着。若某台机器上 `establish()` 会直接替换别人的 VPN，唯一安全的做法是把「断网方式」切成「我常开代理（不占 VPN）」——UI 里已经写清，代理模式下本 App 绝不碰通道。
+
 
 
 

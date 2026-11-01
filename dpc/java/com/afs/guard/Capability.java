@@ -135,9 +135,10 @@ public final class Capability {
             items[i] = name(levels[i]) + " · " + hint(levels[i]);
             if (levels[i] == have) checked = i;
         }
+        // ⚠️ 不能同时 setMessage + setSingleChoiceItems：真机（Android 14）上两者互斥，
+        // message 会把单选列表整个顶掉，弹窗只剩一句「现在：设备所有者」。标题里带当前等级。
         ThemeStore.dialog(a)
-                .setTitle(T.s("能力等级"))
-                .setMessage(T.s("现在：") + name(have) + "\n" + scope(have))
+                .setTitle(T.s("能力等级") + T.s(" · 现在：") + name(have))
                 .setSingleChoiceItems(items, checked, (dialog, which) -> {
                     dialog.dismiss();
                     choose(a, levels[which], have);

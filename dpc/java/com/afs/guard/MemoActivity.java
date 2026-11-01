@@ -54,7 +54,6 @@ public final class MemoActivity extends ThemedActivity {
     private boolean historyBinding, previewing;
     /** 有序列表回车续号：改文本时自己触发的 TextWatcher 回调要跳过。 */
     private boolean listContinuing;
-    private int pendingNewline=-1;
     private TextView undoButton,redoButton,previewButton,editorStatus,previewText;
     private ScrollView previewScroll;
     private String exportText="";
@@ -545,24 +544,24 @@ public final class MemoActivity extends ThemedActivity {
         titleInput.setText(title);
         bodyInput.setText(body);
         history=new MemoEditor.History(snapshot());
-        // 有序列表回车续号：onTextChanged 只记下换行位置，真正改文本放到 afterTextChanged 里做。
-        // 在 onTextChanged 里直接改文本会和输入法抢同一帧，光标会跳回上一行。
+        // 有序列表回车续号：判定放在 afterTextChanged 里看「光标前面是不是刚落下的换行」。
+        // 以前靠 onTextChanged 精确捕捉「插入了一个 \n」，真机（ColorOS 拼音键盘 + KEYCODE_ENTER）
+        // 的事件序不保证 s 里立刻可见那个 \n，判定全落空。光标方案对事件序免疫：
+        // 换行插入后光标必然紧跟在 \n 后面，删除内容贴着 \n 的情形 continueList 也会返回 null。
         bodyInput.addTextChangedListener(new TextWatcher(){
             public void beforeTextChanged(CharSequence s,int start,int count,int after){}
-            public void onTextChanged(CharSequence s,int start,int before,int count){
-                if(listContinuing)return;
-                pendingNewline=(before==0&&count==1&&start>=0&&start<s.length()&&s.charAt(start)=='\n')?start:-1;
-            }
+            public void onTextChanged(CharSequence s,int start,int before,int count){}
             public void afterTextChanged(Editable e){
-                int at=pendingNewline;pendingNewline=-1;
-                if(listContinuing||at<0||at>=e.length())return;
-                MemoTextFormat.Change change=MemoTextFormat.continueList(e.toString(),at);
+                if(listContinuing)return;
+                int cursor=bodyInput.getSelectionEnd();
+                if(cursor<=0||cursor>e.length()||e.charAt(cursor-1)!='\n')return;
+                MemoTextFormat.Change change=MemoTextFormat.continueList(e.toString(),cursor-1);
                 if(change==null)return;
                 listContinuing=true;
                 try{
-                    int cursor=Math.min(change.cursor,change.body.length());
+                    int next=Math.min(change.cursor,change.body.length());
                     e.replace(0,e.length(),change.body);
-                    bodyInput.setSelection(Math.min(cursor,bodyInput.length()));
+                    bodyInput.setSelection(Math.min(next,bodyInput.length()));
                 }finally{listContinuing=false;}
             }
         });

@@ -16,7 +16,7 @@ import java.util.Locale;
  * 要收着点」得改两个地方，还容易只改一半。现在只有这一个时段，谁要按时段生效就来读它。
  *
  * 语义只有三条，所有判断都必须走 {@link #contains(long, int, int)}：
- * 1. 左闭右开：[21:00, 22:00) 表示 21:00:00 生效、21:59:59 还在、22:00:00 已经放开。
+ * 1. 左闭右开：[22:00, 23:00) 表示 22:00:00 生效、22:59:59 还在、23:00:00 已经放开。
  * 2. start &gt; end 表示跨午夜（22:00–01:00）。
  * 3. start == end 当成全天生效 —— 唯一能表达「整天都管」的写法，不允许当成空。
  */
@@ -25,10 +25,11 @@ public final class TimeWindow {
     static final String SP = "afs_time_window";
     private static final String K_START = "start";
     private static final String K_END = "end";
+    private static final String K_DEFAULT_22_23 = "default_22_23";
 
-    /** 晚上 9 点到 10 点。 */
-    public static final int DEFAULT_START = 21 * 60;
-    public static final int DEFAULT_END = 22 * 60;
+    /** 默认晚上 10 点到 11 点；用户可在设置中自定义。 */
+    public static final int DEFAULT_START = 22 * 60;
+    public static final int DEFAULT_END = 23 * 60;
 
     private static final int MINUTES = 24 * 60;
 
@@ -36,7 +37,18 @@ public final class TimeWindow {
     }
 
     private static SharedPreferences sp(Context c) {
-        return c.getSharedPreferences(SP, Context.MODE_PRIVATE);
+        SharedPreferences prefs = c.getSharedPreferences(SP, Context.MODE_PRIVATE);
+        // 1.71/1.72 开发期曾默认 21:00–22:00；只迁移这一组旧默认值，其他自定义值不动。
+        if (!prefs.getBoolean(K_DEFAULT_22_23, false)) {
+            int oldStart = prefs.getInt(K_START, DEFAULT_START);
+            int oldEnd = prefs.getInt(K_END, DEFAULT_END);
+            SharedPreferences.Editor edit = prefs.edit().putBoolean(K_DEFAULT_22_23, true);
+            if (oldStart == 21 * 60 && oldEnd == 22 * 60) {
+                edit.putInt(K_START, DEFAULT_START).putInt(K_END, DEFAULT_END);
+            }
+            edit.apply();
+        }
+        return prefs;
     }
 
     public static int start(Context c) {

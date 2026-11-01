@@ -1140,7 +1140,8 @@ public class FreezeBoardActivity extends ThemedActivity {
         if (request == REQ_VPN) {
             if (result == RESULT_OK) NetBlockService.reconcile(this);
             else {
-                NetBlockStore.setOn(this, false);
+                // 授权窗若恰好跨出收束时段，不能借返回结果在时段外关掉设置。
+                if (TimeWindow.on(this)) NetBlockStore.setOn(this, false);
                 toast(T.s("没给 VPN 授权，断网开不了"));
             }
             rebuild();
@@ -1151,6 +1152,8 @@ public class FreezeBoardActivity extends ThemedActivity {
             boolean pending = false;
             if (result == RESULT_OK && data != null) {
                 ArrayList<String> picked = data.getStringArrayListExtra("picked");
+                // 选择页可能一直开到收束时段结束；真正写入前必须再检查一次。
+                if (picked != null && !netEditAllowed()) picked = null;
                 if (picked != null) {
                     NetBlockStore.setPackages(this, new LinkedHashSet<String>(picked));
                     NetBlockService.stop(this);           // 名单变了要按新名单重开隧道
@@ -1276,7 +1279,14 @@ public class FreezeBoardActivity extends ThemedActivity {
         if (netHint != null) netHint.setText(netSummary());
     }
 
-    /** 断网设置：开关、挑应用、隧道真状态。 */
+    /** 断网名单和开关都属于设置，只允许在全局收束时段内修改。 */
+    private boolean netEditAllowed() {
+        if (TimeWindow.on(this)) return true;
+        toast(T.f("断网设置只能在收束时段 %s 内修改", TimeWindow.label(this)));
+        return false;
+    }
+
+    /** 断网设置：开关、挑应用、收束时段、隧道真状态；时段外仅可查看。 */
     private void netSettings() {
         if (isFinishing() || isDestroyed()) return;
         LinearLayout box = new LinearLayout(this);
@@ -1288,6 +1298,7 @@ public class FreezeBoardActivity extends ThemedActivity {
 
         final TextView toggleValue = text("", 13, look.accent());
         final TextView appsValue = text("", 13, look.text2());
+        final TextView windowValue = text(TimeWindow.label(this), 13, look.accent());
         final TextView statusValue = text("", 12, look.text2());
 
         final Runnable paint = () -> {
@@ -1302,6 +1313,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         LinearLayout toggleRow = dialogRow(T.s("开启断网"));
         toggleRow.addView(toggleValue);
         toggleRow.setOnClickListener(v -> {
+            if (!netEditAllowed()) return;
             // 开着但隧道没了（进程被系统杀过）：这一下算「重连」，不是关掉
             if (NetBlockStore.on(this) && !NetBlockStore.running(this)) {
                 if (askVpn()) dialog.dismiss();   // 要系统授权就等回来，回来会自己弹回这一页
@@ -1341,8 +1353,19 @@ public class FreezeBoardActivity extends ThemedActivity {
 
         LinearLayout appsRow = dialogRow(T.s("断网的应用"));
         appsRow.addView(appsValue);
-        appsRow.setOnClickListener(v -> { dialog.dismiss(); pickNetApps(); });
+        appsRow.setOnClickListener(v -> {
+            if (!netEditAllowed()) return;
+            dialog.dismiss();
+            pickNetApps();
+        });
         box.addView(appsRow);
+
+        LinearLayout windowRow = dialogRow(T.s("收束时段"), windowValue);
+        windowRow.setOnClickListener(v -> TimeWindow.pick(this, () -> {
+            windowValue.setText(TimeWindow.label(this));
+            updateNetHint();
+        }));
+        box.addView(windowRow);
 
         box.addView(dialogRow(T.s("状态"), statusValue));
 
@@ -1354,7 +1377,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         TextView second = text(T.s("应用会表现为转圈、超时，而不是弹「已断网」；视频类通常还会显示缓存过的内容。"), 12, look.text2());
         second.setPadding(0, dp(6), 0, 0);
         notes.addView(second);
-        TextView third = text(T.f("断网只在全局收束时段 %s 内生效，到点自动断、过点自动放。", TimeWindow.label(this)), 12, look.text2());
+        TextView third = text(T.f("断网只在全局收束时段 %s 内生效，到点自动断、过点自动放；开关和名单也只能在此时段内修改。", TimeWindow.label(this)), 12, look.text2());
         third.setPadding(0, dp(6), 0, 0);
         notes.addView(third);
         box.addView(notes);
@@ -1409,6 +1432,7 @@ public class FreezeBoardActivity extends ThemedActivity {
     }
 
     private void pickNetApps() {
+        if (!netEditAllowed()) return;
         Intent intent = new Intent(this, AppPickerActivity.class)
                 .putStringArrayListExtra(AppPickerActivity.EXTRA_PRESELECT, new ArrayList<String>(NetBlockStore.packages(this)))
                 .putExtra(AppPickerActivity.EXTRA_HINT, T.s("这些应用连不上任何服务器"));

@@ -30,9 +30,9 @@ public final class TimeWindowTest {
     private static final int DAY = 24 * 60 * 60 * 1000;
 
     public static void main(String[] args) {
-        // 默认 21:00–22:00
-        eq(21 * 60, TimeWindow.DEFAULT_START, "default start");
-        eq(22 * 60, TimeWindow.DEFAULT_END, "default end");
+        // 默认 22:00–23:00
+        eq(22 * 60, TimeWindow.DEFAULT_START, "default start");
+        eq(23 * 60, TimeWindow.DEFAULT_END, "default end");
         eq("21:00", TimeWindow.clock(21 * 60), "clock start");
         eq("23:59", TimeWindow.clock(23 * 60 + 59), "clock end of day");
         eq("00:00", TimeWindow.clock(0), "clock midnight");
@@ -88,25 +88,26 @@ public final class TimeWindowTest {
 
         java.util.Calendar cal = java.util.Calendar.getInstance();
         cal.setTimeInMillis(day + 15 * 3600_000L);   // 15:00
-        // 默认窗口 21–22：下午 3 点不能减，晚上 9 点半可以
+        // 默认窗口 22–23：下午 3 点不能减，晚上 10 点半可以
         ok(!DailyQuotaData.editable(cal), "quota not editable at 15:00");
-        cal.setTimeInMillis(day + (21 * 60 + 30) * 60_000L);
+        cal.setTimeInMillis(day + (22 * 60 + 30) * 60_000L);
         ok(DailyQuotaData.editable(cal), "quota editable in window");
         // 自定义窗口也走同一判断；start==end = 全天 = 随时可改
+        cal.setTimeInMillis(day + 15 * 3600_000L);
         ok(!DailyQuotaData.editable(cal, 1320, 60), "custom window 15:00 out");
         cal.setTimeInMillis(day + 23 * 3600_000L);
         ok(DailyQuotaData.editable(cal, 1320, 60), "custom overnight window 23:00 in");
         ok(DailyQuotaData.editable(cal, 600, 600), "all-day window always editable");
 
-        // nextEdit：下午 3 点问下一次开门 → 今天 21:00
+        // nextEdit：下午 3 点问下一次开门 → 今天 22:00
         cal.setTimeInMillis(day + 15 * 3600_000L);
-        eq(day + 21 * 3600_000L, DailyQuotaData.nextEdit(cal), "next edit tonight 21:00");
-        // 已过 22 点（在窗口外）→ 明天 21:00
-        cal.setTimeInMillis(day + 23 * 3600_000L);
-        eq(day + DAY + 21 * 3600_000L, DailyQuotaData.nextEdit(cal), "next edit tomorrow 21:00");
+        eq(day + 22 * 3600_000L, DailyQuotaData.nextEdit(cal), "next edit tonight 22:00");
+        // 已过 23 点（在窗口外）→ 明天 22:00
+        cal.setTimeInMillis(day + 23 * 3600_000L + 60_000L);
+        eq(day + DAY + 22 * 3600_000L, DailyQuotaData.nextEdit(cal), "next edit tomorrow 22:00");
         // 窗口内 → 现在就能改
-        cal.setTimeInMillis(day + (21 * 60 + 15) * 60_000L);
-        eq(day + (21 * 60 + 15) * 60_000L, DailyQuotaData.nextEdit(cal), "inside window edit now");
+        cal.setTimeInMillis(day + (22 * 60 + 15) * 60_000L);
+        eq(day + (22 * 60 + 15) * 60_000L, DailyQuotaData.nextEdit(cal), "inside window edit now");
         // 跨午夜 22–01：凌晨 2 点问 → 今天 22:00（今晚还没到）
         cal.setTimeInMillis(day + 2 * 3600_000L);
         eq(day + 22 * 3600_000L, DailyQuotaData.nextEdit(cal, 1320, 60), "overnight next open tonight 22:00");

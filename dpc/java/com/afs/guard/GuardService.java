@@ -39,9 +39,16 @@ public class GuardService extends Service {
     private String lastNoticeText;
     private final java.util.concurrent.ExecutorService quotaWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
     private volatile boolean quotaBusy;
+    /**
+     * 额度节拍：收束时段内 5 秒一问，时段外 60 秒。
+     *
+     * 时段外根本不计时、不判超（TimeWindow 统一关了门），查使用记录纯属白烧 CPU ——
+     * 这一项从 5s 放到 60s，是本轮耗电优化里最大的一块：使用记录查询在 ColorOS
+     * 上偶尔要几百毫秒，以前一天 24 小时 × 5 秒全都在查。
+     */
     private final Runnable quotaTick=new Runnable(){public void run(){
         if(!quotaBusy){quotaBusy=true;quotaWorker.execute(()->{try{if(DailyQuotaStore.enforcementChanged(GuardService.this))Guard.apply(GuardService.this);}catch(Throwable error){Log.e(Guard.TAG,"daily quota tick failed",error);}finally{quotaBusy=false;}Guard.kickQuotaExceeded(GuardService.this);});}
-        handler.postDelayed(this,5000);
+        handler.postDelayed(this,TimeWindow.on(GuardService.this)?5000:60000);
     }};
 
     /**
@@ -49,6 +56,14 @@ public class GuardService extends Service {
      *
      * 单开一条，不塞进 30 秒的状态 tick —— 那一条里面有 setPackagesSuspended 和
      * 使用记录查询，偶尔要几百毫秒；锁机要的是"到点就弹"，不能被它拖住。
+     */
+    /**
+     * 锁机节拍：亮屏 5 秒一问，灭屏 30 秒。
+     *
+     * 单开一条，不塞进 30 秒的状态 tick —— 那一条里面有 setPackagesSuspended 和
+     * 使用记录查询，偶尔要几百毫秒；锁机要的是"到点就弹"，不能被它拖住。
+     * 灭屏时锁机没有对象（用户根本不在用手机），放宽到 30 秒不吃任何体验；
+     * 亮屏检测用 isInteractive，不用读电池，开销可忽略。
      */
     private final Runnable lockTick = new Runnable() {
         @Override
@@ -59,9 +74,18 @@ public class GuardService extends Service {
             } catch (Throwable error) {
                 Log.e(Guard.TAG, "lock tick failed", error);
             }
-            handler.postDelayed(this, 5000L);
+            handler.postDelayed(this, interactive() ? 5000L : 30000L);
         }
     };
+
+    private boolean interactive() {
+        try {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            return pm != null && pm.isInteractive();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
 
     private final Runnable tick = new Runnable() {
         @Override
@@ -76,11 +100,13 @@ public class GuardService extends Service {
                 // 20:00 判断点：今天打卡没打完 → 各应用本次冻结再延 30 分钟（一天只入账一次）
                 CheckinPenalty.tick(GuardService.this);
                 Guard.apply(GuardService.this);   // 内部只有状态变化时才调 setPackagesSuspended
+                NetBlockService.reconcile(GuardService.this);   // 收束时段边界在这里翻隧道
                 updateNotice();
             } catch (Throwable t) {
                 Log.e(Guard.TAG, "tick failed", t);
             }
-            handler.postDelayed(this, TICK_MS);
+            // 灭屏放宽到 60 秒：冻结状态切换没人看着，晚一分钟无感；亮屏保持 30 秒。
+            handler.postDelayed(this, interactive() ? TICK_MS : TICK_MS * 2);
         }
     };
 

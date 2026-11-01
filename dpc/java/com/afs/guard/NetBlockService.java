@@ -45,6 +45,12 @@ public class NetBlockService extends VpnService {
             return START_NOT_STICKY;
         }
         if (tunnel != null) return START_STICKY;      // 已经在跑，不重建
+        if (!TimeWindow.on(this)) {                   // 收束时段外不接管：起服务也只起个空壳
+            Log.i(Guard.TAG, "netblock: outside window " + TimeWindow.label(this) + ", refuse");
+            NetBlockStore.setRunning(this, false);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         open();
         return START_STICKY;
     }
@@ -185,6 +191,18 @@ public class NetBlockService extends VpnService {
     }
 
     /* ---------- 对外开关 ---------- */
+
+    /**
+     * 按全局收束时段把隧道拨到正确状态，反复调用是安全的。
+     *
+     * 开关只认「想要」和「正在」的差：想要（开了断网、选了应用、在时段内）而没在跑就拉起，
+     * 反过来就收掉。边界跨越靠守护服务的周期 tick 和闹钟兜着，最晚延迟一个节拍生效。
+     */
+    public static void reconcile(Context c) {
+        boolean want = NetBlockStore.enabled(c) && TimeWindow.on(c);
+        if (want && !NetBlockStore.running(c)) start(c);
+        else if (!want && NetBlockStore.running(c)) stop(c);
+    }
 
     /** 开：需要先在界面里调 VpnService.prepare() 拿到授权。 */
     public static void start(Context c) {

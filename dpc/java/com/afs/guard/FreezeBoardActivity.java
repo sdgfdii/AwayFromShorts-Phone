@@ -1130,7 +1130,7 @@ public class FreezeBoardActivity extends ThemedActivity {
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request == REQ_VPN) {
-            if (result == RESULT_OK) NetBlockService.start(this);
+            if (result == RESULT_OK) NetBlockService.reconcile(this);
             else {
                 NetBlockStore.setOn(this, false);
                 toast(T.s("没给 VPN 授权，断网开不了"));
@@ -1147,7 +1147,7 @@ public class FreezeBoardActivity extends ThemedActivity {
                     NetBlockStore.setPackages(this, new LinkedHashSet<String>(picked));
                     NetBlockService.stop(this);           // 名单变了要按新名单重开隧道
                     if (picked.isEmpty()) NetBlockStore.setOn(this, false);
-                    else if (NetBlockStore.on(this)) pending = askVpn();
+                    else if (NetBlockStore.on(this)) { NetBlockService.reconcile(this); pending = askVpn(); }
                 }
             }
             rebuild();
@@ -1316,7 +1316,9 @@ public class FreezeBoardActivity extends ThemedActivity {
                 askVpn();
                 return;
             }
-            NetBlockService.start(this);
+            NetBlockService.reconcile(this);
+            if (!TimeWindow.on(this))            // 时段外不拉隧道，说清楚到点才生效
+                toast(T.f("已开启，%s 才断网", TimeWindow.label(this)));
             paint.run();
             // 隧道是异步建立的，这一刻还在「待断网」，过一秒再刷一次状态
             handler.postDelayed(paint, 900);
@@ -1340,6 +1342,9 @@ public class FreezeBoardActivity extends ThemedActivity {
         TextView second = text(T.s("应用会表现为转圈、超时，而不是弹「已断网」；视频类通常还会显示缓存过的内容。"), 12, look.text2());
         second.setPadding(0, dp(6), 0, 0);
         notes.addView(second);
+        TextView third = text(T.f("断网只在全局收束时段 %s 内生效，到点自动断、过点自动放。", TimeWindow.label(this)), 12, look.text2());
+        third.setPadding(0, dp(6), 0, 0);
+        notes.addView(third);
         box.addView(notes);
 
         paint.run();

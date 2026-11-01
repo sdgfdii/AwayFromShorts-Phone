@@ -63,6 +63,6 @@ fi
 "$JAVA" -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 \
   -cp "$RUN_CP" com.afs.guard.GuardTest
 
-for TEST in ScreenLockTest PageRuleTest CheckinPenaltyTest RestReminderTest LockPlanTest UnlockCodeTest KeywordRuleTest KeyGateTest CapabilityTest PenaltyTimingTest AppUsageQuotaTest DailyQuotaTest PercentTextTest DayBoundaryTest FocusPlanTest UpdateCheckTest CalendarDataTest FreezeRuleTest LedgerMergeTest MemoryTest MemoryFlashcardsTest MemorySwipeTest MemoryAuthoringTest TabOrderTest FreezeSlotTest QuizTest QuizImportTest DockSpringTest AppearanceTest MemoTest MemoEditorTest MemoChecklistTest MemoLibraryTest MemoBackupTest MemoTextFormatTest MemoBlocksTest MemoTableTest MemoSketchTest LearningPolicyTest CardDataTest SyncTargetTest LocalArchiveTest TranslationTest; do
+for TEST in ScreenLockTest PageRuleTest CheckinPenaltyTest RestReminderTest LockPlanTest UnlockCodeTest KeywordRuleTest KeyGateTest CapabilityTest PenaltyTimingTest AppUsageQuotaTest DailyQuotaTest PercentTextTest DayBoundaryTest TimeWindowTest FocusPlanTest UpdateCheckTest CalendarDataTest FreezeRuleTest LedgerMergeTest MemoryTest MemoryFlashcardsTest MemorySwipeTest MemoryAuthoringTest TabOrderTest FreezeSlotTest QuizTest QuizImportTest DockSpringTest AppearanceTest MemoTest MemoEditorTest MemoChecklistTest MemoLibraryTest MemoBackupTest MemoTextFormatTest MemoBlocksTest MemoTableTest MemoSketchTest LearningPolicyTest CardDataTest SyncTargetTest LocalArchiveTest TranslationTest; do
   "$JAVA" -Dfile.encoding=UTF-8 -cp "$RUN_CP" "com.afs.guard.$TEST"
 done

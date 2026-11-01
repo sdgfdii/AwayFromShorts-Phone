@@ -17,7 +17,7 @@ final class DailyQuotaStore {
     static synchronized void refresh(Context c){refresh(c,false);}
     private static synchronized void refresh(Context c,boolean force){long now=GuardClock.now(c).getTimeInMillis();if(!force&&now>=refreshed&&now-refreshed<4500)return;DailyQuotaData d=load(c,now);if(d.groups().length()==0||!d.enabled()&&!force)return;
         boolean reliable=AppUsageQuota.permission(c);List<AppUsageQuota.Span> spans=Collections.emptyList();if(d.enabled()&&reliable)try{spans=AppUsageQuota.spans(c,now,true);}catch(RuntimeException error){reliable=false;}
-        d.advance(now,spans,reliable,RuleStore.all(c),DayBoundary.hour(c));if(!prefs(c).edit().putString("usage",d.usage.toString()).commit()){writeFailed=true;throw new IllegalStateException(T.s("每日限额用量未能保存"));}writeFailed=false;refreshed=now;
+        d.advance(now,spans,reliable,RuleStore.all(c),DayBoundary.hour(c),TimeWindow.start(c),TimeWindow.end(c));if(!prefs(c).edit().putString("usage",d.usage.toString()).commit()){writeFailed=true;throw new IllegalStateException(T.s("每日限额用量未能保存"));}writeFailed=false;refreshed=now;
     }
     static synchronized void save(Context c,JSONObject candidate){Calendar now=GuardClock.now(c);DailyQuotaData.validate(candidate);if(new DailyQuotaData(candidate.toString(),"{}",now.getTimeInMillis()).packages().contains(c.getPackageName()))throw new IllegalArgumentException(T.s("不能限制守卫自身"));
         refresh(c,true);DailyQuotaData current=load(c,now.getTimeInMillis());
@@ -73,9 +73,9 @@ final class DailyQuotaStore {
     static boolean active(Context c){DailyQuotaData d=snapshot(c);return d.enabled()&&d.groups().length()>0;}
     static boolean hasAllowance(Context c,String pkg){DailyQuotaData d=snapshot(c);return d.enabled()&&d.group(pkg)!=null;}
     /** 先放开权限：没授权也能配额度，但判不出用量就不冻结；授权后立刻恢复计时与冻结。 */
-    static boolean exceeded(Context c,String pkg){if(!AppUsageQuota.permission(c))return false;DailyQuotaData d=snapshot(c);Rule rule=RuleStore.all(c).get(pkg);return DailyQuotaData.inScope(rule,GuardClock.now(c).getTimeInMillis())&&d.enabled()&&d.group(pkg)!=null&&(writeFailed||d.usage.optBoolean("unavailable")||d.exceeded(pkg));}
+    static boolean exceeded(Context c,String pkg){if(!AppUsageQuota.permission(c))return false;DailyQuotaData d=snapshot(c);Rule rule=RuleStore.all(c).get(pkg);return DailyQuotaData.inScope(rule,GuardClock.now(c).getTimeInMillis(),TimeWindow.start(c),TimeWindow.end(c))&&d.enabled()&&d.group(pkg)!=null&&(writeFailed||d.usage.optBoolean("unavailable")||d.exceeded(pkg));}
     static boolean enforcementChanged(Context c){try{refresh(c);}catch(IllegalStateException error){if(!writeFailed)throw error;}StringBuilder out=new StringBuilder();for(String pkg:packages(c))if(exceeded(c,pkg))out.append(pkg).append(';');synchronized(DailyQuotaStore.class){String next=out.toString();boolean changed=!next.equals(signature);signature=next;return changed;}}
-    static String status(Context c,String pkg){DailyQuotaData d=snapshot(c);JSONObject g=d.group(pkg);Rule rule=RuleStore.all(c).get(pkg);return g==null?"":(rule==null||FreezeSlotStore.unassigned(rule)?T.s("全天限额 · "):T.s("所绑时段限额 · "))+description(c,d,g);}
+    static String status(Context c,String pkg){DailyQuotaData d=snapshot(c);JSONObject g=d.group(pkg);Rule rule=RuleStore.all(c).get(pkg);if(g==null)return "";String base=(rule==null||FreezeSlotStore.unassigned(rule)?T.s("全天限额 · "):T.s("所绑时段限额 · "))+description(c,d,g);return TimeWindow.on(c)?base:T.s("时段外不计 · ")+base;}
     static boolean readable(Context c,DailyQuotaData d){return !writeFailed&&AppUsageQuota.permission(c)&&!d.usage.optBoolean("unavailable")&&d.usage.optString("error").isEmpty();}
     static String description(Context c,DailyQuotaData d,JSONObject g){if(!d.enabled())return T.s("每日限额已暂停");if(!AppUsageQuota.permission(c))return T.s("未授予使用情况权限，暂不计时");if(writeFailed||d.usage.optBoolean("unavailable")||!d.usage.optString("error").isEmpty())return T.s("用量暂不可读，保护性冻结");long used=d.used(g),limit=g.optInt("minutes")*60000L;return String.format(Locale.CHINA,T.s("已用 %.1f / %d 分钟 · 剩余 %.1f 分钟"),used/60000.0,g.optInt("minutes"),Math.max(0,limit-used)/60000.0);}
 }

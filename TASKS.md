@@ -1063,3 +1063,29 @@ manifest 没 `notes` 所以弹窗只报版本号）正好一起清掉。
 - `dpc/build.sh` 开头的 `rm -rf build` 会被 safe-delete 钩子拦（一次删 974 个文件）。绕法：先把 `dpc/build` **mv** 到 `%LOCALAPPDATA%\Temp\afs-scratch\`，让 rm 面对空目录；两次构建之间要再 mv 一次。
 - 代理不稳定：`git push` / `curl` 报 `CONNECT tunnel failed, response 502` 和 `SSL_read: unexpected eof`。重试即可（push 重试 6 次成功）；校验资产用 `gh api .../releases/tags/<tag>` 读服务端 digest，比下载 10MB 到本地算哈希稳。
 - Git Bash 的 `/tmp` 和 Windows 版 python 看到的不是同一个目录，curl 写到 `/tmp` 后 python 读不到 —— 校验文件一律放仓库内被忽略的路径（`dist/_verify/`）。
+
+## 29 · 1.71.0 全局收束时段 + 耗电优化（2026-11-01 上午）
+
+### 需求与落点
+
+| 需求 | 落点 |
+|---|---|
+| bilibili 移出冻结名单 | adb 改设备 `afs_guard.xml`：36→35 条，杀进程重建缓存，装 1.71.0 后复核未回写 |
+| 断网时间 21:00–22:00 | `NetBlockService.reconcile()`：开断网+选了应用+在时段内才拉隧道；`onStartCommand` 时段外拒绝建立 |
+| 时间设为全局变量 | 新建 `TimeWindow`（SP `afs_time_window`，默认 21:00–22:00）：限额计时（`DailyQuotaData.advance` 按段累计）与断网翻转统一读它；设置页「自律」组加「收束时段」行，两段式半小时一档选择器 |
+| 耗电优化 | GuardService 三节拍自适应：quotaTick 时段内 5s/时段外 60s（使用记录查询不再 24h 空转）；lockTick 亮屏 5s/灭屏 30s；状态 tick 亮屏 30s/灭屏 60s |
+
+### 关键取舍
+
+- **TimeWindow 语义**：左闭右开；start==end 表示全天（不许当空）；跨午夜从前往后扫 5 天切段，额度账本只累计窗口交集。
+- **时段外照旧推进 lastAt 水位线**——不推进的话下次进时段会把空闲时间当在用，凭空多算。
+- **0/0 传参 = 全天**，`advance` 旧签名保持旧行为，离线测试不动。
+- 断网边界翻转靠 GuardService tick + AlarmReceiver 双路，最晚延迟一个节拍。
+- 编辑窗口（22:00–23:00 才能减少额度）**没有**并入全局时段——那是防绕过设计，固定不动。
+
+### 验证
+
+- 回归 207 PASS / 0 FAIL，新增 `TimeWindowTest` 28 checks（左闭右开/跨午夜/全天/切段/空交集）。
+- i18n batch32 补 7 条，覆盖率 2350/2350 = 100%。
+- 真机：dev 包 2238/1.71.0 装机成功；主页齿轮图标正确、应用 35 个；设置页显示「收束时段 21:00–22:00」；守护进程存活。
+- 踩坑：`build.sh` 开头 `cd dpc/`，`AFS_APK_OUTPUT` 相对路径产物落在 `dpc/`，根目录旧包会骗过 `adb install`——装包前先 `aapt2 dump badging` 核对版本。

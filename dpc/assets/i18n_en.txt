@@ -195,9 +195,11 @@
 %.1f 分钟	%.1f min
 %d 个	%d
 %d 个应用 · %d 个时段	%d apps · %d time slots
+%d 个应用 · %s 才生效	%d apps · active %s
 %d 个应用 · 没开	%d apps · off
 %d 个应用待断网（没连上隧道）	%d apps waiting (tunnel not up)
 %d 个应用断网中	%d apps cut off
+%d 个应用断网中 · %s	%d apps cut off · %s
 %d 个词 · %d 个应用 · 已拦 %d 次	%d words · %d apps · %d blocked
 %d 分钟	%d min
 %d 条	%d rules
@@ -1069,6 +1071,7 @@ yyyy年M月d日	MMM d, yyyy
 已导出	Exported
 已开启	On
 已开启 · 未授予使用情况权限，无法计时	On · no usage access, cannot count
+已开启，%s 才断网	Enabled, cuts network at %s
 已待 %d / %d 分钟，还差 %d 分钟	%d / %d min, %d min to go
 已恢复	Restored
 已恢复 · 打卡页和闸门都用新数据	Restored · the check-in page and gate now use the new data
@@ -1323,6 +1326,7 @@ yyyy年M月d日	MMM d, yyyy
 操作未完成	Action not completed
 支持格式与模板	Formats and templates
 收下	Take it
+收束时段未能保存	Could not save the focus window
 收藏夹	Starred
 收藏夹 · 	Saved · 
 收集曾经选择“忘了”的卡片。到期后自动进入学习队列。	Collects cards you once answered “forgot”. They rejoin the queue when due.
@@ -1359,6 +1363,7 @@ yyyy年M月d日	MMM d, yyyy
 文字字段超过 16000 字	A text field exceeds 16000 characters
 文本缩放	Text size
 斜体	Italic
+断网只在全局收束时段 %s 内生效，到点自动断、过点自动放。	Network cut only takes effect inside the global focus window %s; it switches on and off automatically.
 断网应用设置	Network cut settings
 断网的应用	Cut-off apps
 新加了 	Added 
@@ -1422,9 +1427,11 @@ yyyy年M月d日	MMM d, yyyy
 旧版 .xls 请先另存为 .xlsx 或 CSV	Save legacy .xls as .xlsx or CSV first
 早上好	Good morning
 时	h
+时刻只能是 0:00–23:59	Time must be 0:00-23:59
 时段	Window
 时段内有正在冻结的应用，放行后再修改	The window holds frozen apps; edit it after they are allowed
 时段冻结	Window freeze
+时段外不计 · 	Outside window · 
 时间段	Window
 时间表守护	Schedule guard
 时间限额	Time quotas

@@ -90,9 +90,11 @@ public final class SettingsActivity extends ThemedActivity {
         body.addView(control, ui.gap(10));
         row(control, Lang.t(this, "自律规则", "Self-control rules"), ControlActivity.summary(this),
                 () -> startActivity(new Intent(this, ControlActivity.class)));
+        row(control, Lang.t(this, "收束时段", "Focus window"), TimeWindow.label(this),
+                () -> TimeWindow.pick(this, this::render));
         addNote(control, Lang.t(this,
-                "定时锁机、钥匙应用、亲友解锁码、关键词拦截、页面拦截都在那一页；断网在冻结页底部的设置里。",
-                "Scheduled lock, key app, family unlock code, keyword blocking and in-app pages live there; network cut sits in the settings at the bottom of the freeze board."));
+                "收束时段是全局的：断网和每日限额只在这段时间内真正动手，时段外照常放行。改这一个时间，两件事一起跟着走。",
+                "The focus window is global: network cut and daily quotas only bite inside it. Change this one time and both follow."));
 
         /* ---------- 打卡 ---------- */
         body.addView(groupTitle(Lang.t(this, "打卡", "Check-in")));

@@ -88,7 +88,8 @@ public final class NetBlockStore {
         if (!on(c)) return T.s("未开启");
         int n = packages(c).size();
         if (n == 0) return T.s("还没选应用");
-        if (running(c)) return T.f("%d 个应用断网中", n);
+        if (!TimeWindow.on(c)) return T.f("%d 个应用 · %s 才生效", n, TimeWindow.label(c));
+        if (running(c)) return T.f("%d 个应用断网中 · %s", n, TimeWindow.label(c));
         return T.f("%d 个应用待断网（没连上隧道）", n);
     }
 }

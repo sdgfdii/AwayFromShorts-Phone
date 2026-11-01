@@ -72,13 +72,24 @@ final class DailyQuotaData {
     long used(JSONObject group){long total=0;JSONArray apps=group.optJSONArray("apps");for(int i=0;i<apps.length();i++)total+=usage.optJSONObject("targets").optLong(apps.optString(i));return total;}
     boolean exceeded(String pkg){JSONObject g=group(pkg);return enabled()&&g!=null&&(usage.optBoolean("unavailable")||!usage.optString("error").isEmpty()||used(g)>=g.optInt("minutes")*60000L);}
     static boolean inScope(Rule rule,long now){Calendar c=Calendar.getInstance();c.setTimeInMillis(now);return rule==null||FreezeSlotStore.unassigned(rule)||!rule.inWindow(c);}
+    /** 再叠一层全局收束时段：时段外一律不计时、也不判超，额度原样留着。 */
+    static boolean inScope(Rule rule,long now,int winStart,int winEnd){return TimeWindow.contains(now,winStart,winEnd)&&inScope(rule,now);}
     void advance(long now,List<AppUsageQuota.Span> spans,boolean reliable){advance(now,spans,reliable,Collections.emptyMap(),DayBoundary.DEFAULT_HOUR);}
     void advance(long now,List<AppUsageQuota.Span> spans,boolean reliable,Map<String,Rule> rules){advance(now,spans,reliable,rules,DayBoundary.DEFAULT_HOUR);}
     void advance(long now,List<AppUsageQuota.Span> spans,boolean reliable,Map<String,Rule> rules,int resetHour){
+        advance(now,spans,reliable,rules,resetHour,0,0);   // 0/0 = 全天，等价旧行为
+    }
+    /**
+     * 带收束时段的账本推进：只累计落在 [winStart, winEnd) 里的时间。
+     *
+     * 时段外的时间照旧推进 lastAt 水位线 —— 不推进的话下次进时段会把之前的空闲时间
+     * 当成在用，凭空多算一笔。所以「不计数」和「不推进」必须分开做。
+     */
+    void advance(long now,List<AppUsageQuota.Span> spans,boolean reliable,Map<String,Rule> rules,int resetHour,int winStart,int winEnd){
         long begin=DayBoundary.startMs(now,resetHour);
         long last=usage.optLong("lastAt",now);if(!DayBoundary.key(now,resetHour).equals(usage.optString("date"))){usage=fresh(now,resetHour);last=Math.max(last,begin);}
         long from=Math.max(last,begin);
-        if(enabled()&&reliable&&usage.optString("error").isEmpty()&&now>from){Set<String> apps=packages();JSONObject targets=usage.optJSONObject("targets");for(AppUsageQuota.Span s:spans)if(apps.contains(s.pkg)){Rule rule=rules.get(s.pkg);Rule scope=rule==null||FreezeSlotStore.unassigned(rule)?null:rule;long elapsed=AppUsageQuota.overlap(Math.max(from,s.start),Math.min(now,s.end),scope);if(elapsed>0)put(targets,s.pkg,targets.optLong(s.pkg)+elapsed);}}
+        if(enabled()&&reliable&&usage.optString("error").isEmpty()&&now>from){Set<String> apps=packages();JSONObject targets=usage.optJSONObject("targets");List<long[]> windows=TimeWindow.segments(from,now,winStart,winEnd);for(AppUsageQuota.Span s:spans)if(apps.contains(s.pkg)){Rule rule=rules.get(s.pkg);Rule scope=rule==null||FreezeSlotStore.unassigned(rule)?null:rule;long elapsed=0;for(long[] w:windows){long a=Math.max(Math.max(from,s.start),w[0]),b=Math.min(Math.min(now,s.end),w[1]);if(b>a)elapsed+=AppUsageQuota.overlap(a,b,scope);}if(elapsed>0)put(targets,s.pkg,targets.optLong(s.pkg)+elapsed);}}
         if(enabled()&&!reliable)put(usage,"unavailable",true);else usage.remove("unavailable");
         put(usage,"lastAt",now);
     }

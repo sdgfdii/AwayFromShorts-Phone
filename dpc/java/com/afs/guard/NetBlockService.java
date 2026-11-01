@@ -35,6 +35,10 @@ public class NetBlockService extends VpnService {
     private static final String ADDRESS = "10.111.0.2";
     private static final String DNS = "10.111.0.1";
 
+    /** 建不起来的原因码，落到 {@link NetBlockStore} 里给界面照实说。 */
+    static final String WHY_PERMISSION = "perm";
+    static final String WHY_OTHER_VPN = "vpn";
+
     private ParcelFileDescriptor tunnel;
     private Thread pump;
     private Thread beat;
@@ -93,10 +97,17 @@ public class NetBlockService extends VpnService {
             Log.e(Guard.TAG, "netblock establish failed", error);
         }
         if (tunnel == null) {
+            // establish() 只返回 null、不抛异常这条静默路径踩过两次，必须留原因：
+            // 要么从没授权（用户没点过系统弹窗 / 覆盖安装后授权丢了），
+            // 要么系统同一时间只允许一个 VPN，被代理之类占着。界面直接照这句说。
+            String why = VpnService.prepare(this) != null ? WHY_PERMISSION : WHY_OTHER_VPN;
+            NetBlockStore.setWhy(this, why);
             NetBlockStore.setRunning(this, false);
+            Log.w(Guard.TAG, "netblock: establish returned null, reason=" + why);
             stopSelf();
             return;
         }
+        NetBlockStore.setWhy(this, "");
         NetBlockStore.setRunning(this, true);
         Log.i(Guard.TAG, "netblock established for " + allowed + " apps");
         pump = new Thread(new Runnable() {

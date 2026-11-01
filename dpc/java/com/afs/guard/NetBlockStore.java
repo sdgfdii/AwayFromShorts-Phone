@@ -20,6 +20,7 @@ public final class NetBlockStore {
     private static final String K_RUNNING = "running";
     private static final String K_BEAT = "beat";
     private static final String K_TRIED = "tried";
+    private static final String K_WHY = "why";
 
     /**
      * 隧道心跳的有效期。服务被系统杀掉时 {@code onDestroy} 不一定跑，
@@ -94,8 +95,19 @@ public final class NetBlockStore {
         sp(c).edit().putLong(K_TRIED, System.currentTimeMillis()).apply();
     }
 
+    /** 上一次建隧道失败的原因（空 = 没失败过），见 {@link NetBlockService} 的 WHY_*。 */
+    static String why(Context c) {
+        String value = sp(c).getString(K_WHY, "");
+        return value == null ? "" : value;
+    }
+
+    static void setWhy(Context c, String value) {
+        sp(c).edit().putString(K_WHY, value == null ? "" : value).apply();
+    }
+
     /**
-     * 一句话状态：开没开、选了几个、隧道通没通、是不是正在调整时段里被放开。
+     * 一句话状态：开没开、选了几个、隧道通没通、是不是正在调整时段里被放开，
+     * 以及「没通」到底卡在哪 —— 没授权还是被别的 VPN 占着。
      *
      * 方向是「默认常开」：调整时段内放开是本该如此，不能说成「没连上隧道」。
      */
@@ -105,6 +117,9 @@ public final class NetBlockStore {
         if (n == 0) return T.s("还没选应用");
         if (NetWindow.inside(c)) return T.f("%d 个应用 · 调整时段 %s 内放开", n, NetWindow.label(c));
         if (running(c)) return T.f("%d 个应用断网中", n);
+        String why = why(c);
+        if (NetBlockService.WHY_PERMISSION.equals(why)) return T.f("%d 个应用 · 断网没生效：没给 VPN 授权", n);
+        if (NetBlockService.WHY_OTHER_VPN.equals(why)) return T.f("%d 个应用 · 断网没生效：另一个 VPN 占着", n);
         return T.f("%d 个应用待断网（没连上隧道）", n);
     }
 }

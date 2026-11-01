@@ -1153,7 +1153,13 @@ manifest 没 `notes` 所以弹窗只报版本号）正好一起清掉。
 ### 验证
 
 - 离线回归：`bash dpc/test/run.sh` → 207 PASS / 0 FAIL，46 个测试类全跑；新增 `NetWindowTest` 22 checks（默认 22:00–23:00、左闭右开、跨午夜、start==end 全天、`shouldCut` 四象限、全天按半小时扫「恰好 2 格放开」、contains 必须走 TimeWindow）。
-- i18n：batch35 补 8 条，`tools/i18n.py check` → msgid 2358 / 已译 2358 / 100%，占位符全部一致；另核对 8 个改动 Java 文件 332 处 `T.s/T.f` 字面量全部有 key。
-- 构建：`bash dpc/build.sh` 7/7 步全过，aapt2 第一行 `versionCode='2240' versionName='1.73.0'`；`apksigner verify` 通过；dexdump 确认包内有 `Lcom/afs/guard/NetWindow;`。产物 `afs-guard.apk` / `afs-guard-1.73.0-netblock-window.apk`（10,624,784 B，SHA-256 `F5B154F49CC48354BEC98355D1C9DD0E4DA51ACE5C495D19938BD1A18A8FD64F`）。
+- i18n：batch35 补 8 条 + batch36 补 2 条（断网建不起来的原因文案），`tools/i18n.py check` → msgid 2360 / 100%，占位符全部一致；另核对改动 Java 文件的 `T.s/T.f` 字面量全部有 key。
+- 构建：`bash dpc/build.sh` 7/7 步全过，aapt2 第一行 `versionCode='2240' versionName='1.73.0'`；`apksigner verify` 通过；dex 内有 `Lcom/afs/guard/NetWindow;` 与新日志串。产物 `afs-guard.apk` / `afs-guard-1.73.0-netblock-window.apk`（10,624,784 B，SHA-256 `FBB750D6B5925A124496298BFCDEB697A614CD60AA8FC589C62DB4EC77AFB301`）。
 - 顺手修一个既有构建缺陷：Git Bash 没有 `zip` 时 `build.sh` 的 Python 回退分支用 `command -v python3`，会命中 WindowsApps 的应用商店存根（以 49 退出、classes.dex 没进包、流程止于 [5/7]）。改成复用 2b 步的 `pick_python`，现在裸 `bash build.sh` 也能出包。
-- 真机：PLR110（SDK 36）在线，已装 1.72.0/2239，证书与新包一致、可原地升级。**未装机** —— 等用户确认（安装后时段外会立刻按名单断网）。
+- 真机（PLR110，SDK 36）：`adb install -r` 覆盖安装成功，2239/1.72.0 → 2240/1.73.0，数据保留。两个方向都实测到了：
+  - 时段外（16:09，窗口 22:00–23:00）：`ip addr` 有 `tun0 inet 10.111.0.2/32`、`dumpsys vpn_management` 里 `com.afs.guard` 为唯一 VPN、`Uids: {10419,20419}`（B 站），日志 `netblock established for 1 apps`；`on=true / running=true / why=""`。**断网真的生效**。
+  - 时段内（临时把窗口写成 16:00–17:00）：进程重启后 `tun0` 不存在、`running=false`，同一份 `on=true` 名单还在 —— 到点自动放开。
+  - 恢复窗口 22:00–23:00 后再重启，隧道立刻回来。调整时段在设备上现为 `start=1320 / end=1380`（即默认值）。
+- **真机踩到并修掉的一个诊断缺口**：`establish()` 失败只返回 null、不抛异常，原来的代码在那条路径上一句日志都没有，看上去像「什么都没发生」。现在会把原因落到 `afs_netblock.why` 并显示在状态行：「没给 VPN 授权」/「另一个 VPN 占着」。实测抓到的正是后者 —— 手机上 FlClash（`com.follow.clash`）长期占着系统唯一的 VPN 槽，停掉它之后守护进程 3 秒内就建好了隧道（`netblock: establish returned null, reason=vpn` → `netblock established for 1 apps`）。
+- 由此明确的产品约束（不是 bug）：断网和别的 VPN（代理、加速器）互斥；断网常开后它默认霸占 VPN 槽，所以开着断网时 FlClash 连不上，要等 22:00–23:00 的调整时段才能改。
+

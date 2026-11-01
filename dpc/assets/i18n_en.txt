@@ -197,6 +197,8 @@
 %d 个	%d
 %d 个应用 · %d 个时段	%d apps · %d time slots
 %d 个应用 · %s 才生效	%d apps · active %s
+%d 个应用 · 断网没生效：另一个 VPN 占着	%d apps · blocking inactive: another VPN is holding the only slot
+%d 个应用 · 断网没生效：没给 VPN 授权	%d apps · blocking inactive: VPN permission not granted
 %d 个应用 · 没开	%d apps · off
 %d 个应用 · 调整时段 %s 内放开	%d apps · released inside the adjustment window %s
 %d 个应用待断网（没连上隧道）	%d apps to cut off (tunnel not connected)

@@ -119,7 +119,7 @@ public final class NetBlockStore {
         if (running(c)) return T.f("%d 个应用断网中", n);
         String why = why(c);
         if (NetBlockService.WHY_PERMISSION.equals(why)) return T.f("%d 个应用 · 断网没生效：没给 VPN 授权", n);
-        if (NetBlockService.WHY_OTHER_VPN.equals(why)) return T.f("%d 个应用 · 断网没生效：另一个 VPN 占着", n);
+        if (NetBlockService.WHY_OTHER_VPN.equals(why)) return T.f("%d 个应用 · 断网没生效：VPN 通道被占用", n);
         return T.f("%d 个应用待断网（没连上隧道）", n);
     }
 }

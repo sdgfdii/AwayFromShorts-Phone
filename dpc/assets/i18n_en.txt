@@ -197,6 +197,7 @@
 %d 个	%d
 %d 个应用 · %d 个时段	%d apps · %d time slots
 %d 个应用 · %s 才生效	%d apps · active %s
+%d 个应用 · 断网没生效：VPN 通道被占用	%d apps · blocking inactive: the VPN channel is occupied
 %d 个应用 · 断网没生效：另一个 VPN 占着	%d apps · blocking inactive: another VPN is holding the only slot
 %d 个应用 · 断网没生效：没给 VPN 授权	%d apps · blocking inactive: VPN permission not granted
 %d 个应用 · 没开	%d apps · off

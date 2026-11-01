@@ -1356,6 +1356,18 @@ Android 同一时间只允许一个 VpnService；非 root 设备没有第二套�
 
 - 分应用代理（split tunneling）下，「看得见的 VPN 网络」可能为空，此时本 App 只能靠 `establish()` 返回 null 这条硬证据退避（10 分钟一次），无法提前知道代理在占着。若某台机器上 `establish()` 会直接替换别人的 VPN，唯一安全的做法是把「断网方式」切成「我常开代理（不占 VPN）」——UI 里已经写清，代理模式下本 App 绝不碰通道。
 
+## 39 · 设备改动记录：B 站进冻结格 + FlClash 附加规则 + 断网切代理模式（2026-11-01 晚）
+
+用户当晚的两个现场操作（非代码改动，记在这里方便回溯）：
+
+| 改动 | 做法 | 结果 |
+|---|---|---|
+| 把 B 站加进「抖音」那个冻结时段 | adb 改设备 `afs_guard.xml` 的 `rules`，给 `tv.danmaku.bili` 复制抖音的时段（`d:127`、`w:[[0,1260],[1380,0]]`、`g/freeze:true`、`at:当时时间戳`），`install -r` 重启进程后生效 | `Guard` 结果「37 个应用，17 个冻结」，B 站 `suspended=true`；用户确认冻结页该卡显示 14 个应用 |
+| FlClash 里给 B 站加 REJECT | 用户找不到「覆写」入口；实际路径是 **工具 → 进阶配置 → 附加规则 → ＋ → DOMAIN-SUFFIX / 域名 / REJECT**。用 adb 逐条添加 7 条（bilibili.com、bilivideo.com、bilivideo.cn、biliapi.com、biliapi.net、hdslb.com、b23.tv） | 列表 7 条 DOMAIN_SUFFIX→REJECT；仪表盘红条报错消失 |
+| 断网方式切到「我常开代理（不占 VPN）」 | adb 改 `afs_netblock.xml` 加 `proxy_mode=true`，重启进程 | `running=false`，本 App 不再占 VPN 通道；FlClash 可常开 |
+
+**踩到的坑**：`install -r` 杀进程后，系统里残留一条 `com.afs.guard` 的 `type=-1` 死 VPN 记录，占着通道导致 FlClash 点「启动」一直「未运行」。重启手机后记录清掉（只剩 `[Legacy VPN]` 占位）。另外 B 站网络拦截在「附加规则」生效后，`bilibili.com` 等域名会被 REJECT——B 站只能看已缓存内容。
+
 
 
 

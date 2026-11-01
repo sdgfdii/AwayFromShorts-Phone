@@ -47,10 +47,34 @@ public final class RuleStore {
 
     /* ---------- 读 ---------- */
 
+    /**
+     * 解析结果的记忆：键是 prefs 里的原始串，变了就重解析。
+     *
+     * 冻结页每秒刷新几十个应用的状态，每个应用都要读规则；不记忆的话就是每秒上千次
+     * JSON 解析（实测一次 tick 470ms，几乎全花在这里）。这里只缓存解析结果，
+     * 对外仍返回一份新 Map，调用方照样能改。
+     */
+    private static String cachedRaw;
+    private static Map<String, Rule> cachedRules;
+
     public static Map<String, Rule> all(Context c) {
         migrate(c);
-        Map<String, Rule> m = new LinkedHashMap<>();
         String raw = sp(c).getString(K_RULES, "");
+        Map<String, Rule> parsed;
+        synchronized (RuleStore.class) {
+            if (cachedRules != null && raw.equals(cachedRaw)) {
+                parsed = cachedRules;
+            } else {
+                parsed = parseAll(raw);
+                cachedRules = parsed;
+                cachedRaw = raw;
+            }
+        }
+        return new LinkedHashMap<>(parsed);
+    }
+
+    private static Map<String, Rule> parseAll(String raw) {
+        Map<String, Rule> m = new LinkedHashMap<>();
         try {
             JSONObject o = new JSONObject(raw.length() == 0 ? "{}" : raw);
             Iterator<String> it = o.keys();

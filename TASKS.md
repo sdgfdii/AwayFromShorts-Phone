@@ -1163,3 +1163,48 @@ manifest 没 `notes` 所以弹窗只报版本号）正好一起清掉。
 - **真机踩到并修掉的一个诊断缺口**：`establish()` 失败只返回 null、不抛异常，原来的代码在那条路径上一句日志都没有，看上去像「什么都没发生」。现在会把原因落到 `afs_netblock.why` 并显示在状态行：「没给 VPN 授权」/「另一个 VPN 占着」。实测抓到的正是后者 —— 手机上 FlClash（`com.follow.clash`）长期占着系统唯一的 VPN 槽，停掉它之后守护进程 3 秒内就建好了隧道（`netblock: establish returned null, reason=vpn` → `netblock established for 1 apps`）。
 - 由此明确的产品约束（不是 bug）：断网和别的 VPN（代理、加速器）互斥；断网常开后它默认霸占 VPN 槽，所以开着断网时 FlClash 连不上，要等 22:00–23:00 的调整时段才能改。
 
+## 33 · 1.73.1 主线程周期性卡顿（2026-11-01 傍晚）
+
+用户原话：「优化程序动画，避免卡顿现象」，并点名切页/返回、底栏动效、冻结页拖拽与展开。先上真机量化，再按证据改。
+
+### 量化与根因（PLR110 / 90Hz / 动画倍率 1.0）
+
+| 现象 | 证据 |
+|---|---|
+| 冻结页每秒一次主线程大卡 | `dumpsys gfxinfo` 一次 tick 内出现 350–470ms 长帧；加临时计时后发现 `FreezeBoard.tick` 470ms，其中 `refreshBadges` 466ms |
+| 每个瓦片都在重算全局状态 | `Guard.blockReasonNow` 每个应用 10ms：里面 `StudyGate.holding`→`PenaltyStore.any` 把 `RuleStore.packages/get` 反复整块解析（一次 tick 数百次 JSON 解析） |
+| 每 30 秒一次全页卡顿 | 主线程栈采样（临时探针）抓到 `GuardService tick → Guard.apply → DailyQuotaStore.refresh → AppUsageQuota.spans → UsageStatsManager.queryEvents` 阻塞 186ms，个别 538ms |
+| 冻结页冷开慢 | `Displayed +736ms`；`rebuild()` 538ms，其中图标签名 `getApplicationIcon` 每个 2–7ms（ColorOS 还要过主题拦截、读资源表） |
+| 切页回来整页重新录制 | framestats：冻结页首个绘制帧 `drawCmd` 55–77ms、layout 6–8ms、GPU 0.2ms |
+
+### 修复落点
+
+| 改动 | 文件 |
+|---|---|
+| 规则解析结果按原始串记忆（对外仍返回副本） | `RuleStore` |
+| 罚时表只读快照 + `any()` 单次遍历（原来每个应用都解析一遍规则） | `PenaltyStore` |
+| 额度表 `limits` 记忆、`minutes()` 不再每次解析；授权查询 1 秒内复用 | `AppUsageQuota` |
+| 每日额度快照按 config+usage 原始串记忆（构造里含整份校验） | `DailyQuotaStore` |
+| `StudyGate.holding` 结果缓存 3 秒（闸门粒度是分钟级） | `StudyGate` |
+| 新增「预计算全局状态」的判定入口；冻结页一屏共用一份学习闸门/禁忌/关键应用/规则/奖励 | `Guard`、`FreezeBoardActivity` |
+| 冻结页刷新改为每两拍一次（约 2 秒），文案/颜色/进度没变就不 `setText` | `FreezeBoardActivity`、`UsageQuotaProgress` |
+| `Guard.apply` 移到后台单线程执行（合并重复请求） | `Guard.applyAsync` + `GuardService`/`AlarmReceiver`/`GuardJob`/`BootReceiver` |
+| 应用图标 `ConstantState` 缓存 + 启动后台预热 | 新增 `AppIcons`、`Startup` |
+| 恢复滚动位置时不再整窗 `invalidate()`；窗口背景/系统栏只有在值变化时才设置 | `PageScrollState`、`FreezeBoardActivity.immersive` |
+
+### 验证（同设备、同操作，前后各一次采样）
+
+| 指标 | 修复前 | 修复后 |
+|---|---|---|
+| 冻结页每秒刷新占用主线程 | 470ms | 8–22ms（且改为每 2 秒一次） |
+| 冻结页 `rebuild()`（拖拽/改设置后整页重建） | 538ms | 57ms |
+| 冻结页冷开 `Displayed` | 736ms | 217ms |
+| 守卫每 30 秒一次的主线程阻塞 | 186–538ms | 0（后台线程） |
+| 冻结页空闲 12s | 每拍必掉帧（tick 470ms） | 6 个刷新帧里 3 个 >11ms，p95 34ms，Slow UI thread 1 |
+| 20 次热切页 | 136 帧 / 26 janky（19.12%）/ p90 28 / p95 34 / p99 89ms | 138 帧 / 26 janky（18.84%）/ p90 30 / p95 34 / p99 97ms |
+
+**没变的一处，别当成修好了**：切页本身每切一次仍有约 1 帧 60–110ms（冻结页首帧 display list 录制 55–77ms + 系统拉起页面时主线程等 78ms）。这次没动页面结构，所以切页指标基本持平；要彻底解决得把五个独立 Activity 合成单页多视图（或给冻结页做虚拟化/懒加载），属于结构性改动，未在本版做。
+
+证据文件：`.codex-fix/motion-opt/20261101-jank/`（measure-*.txt、frames-*.txt、framestats-*.txt），测量脚本同目录 `measure.ps1`。
+
+

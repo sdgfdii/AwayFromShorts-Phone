@@ -8,7 +8,7 @@ public class GuardJob extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters params) {
-        Guard.apply(this);
+        Guard.applyAsync(this);   // 主线程只排下一次，重活交给后台策略线程
         Guard.schedule(this);
         return false;
     }

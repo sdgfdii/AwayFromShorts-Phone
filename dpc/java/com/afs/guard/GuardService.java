@@ -99,7 +99,9 @@ public class GuardService extends Service {
                 Hub.kick(GuardService.this);
                 // 20:00 判断点：今天打卡没打完 → 各应用本次冻结再延 30 分钟（一天只入账一次）
                 CheckinPenalty.tick(GuardService.this);
-                Guard.apply(GuardService.this);   // 内部只有状态变化时才调 setPackagesSuspended
+                // apply 里要查使用记录（单次 186–538ms），绝不能占主线程：每 30 秒卡一下，
+                // 用户在任何页面滑动都会撞上。后台串行跑，合并重复请求。
+                Guard.applyAsync(GuardService.this);   // 内部只有状态变化时才调 setPackagesSuspended
                 NetBlockService.reconcile(GuardService.this);   // 断网调整时段边界在这里翻隧道
                 updateNotice();
             } catch (Throwable t) {

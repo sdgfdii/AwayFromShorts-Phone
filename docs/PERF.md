@@ -83,3 +83,41 @@ adb shell dumpsys gfxinfo com.afs.guard
 首次 Displayed 不包含后台目录完全加载的时间。目录异步加载有独立布局帧，因此不能根据 p99 降低声称全部掉帧指标改善。实机确认应用库横向滚动出现新卡片、冻结灰度与原因文字、收起再展开均可用。
 
 验证：全部 11 组 Java 回归通过，导入/制卡脚本 43 项通过；APK 编译、签名、安装通过。原始测量保留本地 `.codex-fix/perf/measure-1492-before.txt` 与 `measure-1493-after.txt`，临时文件不提交。
+
+## 1.73.1：主线程周期性卡顿（2026-11-01）
+
+这轮不再是「切页过渡」的问题，而是**界面线程被周期性占满**：冻结页每秒一次、守卫每 30 秒一次，用户在任意页面滑动都可能撞上。
+
+### 怎么定位的
+
+1. `dumpsys gfxinfo com.afs.guard reset` 后只切一次页，读 90Hz 分位数：冻结页出现 350–470ms 的整帧。
+2. 屏幕上只有 90 个可见节点，说明不是「视图太多画得慢」，先怀疑主线程活儿；于是在可疑路径上加临时毫秒计时（`tick`、`refreshBadges`、`RuleStore.all`、`StudyGate.holding`、`PenaltyStore.any`、`DailyQuotaStore.snapshot`、图标加载）。
+3. 首次打开冻页 + 停留 4 秒，日志给出：`FreezeBoard.tick 470ms`、`refreshBadges pass 466ms`，且每个应用 `Guard.blockReasonNow` 10ms，里面 `StudyGate.holding` 8ms、`PenaltyStore.any` 8ms。
+4. 28 行以上的 30 秒级卡顿用**后台线程采样主线程栈**抓（临时探针，debug 构建才开）：`GuardService tick → Guard.apply → DailyQuotaStore.refresh → AppUsageQuota.spans → UsageStatsManager.queryEvents` 阻塞 186ms（另一次 538ms）。
+5. 切页长帧用 `dumpsys gfxinfo ... framestats` 拆阶段：冻结页首个绘制帧 `DrawStart→SyncQueued`（display list 录制）55–77ms，layout 6–8ms，GPU 0.2ms —— 说明卡在「画」，不是「算」或「GPU」。
+
+### 改了什么
+
+- **去重复解析**：规则、罚时、额度表、每日额度快照都按「原始串」记忆解析结果，写盘后原始串变了自动失效。`PenaltyStore.any()` 从「每个应用解析一遍规则」改成一次遍历。
+- **去重复判定**：冻结页一屏共用一份学习闸门/禁忌/关键应用/生效规则/奖励；`StudyGate.holding` 结果缓存 3 秒（粒度是分钟级）。
+- **去重复重画**：徽标文案、颜色、进度值没变就不 setText/setProgress（每处 `setText` 都会让整页重新录制 display list）；整屏刷新从每秒一次改成每 2 秒一次。
+- **别在主线程查系统**：`Guard.apply`（含 `UsageStatsManager.queryEvents`）移到后台单线程，合并重复请求；守护节拍、闹钟、开机、JobScheduler 四条入口都改走后台。
+- **图标别再每次取**：`ConstantState` 缓存 + 启动后台预热；恢复滚动位置不再 `root.invalidate()` 整窗；窗口背景/系统栏只在值变化时设置。
+
+### 前后数据（PLR110，90Hz，动画倍率 1.0，各一次采样）
+
+| 指标 | 前 | 后 |
+| --- | --- | --- |
+| 冻结页每秒刷新占用主线程 | 470ms | 8–22ms，且改为 2 秒一次 |
+| 冻结页整页重建 `rebuild()` | 538ms | 57ms |
+| 冻结页冷开 `Displayed` | 736ms | 217ms |
+| 每 30 秒主线程阻塞（使用记录查询） | 186–538ms | 0（后台） |
+| 冻结页空闲 12s | 每拍必掉帧 | 6 帧中 3 帧 >11ms，p95 34ms |
+| 20 次热切页 | 136 帧 / 26 janky（19.1%）/ p95 34 / p99 89ms | 138 帧 / 26 janky（18.8%）/ p95 34 / p99 97ms |
+
+### 没解决的（别误读成「全面流畅」）
+
+切页仍然每切一次约 1 帧长帧：冻结页首帧 display list 录制 55–77ms，外加系统拉起页面时主线程等 78ms。要彻底消掉得把五个 Activity 合成一页（或给冻结页做懒加载/虚拟化），是结构性改动。本轮只解决「周期性卡顿」和「冷开/重建」，切页指标持平。
+
+测量脚本与原始输出：`.codex-fix/motion-opt/20261101-jank/measure.ps1`、`measure-*.txt`、`frames-*.txt`、`framestats-*.txt`（本地证据目录，不入库）。
+

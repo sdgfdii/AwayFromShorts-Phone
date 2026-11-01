@@ -50,7 +50,9 @@ public class FreezeBoardActivity extends ThemedActivity {
     private String dailySnapshot="";
     private Calendar statusNow;
     private Set<String> statusKeys;
-    private boolean statusHold, statusTaboo;
+    private Map<String, Rule> statusRules;
+    private boolean statusHold, statusTaboo, statusReward;
+    private int statusTick;
     private TextView gateNote;   // 学习联动还差什么（点一下跳到对应页面）
     private TextView netHint;    // 底部「断网应用设置」那行小字，运行状态会变，单独留个引用
     private final Handler handler = new Handler();
@@ -95,17 +97,31 @@ public class FreezeBoardActivity extends ThemedActivity {
         look = new Ui(this);
         rebuild();
     }
+    private int immersiveBg = Integer.MIN_VALUE;
+    private int immersiveCutout = Integer.MIN_VALUE;
+    private int immersiveSysUi = Integer.MIN_VALUE;
     private void immersive() {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         getWindow().setStatusBarColor(0);
         if (Build.VERSION.SDK_INT >= 28) {
-            WindowManager.LayoutParams lp = getWindow().getAttributes();
-            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-            getWindow().setAttributes(lp);
+            if (immersiveCutout != WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES) {
+                immersiveCutout = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                lp.layoutInDisplayCutoutMode = immersiveCutout;
+                getWindow().setAttributes(lp);
+            }
         }
-        getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(look.bg()));
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        // 每次 onResume 都换一个新的窗口背景 = 让窗口重新判脏；颜色没变就别碰。
+        if (immersiveBg != look.bg()) {
+            immersiveBg = look.bg();
+            getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(immersiveBg));
+        }
+        int visibility = View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
+        if (immersiveSysUi != visibility) {
+            immersiveSysUi = visibility;
+            getWindow().getDecorView().setSystemUiVisibility(visibility);
+        }
     }
     @Override protected void onResume() {
         super.onResume();
@@ -129,7 +145,15 @@ public class FreezeBoardActivity extends ThemedActivity {
         public void run() {
             if (!dragging && !sheetMoving && screen != null) {
                 if (!ruleSnapshot.equals(RuleStore.exportRules(FreezeBoardActivity.this))||!dailySnapshot.equals(DailyQuotaStore.snapshot(FreezeBoardActivity.this).config.toString())) rebuild();
-                else { refreshBadges(screen);refreshDailyCounters();updateNetHint(); for (FreezeTimelineView timeline : timelines) timeline.invalidate(); }
+                else {
+                    // 整屏徽标刷新（含学习闸门/罚时判定）一次 8–20ms，正好卡在 90Hz 的 11ms 预算上；
+                    // 这些状态最细也只按分钟变，每两拍（约 2 秒）刷一次就够，页面不再每秒掉一帧。
+                    updateNetHint();
+                    if ((statusTick++ & 1) == 0) {
+                        refreshBadges(screen);refreshDailyCounters();
+                        for (FreezeTimelineView timeline : timelines) timeline.invalidate();
+                    }
+                }
             }
             handler.postDelayed(this, 1000);
         }
@@ -450,13 +474,18 @@ public class FreezeBoardActivity extends ThemedActivity {
             return true;
         }
     }
+    private android.graphics.drawable.Drawable appIcon(String pkg) {
+        return AppIcons.drawable(this, pkg);
+    }
+
     private View appTile(final String pkg, boolean compact) {
         LinearLayout tile = new LinearLayout(this); tile.setOrientation(compact ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
         tile.setGravity(Gravity.CENTER_VERTICAL); tile.setPadding(dp(10), dp(10), dp(10), dp(10));
         tile.setBackground(look.round(look.surface2(), 13));
         ImageView icon = new ImageView(this);
         icon.setImageResource(android.R.drawable.sym_def_app_icon);
-        try { icon.setImageDrawable(getPackageManager().getApplicationIcon(pkg)); } catch (Exception ignored) { }
+        android.graphics.drawable.Drawable loaded = appIcon(pkg);
+        if (loaded != null) icon.setImageDrawable(loaded);
         tile.addView(icon, new LinearLayout.LayoutParams(dp(compact ? 25 : 29), dp(compact ? 25 : 29)));
         LinearLayout labels = new LinearLayout(this); labels.setOrientation(LinearLayout.VERTICAL);
         TextView name = text(appNames.containsKey(pkg)?appNames.get(pkg):Guard.labelOf(getPackageManager(), pkg), compact ? 11 : 13, look.text());
@@ -488,20 +517,44 @@ public class FreezeBoardActivity extends ThemedActivity {
         }
         return tile;
     }
+    private DailyQuotaData badgeQuota;
+    private Map<String, Integer> badgeLimits;
     private void refreshBadges(View view) {
-        if (view == screen) {statusSnapshot();updateGateNote();for (LibraryApp app : libraryApps) updateLibraryApp(app);}
+        if (view == screen) {
+            // 快照/额度表一屏共用一份：以前每个瓦片各取一次，等于每次刷新几十次 prefs 读+解析。
+            badgeQuota = DailyQuotaStore.snapshot(this);
+            badgeLimits = AppUsageQuota.limits(this);
+            statusSnapshot();updateGateNote();
+            for (LibraryApp app : libraryApps) updateLibraryApp(app);
+        }
         if (view instanceof TextView && view.getTag() instanceof String) {
             String pkg = (String)view.getTag(); int reason = statusReason(pkg); boolean blocked = reason != 0;
-            org.json.JSONObject quotaGroup=DailyQuotaStore.snapshot(this).group(pkg);String quotaLabel=quotaGroup==null?"":" · "+(quotaGroup.optJSONArray("apps").length()>1?T.s("共享 "):"")+quotaGroup.optInt("minutes")+T.s("分/日");
-            TextView t = (TextView)view; t.setText(Guard.blockReasonText(reason)+quotaLabel + (statusKeys.contains(pkg) ? T.s(" · 关键") : "")+(AppUsageQuota.minutes(this,pkg)>0?" · "+(FreezeSlotStore.unassigned(rules.get(pkg))?T.s("全天"):T.s("时段"))+T.s("额度 ")+AppUsageQuota.minutes(this,pkg)+T.s("分/日"):""));
-            t.setTextColor(blocked ? look.red() : look.green());
+            org.json.JSONObject quotaGroup=(badgeQuota == null ? DailyQuotaStore.snapshot(this) : badgeQuota).group(pkg);
+            String quotaLabel=quotaGroup==null?"":" · "+(quotaGroup.optJSONArray("apps").length()>1?T.s("共享 "):"")+quotaGroup.optInt("minutes")+T.s("分/日");
+            Integer limitBox = badgeLimits == null ? null : badgeLimits.get(pkg);
+            int limit = limitBox == null ? 0 : limitBox;
+            TextView t = (TextView)view;
+            // 文案没变就别 setText：setText 会给这个 TextView 判脏，整屏几十个一起改就是一次
+            // 全页重新录制 display list（实测这类刷新帧 40ms+）。颜色同理。
+            CharSequence next = Guard.blockReasonText(reason)+quotaLabel + (statusKeys.contains(pkg) ? T.s(" · 关键") : "")+(limit>0?" · "+(FreezeSlotStore.unassigned(rules.get(pkg))?T.s("全天"):T.s("时段"))+T.s("额度 ")+limit+T.s("分/日"):"");
+            if (!next.equals(t.getText())) t.setText(next);
+            int color = blocked ? look.red() : look.green();
+            if (t.getCurrentTextColor() != color) t.setTextColor(color);
         }
         if (view instanceof ViewGroup) for (int i = 0; i < ((ViewGroup)view).getChildCount(); i++) refreshBadges(((ViewGroup)view).getChildAt(i));
     }
+    /**
+     * 一次刷新共用一份全局状态：学习闸门、禁忌、关键应用、生效规则、卡片奖励。
+     *
+     * 以前 statusReason 逐个应用调 Guard.blockReasonNow，里面每个应用都重跑一遍
+     * StudyGate.holding（读联动配置+罚时），一屏四十多个应用就是几百毫秒。
+     */
     private void statusSnapshot() {
-        statusNow=Calendar.getInstance();statusKeys=RuleStore.keyApps(this);
+        statusNow=GuardClock.now(this);statusKeys=RuleStore.keyApps(this);
         statusHold=StudyGate.holding(this,statusNow);
         statusTaboo=StudyGate.tabooHolding(statusNow.getTimeInMillis(),StudyGate.tabooUntil(this));
+        statusRules=Guard.enforcedRules(this);
+        statusReward=CardStore.rewardUntil(this,statusNow.getTimeInMillis())>0;
     }
     /** 写清「学习联动为什么还在冻」，点这一行直接跳到该补的那件事。 */
     private void updateGateNote() {
@@ -529,7 +582,8 @@ public class FreezeBoardActivity extends ThemedActivity {
         }
     }
     private int statusReason(String pkg) {
-        return Guard.blockReasonNow(this,pkg);
+        if (statusRules == null || statusNow == null) statusSnapshot();
+        return Guard.blockReasonNow(this,pkg,statusNow,statusRules,statusKeys,statusHold,statusTaboo,statusReward);
     }
     private void updateLibraryApp(LibraryApp app) {
         int reason = app.installed ? statusReason(app.pkg) : 0;

@@ -197,7 +197,20 @@ public final class Guard {
             Log.w(TAG, "quota kick failed: " + error.getClass().getSimpleName());
         }
     }
-    private static Map<String,Rule> enforcedRules(Context c){Map<String,Rule> rules=RuleStore.all(c);for(String pkg:DailyQuotaStore.packages(c))if(!rules.containsKey(pkg))rules.put(pkg,FreezeSlotStore.withoutSchedule());return rules;}
+    static Map<String,Rule> enforcedRules(Context c){Map<String,Rule> rules=RuleStore.all(c);for(String pkg:DailyQuotaStore.packages(c))if(!rules.containsKey(pkg))rules.put(pkg,FreezeSlotStore.withoutSchedule());return rules;}
+
+    /**
+     * 带预计算全局状态的判定：一屏几十个应用只算一次学习闸门/禁忌，
+     * 别每个应用都重跑一遍 {@link StudyGate#holding}（那里要读联动配置和罚时）。
+     *
+     * 冻结页每秒刷新全部瓦片，旧的逐应用重算实测一次 tick 470ms。
+     */
+    public static int blockReasonNow(Context ctx, String pkg, Calendar now, Map<String, Rule> enforced,
+                                     java.util.Set<String> keys, boolean holding, boolean taboo, boolean reward) {
+        Rule r = enforced.get(pkg);
+        if (r == null) return 0;
+        return effectiveReason(ctx, pkg, r, keys.contains(pkg), holding, taboo, now, reward);
+    }
 
     /** 这个应用现在是否在自己的放行窗口里（不看学习闸门）。 */
     public static boolean inWindowNow(Context ctx, String pkg) {
@@ -289,6 +302,44 @@ public final class Guard {
     }
 
     /* ==================== 落地 ==================== */
+
+    /**
+     * 后台执行 {@link #apply}：默认给「守护节拍、闹钟、开机」这些系统回调用的。
+     *
+     * 为什么要异步：apply 里要查使用记录（`UsageStatsManager.queryEvents`），实测单次
+     * 186ms～538ms，全在主线程上就是每 30 秒卡一下 —— 用户在任何页面滑动都可能撞上。
+     * 这里用单线程串行 + 合并请求：正在跑时再来请求只记一个 pending，跑完补一次。
+     */
+    private static final java.util.concurrent.ExecutorService POLICY =
+            java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "afs-guard-policy"));
+    private static volatile boolean applying;
+    private static volatile boolean pending;
+
+    public static void applyAsync(final Context context) {
+        final Context app;
+        try {
+            app = context.getApplicationContext() == null ? context : context.getApplicationContext();
+        } catch (RuntimeException error) {
+            return;
+        }
+        if (applying) {
+            pending = true;
+            return;
+        }
+        applying = true;
+        POLICY.execute(() -> {
+            try {
+                do {
+                    pending = false;
+                    apply(app);
+                } while (pending);
+            } catch (Throwable error) {
+                Log.e(TAG, "async apply failed", error);
+            } finally {
+                applying = false;
+            }
+        });
+    }
 
     /**
      * 按当前时间把每个目标 App 单独冻结/解冻，并补齐各项限制。

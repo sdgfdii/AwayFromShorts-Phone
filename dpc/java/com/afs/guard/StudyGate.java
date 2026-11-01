@@ -532,8 +532,21 @@ public final class StudyGate {
 
     /** 判定入口：Guard.apply / blockedNow 调这个。拉取节流也挂在这（纯读路径顺带触发）。 */
     public static boolean holding(Context c, Calendar now) {
-        boolean pending=learningPending(c,now);if(pending)for(Rule rule:RuleStore.all(c).values())if(rule.gate&&learningFor(c,rule,now))return true;return PenaltyStore.any(c,now.getTimeInMillis());
+        // 冻结页整屏刷状态时这个判定要反复读联动配置和罚时（实测 4–12ms 一次）。
+        // 缓存 3 秒：闸门状态变化的粒度是分钟级，3 秒的滞后看不出来。
+        long millis = now.getTimeInMillis();
+        if (holdingAt != 0 && millis >= holdingAt && millis - holdingAt < HOLDING_TTL_MS) {
+            return holdingValue;
+        }
+        boolean pending=learningPending(c,now);boolean result;
+        if(pending){result=false;for(Rule rule:RuleStore.all(c).values())if(rule.gate&&learningFor(c,rule,now)){result=true;break;}if(!result)result=PenaltyStore.any(c,now.getTimeInMillis());}
+        else result=PenaltyStore.any(c,now.getTimeInMillis());
+        holdingAt=millis;holdingValue=result;
+        return result;
     }
+    private static final long HOLDING_TTL_MS=3000L;
+    private static long holdingAt;
+    private static boolean holdingValue;
     static boolean learningPending(Context c,Calendar now){
         init(c);
         refreshIfNeeded(c);

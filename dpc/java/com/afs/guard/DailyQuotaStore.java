@@ -13,7 +13,26 @@ final class DailyQuotaStore {
     private static volatile boolean writeFailed;
     private static SharedPreferences prefs(Context c){return c.getSharedPreferences(SP,0);}
     private static DailyQuotaData load(Context c,long now){SharedPreferences p=prefs(c);return new DailyQuotaData(p.getString("config","{}"),p.getString("usage",p.contains("config")?"{missing":"{}"),now,DayBoundary.hour(c));}
-    static synchronized DailyQuotaData snapshot(Context c){return load(c,GuardClock.now(c).getTimeInMillis());}
+    /** 只读快照的记忆：见 {@link #snapshot(Context)}。 */
+    private static String cachedConfigRaw,cachedUsageRaw;
+    private static DailyQuotaData cachedSnapshot;
+    /**
+     * 只读快照（返回的对象禁止修改；写路径走 {@link #load}）。
+     *
+     * 构造要校验整份配置（含分组正则），冻结页每秒给几十个应用各取一次快照，
+     * 不记忆就是每秒几十次整份校验 —— 实测是 tick 里仅次于规则解析的开销。
+     * 原始串没变就直接复用，变了自然重建。
+     */
+    static synchronized DailyQuotaData snapshot(Context c){
+        SharedPreferences p=prefs(c);
+        String config=p.getString("config","{}");
+        String usage=p.getString("usage",p.contains("config")?"{missing":"{}");
+        if(cachedSnapshot==null||!config.equals(cachedConfigRaw)||!usage.equals(cachedUsageRaw)){
+            cachedSnapshot=load(c,GuardClock.now(c).getTimeInMillis());
+            cachedConfigRaw=config;cachedUsageRaw=usage;
+        }
+        return cachedSnapshot;
+    }
     static synchronized void refresh(Context c){refresh(c,false);}
     private static synchronized void refresh(Context c,boolean force){long now=GuardClock.now(c).getTimeInMillis();if(!force&&now>=refreshed&&now-refreshed<4500)return;DailyQuotaData d=load(c,now);if(d.groups().length()==0||!d.enabled()&&!force)return;
         boolean reliable=AppUsageQuota.permission(c);List<AppUsageQuota.Span> spans=Collections.emptyList();if(d.enabled()&&reliable)try{spans=AppUsageQuota.spans(c,now,true);}catch(RuntimeException error){reliable=false;}

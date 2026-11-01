@@ -50,6 +50,13 @@ final class Startup {
                     StudyStore.recs(app);
                 } catch (RuntimeException ignored) {
                 }
+                // 应用图标：冻结页每次重建都要取，先在后台把规则里涉及的包名预热进缓存
+                try {
+                    java.util.Set<String> packages = new java.util.LinkedHashSet<>(RuleStore.all(app).keySet());
+                    packages.addAll(DailyQuotaStore.packages(app));
+                    AppIcons.prewarm(app, packages);
+                } catch (RuntimeException ignored) {
+                }
                 android.util.Log.i(Guard.TAG, "prewarm done in "
                         + (System.currentTimeMillis() - started) + "ms");
             }

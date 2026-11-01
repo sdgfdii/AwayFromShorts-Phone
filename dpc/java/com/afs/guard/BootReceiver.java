@@ -19,7 +19,7 @@ public class BootReceiver extends BroadcastReceiver {
         GuardClock.pin(ctx);
         String action = intent == null ? "null" : intent.getAction();
         Log.i(Guard.TAG, "BootReceiver: " + action);
-        Guard.apply(ctx);
+        Guard.applyAsync(ctx);
         Guard.schedule(ctx);
         Guard.ensureService(ctx);
     }

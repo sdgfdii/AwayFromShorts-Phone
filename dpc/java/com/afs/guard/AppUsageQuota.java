@@ -13,9 +13,31 @@ public final class AppUsageQuota {
     static final class Span {String pkg;long start,end;Span(String p,long s,long e){pkg=p;start=s;end=e;}}
     private AppUsageQuota(){}
     static JSONObject config(Context c){try{return new JSONObject(c.getSharedPreferences(SP,0).getString("limits","{}"));}catch(Exception e){throw new IllegalStateException(T.s("使用额度数据无法读取"),e);}}
-    public static int minutes(Context c,String pkg){return config(c).optInt(pkg,0);}
+    /** 只读额度表：原始串没变就不重解析（冻结页每秒几十次 minutes()）。 */
+    private static String cachedLimitsRaw;
+    private static Map<String,Integer> cachedLimits;
+    static Map<String,Integer> limits(Context c){
+        String raw=c.getSharedPreferences(SP,0).getString("limits","{}");
+        synchronized(AppUsageQuota.class){
+            if(cachedLimits==null||!raw.equals(cachedLimitsRaw)){
+                Map<String,Integer> parsed=new HashMap<>();
+                try{JSONObject o=new JSONObject(raw);for(Iterator<String> keys=o.keys();keys.hasNext();){String pkg=keys.next();parsed.put(pkg,o.optInt(pkg,0));}}catch(Exception ignored){}
+                cachedLimits=parsed;cachedLimitsRaw=raw;
+            }
+            return cachedLimits;
+        }
+    }
+    public static int minutes(Context c,String pkg){Integer minutes=limits(c).get(pkg);return minutes==null?0:minutes;}
     public static void save(Context c,String pkg,int minutes){if(minutes<0||minutes>1440)throw new IllegalArgumentException(T.s("使用额度须为1–1440分钟，0为取消"));JSONObject data=config(c);try{if(minutes==0)data.remove(pkg);else data.put(pkg,minutes);}catch(Exception e){throw new IllegalArgumentException(e);}if(!c.getSharedPreferences(SP,0).edit().putString("limits",data.toString()).commit())throw new IllegalStateException(T.s("额度未能保存"));}
-    public static boolean permission(Context c){AppOpsManager manager=(AppOpsManager)c.getSystemService(Context.APP_OPS_SERVICE);return manager!=null&&manager.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,android.os.Process.myUid(),c.getPackageName())==AppOpsManager.MODE_ALLOWED;}
+    /** 授权状态一秒内复用：同一屏几十个应用各查一次 AppOps 是纯耗时。 */
+    private static long permissionAt;private static boolean permissionValue;
+    public static boolean permission(Context c){
+        long now=System.currentTimeMillis();
+        if(permissionAt!=0&&now>=permissionAt&&now-permissionAt<1000)return permissionValue;
+        AppOpsManager manager=(AppOpsManager)c.getSystemService(Context.APP_OPS_SERVICE);
+        boolean allowed=manager!=null&&manager.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,android.os.Process.myUid(),c.getPackageName())==AppOpsManager.MODE_ALLOWED;
+        permissionAt=now;permissionValue=allowed;return allowed;
+    }
     static synchronized List<Span> spans(Context c,long now){return spans(c,now,false);}
     static synchronized List<Span> spans(Context c,long now,boolean fresh){if(!fresh&&now>=cachedAt&&now-cachedAt<5000&&DayBoundary.key(c,now).equals(DayBoundary.key(c,cachedAt)))return cached;
         long begin=DayBoundary.startMs(c,now);long queryFrom=begin-7L*86400000L;

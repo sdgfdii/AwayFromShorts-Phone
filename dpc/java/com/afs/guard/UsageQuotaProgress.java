@@ -23,7 +23,8 @@ final class UsageQuotaProgress extends ProgressBar {
         boolean known=limit>0&&(readable||!enabled);
         setIndeterminate(!known&&enabled);
         int progress=known?(int)Math.min(1000,Math.max(0,used)*1000.0/limit):0;
-        if(!isIndeterminate())setProgress(progress);
+        // 值没变就别碰：ProgressBar 每次 setProgress 都会让这一行重新绘制，整屏一起改就是一次卡顿。
+        if(!isIndeterminate()&&getProgress()!=progress)setProgress(progress);
         // 暂不计时的条目用中性灰，别让"还没开始算"看起来像"已经用爆"。
         int color=!enabled||!known?ui.text3():used>=limit?ui.red():ui.accent();
         fill.setColor(color);setProgressTintList(android.content.res.ColorStateList.valueOf(color));

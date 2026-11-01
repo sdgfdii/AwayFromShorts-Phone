@@ -174,6 +174,17 @@ public class FreezeBoardActivity extends ThemedActivity {
         TextView t = text(s, 13, look.accent()); t.setGravity(Gravity.CENTER);
         t.setPadding(dp(12), dp(10), dp(12), dp(10)); t.setOnClickListener(click); return t;
     }
+    /** 复制到剪贴板：给「代理常开」的人一段 Clash 规则，粘到代理里即可。 */
+    private void copyText(String value) {
+        try {
+            android.content.ClipboardManager manager =
+                    (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (manager != null) {
+                manager.setPrimaryClip(android.content.ClipData.newPlainText("AFS proxy rules", value));
+            }
+        } catch (RuntimeException ignored) {
+        }
+    }
     private void rebuild() {
         finishLibraryMotion();
         if (libraryAnimator != null) libraryAnimator.cancel();
@@ -1465,6 +1476,13 @@ public class FreezeBoardActivity extends ThemedActivity {
             });
             box.addView(proxyRow);
         }
+        LinearLayout rulesRow = dialogRow(T.s("复制代理拦截规则"), text("›", 15, look.text3()));
+        rulesRow.setOnClickListener(v -> {
+            String snippet = ProxyRules.snippet(NetBlockStore.packages(this));
+            copyText(snippet);
+            toast(T.s("已复制。粘到代理 App 的覆写/配置 rules: 里（放在 MATCH 之前），断网就由代理完成；本 App 仍显示「被占用」是正常的。"));
+        });
+        box.addView(rulesRow);
 
         box.addView(dialogRow(T.s("状态"), statusValue));
 
@@ -1482,7 +1500,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         TextView fourth = text(T.s("系统同一时间只允许一个 VPN：代理（FlClash 等）占着时隧道建不起来。选「改用冻结这些应用」后，时段外名单里的应用会被直接冻结（打不开，也就等于没网），时段内自动解冻；名单里别放必须用的应用。"), 12, look.text2());
         fourth.setPadding(0, dp(6), 0, 0);
         notes.addView(fourth);
-        TextView fifth = text(T.s("默认「只提示」不会动你的应用。要让断网在代理常开时也生效，得在代理 App 里加拒绝规则（Clash 覆写示例：DOMAIN-SUFFIX,bilibili.com,REJECT 与 DOMAIN-SUFFIX,bilivideo.com,REJECT）—— 代理是那台「唯一 VPN」，拦网只能它去做。"), 12, look.text2());
+        TextView fifth = text(T.s("两种用法：不开代理的人什么都不用做 —— 本 App 用系统 VPN 断网；常开代理的人，断网交给代理做 —— 点上面「复制代理拦截规则」，把内容放进代理 App 的覆写/配置 rules:（MATCH 之前），代理照常用、这些应用没网。"), 12, look.text2());
         fifth.setPadding(0, dp(6), 0, 0);
         notes.addView(fifth);
         box.addView(notes);

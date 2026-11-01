@@ -69,6 +69,7 @@
  · 点此选择或导入	 · tap to pick or import
  · 点这一行切换	 · tap this row to switch
  · 热爱奖励减免中	 · passion reward applying
+ · 现在：	 · Now: 
  · 目标 	 · goal 
  · 第 	 · #
  · 认领再加 	 · claiming adds 
@@ -200,6 +201,8 @@
 %d 个应用待断网（没连上隧道）	%d apps waiting (tunnel not up)
 %d 个应用断网中	%d apps cut off
 %d 个应用断网中 · %s	%d apps cut off · %s
+%d 个应用要等收束时段 %s 才能移出	%d apps can leave only inside the focus window %s
+%d 个新应用要等收束时段 %s 才能加入	%d new apps can join only inside the focus window %s
 %d 个词 · %d 个应用 · 已拦 %d 次	%d words · %d apps · %d blocked
 %d 分钟	%d min
 %d 条	%d rules
@@ -352,6 +355,7 @@ yyyy年M月d日	MMM d, yyyy
 」认领一次？\n\n冻结程序将延长 	” claim once?\n\nFrozen apps extend by 
 」？	”?
 一个格子放一个应用，就是它单独的一份额度；放多个应用，就是它们共用同一份额度。应用放进冻结时段后，只累计所绑时段内的用量，额度用完才冻结；未绑定时段则全天累计。	One app in a quota means its own allowance; several apps share it. Apps inside a freeze window only count usage within their bound hours and freeze when the quota runs out; unbound quotas count all day.
+一个格子放一个应用，就是它单独的一份额度；放多个应用，就是它们共用同一份额度。应用放进冻结时段后，只累计所绑时段内的用量，额度用完才冻结；未绑定时段则全天累计。%s重置，改格子不清空已用时间。加到格子里的操作随时都能做（加应用、加分钟数）；移出应用、调小分钟数、删格子只在收束时段 %s 内开放。学习联动与禁忌惩罚继续生效。	One app in a cell gets its own allowance; several apps share one. Once tied to a freeze window, only in-window usage counts; untied cells count all day. Resets at %s; edits never reset used time. Adding (apps or minutes) works any time; removing apps, lowering minutes and deleting cells open only inside the focus window %s. Study links and taboo penalties keep working.
 一周不断	A full week
 一天都没选	No days selected
 一次最多选择 20 个文件	At most 20 files at a time
@@ -590,11 +594,13 @@ yyyy年M月d日	MMM d, yyyy
 关键应用　	Key apps    
 关键应用不受学习闸门延长；自身冻结时段和每日额度仍然生效。	Key apps skip the study-gate extension, but their own windows and daily quotas still apply.
 关键应用名单	Key apps
+关键应用名单要等收束时段 %s 才能改	The key-app list can be changed only inside the focus window %s
 关键应用白名单	Always allowed
 关键词	Keywords
 关键词与视频号拦截要用，本版本还没内置	Needed for keyword blocking; not built in yet
 关闭	Close
 关闭选色器	Close the colour picker
+关闭限额要等收束时段 %s	Turning quotas off waits for the focus window %s
 关闭限额要等每天 22:00–23:00	Turning the quota off waits for 22:00–23:00
 其他云端目标（占位）：WebDAV / GitHub 私有仓库 / Git 仓库 只保存配置，尚未实现传输，不影响上面的个人同步。	Other cloud targets (placeholder): WebDAV / private GitHub repo / Git repo. Config is saved only; transfer is not implemented and does not affect personal sync above.
 内容包含控制字符	Content contains control characters
@@ -716,6 +722,7 @@ yyyy年M月d日	MMM d, yyyy
 单次最多处理 30000 张卡片	At most 30000 cards per run
 单次最多导入 10000 张	At most 10000 cards per import
 单独	Single
+单独额度只有一只应用，换应用要等收束时段 %s	A solo allowance holds one app; swapping waits for the focus window %s
 单独额度只有一只应用，换应用要等每天 22:00–23:00	A single allowance holds one app; swapping waits for 22:00–23:00
 单独额度只能放一只应用	A single quota holds only one app
 单独额度：只锁一只应用，额度用完就冻结。	Single quota: one app only, frozen when the allowance runs out.
@@ -1326,6 +1333,7 @@ yyyy年M月d日	MMM d, yyyy
 操作未完成	Action not completed
 支持格式与模板	Formats and templates
 收下	Take it
+收束时段 · %s	Focus window · %s
 收束时段未能保存	Could not save the focus window
 收藏夹	Starred
 收藏夹 · 	Saved · 
@@ -1717,8 +1725,11 @@ yyyy年M月d日	MMM d, yyyy
 现在 	now 
 现在只有「	Right now you only have 
 现在只能加 · 移除或减少要等 	Adding only · removing or lowering waits for 
+现在只能加分钟数，调小要等收束时段 %s	Minutes can only go up right now; lowering waits for the focus window %s
 现在只能加分钟数，调小要等每天 22:00–23:00	You can only add minutes now; lowering waits for 22:00–23:00
+现在只能加：勾上就进这个格子。想把应用拿出去，等收束时段 %s。	Add-only right now: tick apps to bring them in. Taking apps out waits for the focus window %s.
 现在只能加：勾上就进这个格子。想把应用拿出去，等每天 22:00–23:00。	Adding only: tick an app to put it in. To take one out, come back at 22:00–23:00.
+现在只能加：把成员减到一只要等收束时段 %s	Add-only right now: shrinking to a single app waits for the focus window %s
 现在只能加：把成员减到一只要等每天 22:00–23:00	Adding only: trimming members down to one waits for 22:00–23:00
 现在每天 	Daily reset at 
 现在用的不是自定义图片	No custom image is in use right now
@@ -1798,10 +1809,14 @@ yyyy年M月d日	MMM d, yyyy
 移入回收站	Move to trash
 移入回收站？	Move to trash?
 移出冻结列表	Remove from the freeze list
+移出冻结列表要等收束时段 %s	Leaving the freeze list waits for the focus window %s
 移出冻结应用	Remove from frozen apps
+移出冻结时段要等收束时段 %s	Leaving the freeze window waits for the focus window %s
+移出冻结要等收束时段 %s	Unfreezing waits for the focus window %s
 移动到笔记本	Move to notebook
 移除	Remove
 移除勾选框	Remove checkbox
+移除或减少要等收束时段 %s	Removals or reductions wait for the focus window %s
 移除或减少要等每天 22:00–23:00	Removing or lowering waits for 22:00–23:00
 移除格子	Remove quota
 移除这个限额格子？	Remove this quota?
@@ -2111,6 +2126,7 @@ yyyy年M月d日	MMM d, yyyy
 还没配规则	No rules yet
 还要去系统设置里打开无障碍服务	Also turn on the accessibility service in system settings
 这一屏被拦下了	This screen was blocked
+这一步会减少额度，只在收束时段 %s 内开放	This lowers an allowance and opens only inside the focus window %s
 这一步会减少额度，只在每天 22:00–23:00 开放	This step lowers an allowance; it opens only at 22:00–23:00
 这一轮	This round
 这一轮专注完成，休息一下	Round done. Take a break.
@@ -2119,6 +2135,8 @@ yyyy年M月d日	MMM d, yyyy
 这个 Gist 不属于所填写的账号	This Gist does not belong to the account entered
 这个应用	this app
 这个应用用得有点久	You have been here a while
+这个改动要减少额度，只在收束时段 %s 内开放	This change lowers an allowance and opens only inside the focus window %s
+这个改动要减少额度，只在收束时段内开放	This change lowers an allowance and opens only inside the focus window
 这个改动要减少额度，只在每天 22:00–23:00 开放	This change lowers an allowance; it opens only at 22:00–23:00
 这个方向没有可换的卡了	No more cards that way
 这个日子已经过去了	This date has passed

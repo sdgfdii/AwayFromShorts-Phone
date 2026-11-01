@@ -26,17 +26,17 @@ final class DailyQuotaData {
         if(config.optBoolean("enabled")&&groups.length()==0)throw new IllegalArgumentException(T.s("请至少添加一个应用限额格子"));
     }
     /**
-     * 额度的「收紧」权限每天只开一档：22:00–23:00。
+     * 额度的「收紧」权限只在全局收束时段内开放（{@link TimeWindow}）。
      *
      * 其余时间走 {@link #additive} 那条路 —— 能加（新格子、加应用、加分钟数、把总开关打开），
      * 不能减（移出应用、调小分钟数、删格子、关总开关）。理由很直白：
-     * 白天额度不够就该补得上，但想把自己放出来这件事，只能等到固定窗口。
+     * 白天额度不够就该补得上，但想把自己放出来这件事，只能等到收束时段。
      * 想彻底放开，把 EDIT_WINDOW 设成 false 即可。
      */
     static final boolean EDIT_WINDOW = true;
-    static int WINDOW_HOUR = 22;
-    static boolean editable(Calendar now){return !EDIT_WINDOW||now.get(Calendar.HOUR_OF_DAY)==WINDOW_HOUR;}
-    static void requireEdit(Calendar now){if(!editable(now))throw new IllegalStateException(T.s("这个改动要减少额度，只在每天 22:00–23:00 开放"));}
+    static boolean editable(Calendar now){return editable(now,TimeWindow.DEFAULT_START,TimeWindow.DEFAULT_END);}
+    static boolean editable(Calendar now,int winStart,int winEnd){return !EDIT_WINDOW||TimeWindow.contains(now.getTimeInMillis(),winStart,winEnd);}
+    static void requireEdit(Calendar now){if(!editable(now))throw new IllegalStateException(T.s("这个改动要减少额度，只在收束时段内开放"));}
     /**
      * 候选配置相对当前是不是「只加不减」：新开格子、给格子加成员、加分钟数、把总开关打开。
      * 只要出现移除成员、调小分钟数、删格子、关总开关，就不算 —— 那些得等编辑窗口。
@@ -64,7 +64,17 @@ final class DailyQuotaData {
         }
         return true;
     }
-    static long nextEdit(Calendar now){Calendar c=(Calendar)now.clone();c.set(Calendar.HOUR_OF_DAY,WINDOW_HOUR);c.set(Calendar.MINUTE,0);c.set(Calendar.SECOND,0);c.set(Calendar.MILLISECOND,0);if(now.get(Calendar.HOUR_OF_DAY)>=WINDOW_HOUR+1)c.add(Calendar.DAY_OF_MONTH,1);return c.getTimeInMillis();}
+    /** 下一次收束时段开门的时间；时段为全天（start==end）时随时可改，返回当前时刻。 */
+    static long nextEdit(Calendar now){return nextEdit(now,TimeWindow.DEFAULT_START,TimeWindow.DEFAULT_END);}
+    static long nextEdit(Calendar now,int winStart,int winEnd){
+        if(winStart==winEnd)return now.getTimeInMillis();
+        if(TimeWindow.contains(now.getTimeInMillis(),winStart,winEnd))return now.getTimeInMillis();   // 已在窗口内（含跨午夜的后半夜）
+        Calendar c=(Calendar)now.clone();
+        c.set(Calendar.HOUR_OF_DAY,winStart/60);c.set(Calendar.MINUTE,winStart%60);
+        c.set(Calendar.SECOND,0);c.set(Calendar.MILLISECOND,0);
+        if(!c.after(now))c.add(Calendar.DAY_OF_MONTH,1);                                              // 今天的开点已过 → 明天
+        return c.getTimeInMillis();
+    }
     boolean enabled(){return config.optBoolean("enabled");}
     JSONArray groups(){return config.optJSONArray("groups");}
     Set<String> packages(){Set<String> out=new LinkedHashSet<>();for(int i=0;i<groups().length();i++){JSONArray apps=groups().optJSONObject(i).optJSONArray("apps");for(int j=0;j<apps.length();j++)out.add(apps.optString(j));}return out;}

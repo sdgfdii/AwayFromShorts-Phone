@@ -58,9 +58,13 @@ public final class DailyQuotaTest {
         DailyQuotaData overnight=new DailyQuotaData(config(true,ga),"{}",at(29,23,59,59));overnight.advance(at(30,0,0,1),spans(span(a,at(29,23,59,59),at(30,0,0,1))),true,scopes);
         check(overnight.used(ga)==1000,"overnight assigned scope counts only new-day part at midnight");
         check(DailyQuotaData.inScope(night,at(30,0,59,59))&&!DailyQuotaData.inScope(night,at(30,1,0,0)),"overnight allowance ends at its exact release boundary");
-        for(long stamp:new long[]{at(29,12,0,0),at(29,21,59,59),at(29,23,0,0),at(29,3,0,0)})check(!DailyQuotaData.editable(calendar(stamp)),"quota config locked outside 22-23 "+stamp);
-        for(long stamp:new long[]{at(29,22,0,0),at(29,22,59,59)})check(DailyQuotaData.editable(calendar(stamp)),"quota config editable inside 22-23 "+stamp);
-        // 「只进不出」闸门：窗口外随时能加，减要等 22:00–23:00
+        for(long stamp:new long[]{at(29,12,0,0),at(29,22,0,0),at(29,23,0,0),at(29,3,0,0)})check(!DailyQuotaData.editable(calendar(stamp)),"quota config locked outside 21-22 "+stamp);
+        for(long stamp:new long[]{at(29,21,0,0),at(29,21,59,59)})check(DailyQuotaData.editable(calendar(stamp)),"quota config editable inside 21-22 "+stamp);
+        // 自定义窗口走同一判断；start==end = 全天 = 随时可改
+        check(!DailyQuotaData.editable(calendar(at(29,12,0,0)),1320,60),"custom overnight window locked at noon");
+        check(DailyQuotaData.editable(calendar(at(29,23,0,0)),1320,60),"custom overnight window open at 23:00");
+        check(DailyQuotaData.editable(calendar(at(29,12,0,0)),600,600),"all-day window always editable");
+        // 「只进不出」闸门：窗口外随时能加，减要等收束时段
         JSONObject base=new JSONObject(config(true,group("a",30,a),group("b",20,b)));
         check(DailyQuotaData.additive(base,new JSONObject(config(true,group("a",30,a),group("b",20,b),group("c",15,"com.example.c")))),"a brand new group counts as additive");
         check(DailyQuotaData.additive(base,new JSONObject(config(true,group("a",45,a),group("b",20,b)))),"raising minutes counts as additive");
@@ -74,7 +78,11 @@ public final class DailyQuotaTest {
         check(DailyQuotaData.additive(new JSONObject(config(false,group("a",30,a))),new JSONObject(config(true,group("a",30,a)))),"switching the quota on is additive");
         check(!DailyQuotaData.additive(null,base),"no current config means nothing is additive");
         reject(()->DailyQuotaData.requireEdit(calendar(at(29,12,0,0))),"writes rejected outside the nightly window");
-        check(DailyQuotaData.nextEdit(calendar(at(29,23,0,0)))==at(30,22,0,0),"next edit window is tomorrow 22:00");
+        check(DailyQuotaData.nextEdit(calendar(at(29,23,0,0)))==at(30,21,0,0),"next edit window is tomorrow 21:00");
+        check(DailyQuotaData.nextEdit(calendar(at(29,15,0,0)))==at(29,21,0,0),"next edit window is tonight 21:00");
+        check(DailyQuotaData.nextEdit(calendar(at(29,21,30,0)))==at(29,21,30,0),"inside window edits now");
+        check(DailyQuotaData.nextEdit(calendar(at(29,2,0,0)),1320,60)==at(29,22,0,0),"overnight next open tonight 22:00");
+        check(DailyQuotaData.nextEdit(calendar(at(29,0,30,0)),1320,60)==at(29,0,30,0),"overnight inside edits now");
         final String duplicate=config(true,ga,group("other",2,a));reject(()->new DailyQuotaData(duplicate,"{}",noon),"same app cannot be in two groups");
         final String empty=config(true);reject(()->new DailyQuotaData(empty,"{}",noon),"enabled empty selection rejected");
         final String invalid=config(true,group("invalid",0,a));reject(()->new DailyQuotaData(invalid,"{}",noon),"zero allowance rejected");

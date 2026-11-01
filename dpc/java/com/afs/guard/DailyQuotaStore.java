@@ -21,8 +21,8 @@ final class DailyQuotaStore {
     }
     static synchronized void save(Context c,JSONObject candidate){Calendar now=GuardClock.now(c);DailyQuotaData.validate(candidate);if(new DailyQuotaData(candidate.toString(),"{}",now.getTimeInMillis()).packages().contains(c.getPackageName()))throw new IllegalArgumentException(T.s("不能限制守卫自身"));
         refresh(c,true);DailyQuotaData current=load(c,now.getTimeInMillis());
-        // 编辑窗口外只放「只加不减」的改动：补额度随时可以，把自己放出来得等窗口
-        if(!DailyQuotaData.editable(now)&&!DailyQuotaData.additive(current.config,candidate))throw new IllegalStateException(T.s("这个改动要减少额度，只在每天 22:00–23:00 开放"));
+        // 收束时段外只放「只加不减」的改动：补额度随时可以，把自己放出来得等时段
+        if(!DailyQuotaData.editable(now,TimeWindow.start(c),TimeWindow.end(c))&&!DailyQuotaData.additive(current.config,candidate))throw new IllegalStateException(T.f("这个改动要减少额度，只在收束时段 %s 内开放",TimeWindow.label(c)));
         if(!prefs(c).edit().putString("config",candidate.toString()).putString("usage",current.usage.toString()).commit())throw new IllegalStateException(T.s("每日限额未能保存"));refreshed=0;signature="";
     }
     static synchronized void beforeScheduleChange(Context c){if(active(c))refresh(c,true);}
@@ -68,7 +68,7 @@ final class DailyQuotaStore {
         refreshed=0;signature="";
         return moved;
     }
-    static boolean editable(Context c){return DailyQuotaData.editable(GuardClock.now(c));}
+    static boolean editable(Context c){return DailyQuotaData.editable(GuardClock.now(c),TimeWindow.start(c),TimeWindow.end(c));}
     static Set<String> packages(Context c){return snapshot(c).packages();}
     static boolean active(Context c){DailyQuotaData d=snapshot(c);return d.enabled()&&d.groups().length()>0;}
     static boolean hasAllowance(Context c,String pkg){DailyQuotaData d=snapshot(c);return d.enabled()&&d.group(pkg)!=null;}

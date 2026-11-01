@@ -84,6 +84,39 @@ public final class TimeWindowTest {
         // 乱序区间直接返回空
         eq(0, TimeWindow.segments(to, from, 1260, 1320).size(), "reversed range empty");
 
+        // ===== 限额编辑窗口与冻结名单闸（只进不出）=====
+
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.setTimeInMillis(day + 15 * 3600_000L);   // 15:00
+        // 默认窗口 21–22：下午 3 点不能减，晚上 9 点半可以
+        ok(!DailyQuotaData.editable(cal), "quota not editable at 15:00");
+        cal.setTimeInMillis(day + (21 * 60 + 30) * 60_000L);
+        ok(DailyQuotaData.editable(cal), "quota editable in window");
+        // 自定义窗口也走同一判断；start==end = 全天 = 随时可改
+        ok(!DailyQuotaData.editable(cal, 1320, 60), "custom window 15:00 out");
+        cal.setTimeInMillis(day + 23 * 3600_000L);
+        ok(DailyQuotaData.editable(cal, 1320, 60), "custom overnight window 23:00 in");
+        ok(DailyQuotaData.editable(cal, 600, 600), "all-day window always editable");
+
+        // nextEdit：下午 3 点问下一次开门 → 今天 21:00
+        cal.setTimeInMillis(day + 15 * 3600_000L);
+        eq(day + 21 * 3600_000L, DailyQuotaData.nextEdit(cal), "next edit tonight 21:00");
+        // 已过 22 点（在窗口外）→ 明天 21:00
+        cal.setTimeInMillis(day + 23 * 3600_000L);
+        eq(day + DAY + 21 * 3600_000L, DailyQuotaData.nextEdit(cal), "next edit tomorrow 21:00");
+        // 窗口内 → 现在就能改
+        cal.setTimeInMillis(day + (21 * 60 + 15) * 60_000L);
+        eq(day + (21 * 60 + 15) * 60_000L, DailyQuotaData.nextEdit(cal), "inside window edit now");
+        // 跨午夜 22–01：凌晨 2 点问 → 今天 22:00（今晚还没到）
+        cal.setTimeInMillis(day + 2 * 3600_000L);
+        eq(day + 22 * 3600_000L, DailyQuotaData.nextEdit(cal, 1320, 60), "overnight next open tonight 22:00");
+        // 凌晨 0:30 正在跨午夜窗口里 → 现在就能改
+        cal.setTimeInMillis(day + 30 * 60_000L);
+        eq(day + 30 * 60_000L, DailyQuotaData.nextEdit(cal, 1320, 60), "overnight inside edit now");
+        // 全天窗口 → 随时可改
+        cal.setTimeInMillis(day + 15 * 3600_000L);
+        eq(day + 15 * 3600_000L, DailyQuotaData.nextEdit(cal, 600, 600), "all-day edit now");
+
         System.out.println("TimeWindow: " + checks + " checks");
     }
 }

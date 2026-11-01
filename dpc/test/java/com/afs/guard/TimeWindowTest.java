@@ -5,7 +5,8 @@ import java.util.List;
 /**
  * 全局收束时段：左闭右开、跨午夜、全天、切段账本四件事都要钉死。
  *
- * 限额的计时和断网的翻转都读这一个判断，这里错一分钟，两边一起错。
+ * 限额的计时和冻结名单的编辑闸都读这一个判断，这里错一分钟，两边一起错。
+ * 断网不读它了 —— 断网有自己的调整时段，见 {@link NetWindowTest}。
  */
 public final class TimeWindowTest {
     private static int checks;

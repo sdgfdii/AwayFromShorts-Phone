@@ -1130,3 +1130,30 @@ manifest 没 `notes` 所以弹窗只报版本号）正好一起清掉。
 - 回归 207 PASS / 0 FAIL；TimeWindowTest 39 checks（新增 editable/nextEdit 11 条，含跨午夜「正在窗口内」）；DailyQuotaTest 断言迁到新语义并补自定义窗口/全天窗口。
 - i18n batch33 补 18 条（含上轮 Capability 修复遗留的「 · 现在：」），覆盖率 2355/2355 = 100%。
 - 真机：2239/1.72.0 装机成功；规则表复核 35 条、bilibili 仍不在冻结列表。**界面交互验证没做完**——验证途中用户在刷 B 站，不能抢手机；等设备空闲补验（限额页新行、移出冻结的时段提示 toast）。
+
+## 32 · 1.73.0 断网改为常开 + 独立调整时段（2026-11-01 下午）
+
+### 需求与落点
+
+| 需求 | 落点 |
+|---|---|
+| 断网常开、只在调整时段自动放开 | 新建 `NetWindow`（SP `afs_net_window`，默认 22:00–23:00，半小时一档；两段式选择器与 `TimeWindow` 共用 `pickSlots`）；`NetBlockService.reconcile` 改为 `enabled && !NetWindow.inside()` |
+| 调整时段内不接管隧道 | `NetBlockService.onStartCommand` 在调整时段内拒绝建立隧道，已建的由 reconcile 到点断开 |
+| 时段外锁住断网设置 | 断网开关、应用名单、调整时段本身三处一律用 `NetWindow.canEdit` 加锁；`FreezeBoardActivity` 的 REQ_VPN/REQ_NET 回调也改用它判定 |
+| 状态文案改新语义 | `NetBlockStore.status`：调整时段内放开 / 断网中 / 待断网（没连上隧道） |
+| 收束时段与断网解耦 | `SettingsActivity`「收束时段」说明改为只管限额与冻结，另加「断网调整时段」行；断网不再看 `TimeWindow` |
+
+### 关键取舍
+
+- **调整时段本身也加锁**：否则把时段改成「现在」就等于当场解锁，锁形同虚设；改时段和改开关、改名单一样，只能等下一个时段。
+- **首次安装 10 分钟宽限也放行**：`NetWindow.canEdit` 在 `Config.inGrace` 期间允许改断网设置，否则装完不在调整时段就连名单都选不了；宽限只影响「能不能改」，不影响断网什么时候生效。
+- **断网和收束时段彻底解耦**：断网常开、收束只管限额与冻结名单，两个窗口互不影响；旧语义「断网只在全局收束时段生效」整体废弃。
+- 进入调整时段后隧道主动断开而不是挂着空跑，避免「设置可改」和「网还被拦着」同时出现。
+
+### 验证
+
+- 离线回归：`bash dpc/test/run.sh` → 207 PASS / 0 FAIL，46 个测试类全跑；新增 `NetWindowTest` 22 checks（默认 22:00–23:00、左闭右开、跨午夜、start==end 全天、`shouldCut` 四象限、全天按半小时扫「恰好 2 格放开」、contains 必须走 TimeWindow）。
+- i18n：batch35 补 8 条，`tools/i18n.py check` → msgid 2358 / 已译 2358 / 100%，占位符全部一致；另核对 8 个改动 Java 文件 332 处 `T.s/T.f` 字面量全部有 key。
+- 构建：`bash dpc/build.sh` 7/7 步全过，aapt2 第一行 `versionCode='2240' versionName='1.73.0'`；`apksigner verify` 通过；dexdump 确认包内有 `Lcom/afs/guard/NetWindow;`。产物 `afs-guard.apk` / `afs-guard-1.73.0-netblock-window.apk`（10,624,784 B，SHA-256 `F5B154F49CC48354BEC98355D1C9DD0E4DA51ACE5C495D19938BD1A18A8FD64F`）。
+- 顺手修一个既有构建缺陷：Git Bash 没有 `zip` 时 `build.sh` 的 Python 回退分支用 `command -v python3`，会命中 WindowsApps 的应用商店存根（以 49 退出、classes.dex 没进包、流程止于 [5/7]）。改成复用 2b 步的 `pick_python`，现在裸 `bash build.sh` 也能出包。
+- 真机：PLR110（SDK 36）在线，已装 1.72.0/2239，证书与新包一致、可原地升级。**未装机** —— 等用户确认（安装后时段外会立刻按名单断网）。

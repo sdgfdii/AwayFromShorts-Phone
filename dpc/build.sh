@@ -68,8 +68,8 @@ public final class BuildConfig {
     public static final String PREFILL_TOKEN = "";
 }
 EOF
-VERSION_CODE="${AFS_VERSION_CODE:-2239}"
-VERSION_NAME="${AFS_VERSION_NAME:-1.72.0}"
+VERSION_CODE="${AFS_VERSION_CODE:-2240}"
+VERSION_NAME="${AFS_VERSION_NAME:-1.73.0}"
 if [ "${AFS_RELEASE:-0}" = "1" ]; then
   : "${AFS_KEYSTORE:?Release requires an external signing keystore}"
   : "${AFS_STORE_PASS:?Release requires a private signing password}"
@@ -192,7 +192,9 @@ if command -v zip >/dev/null 2>&1; then
   ( cd "$OUT" && zip -q -j unsigned.apk dex/classes.dex )
 else
   # Git Bash 默认没有 zip，用 Python 以追加模式写入（不动已有条目）
-  PY="${AFS_PYTHON:-$(command -v python3 || command -v python || true)}"
+  # 这里必须复用 2b 的 pick_python：直接 command -v python3 会命中 WindowsApps 的应用商店
+  # 存根，它以 49 退出、classes.dex 根本没进包（2026-11-01 实测）。
+  PY="${AFS_PYTHON:-$(pick_python || true)}"
   if [ -z "$PY" ] || [ ! -x "$PY" ]; then
     echo "没有 zip 也没有 python，无法把 classes.dex 塞进 APK。" >&2
     echo "装 python3 或用 AFS_PYTHON=/path/to/python 指定。" >&2

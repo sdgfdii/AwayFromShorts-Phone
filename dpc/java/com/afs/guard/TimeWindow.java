@@ -10,10 +10,11 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 全局「收束时段」：一天里只有这段时间内，断网和每日限额才真正动手。
+ * 全局「收束时段」：一天里只有这段时间内，每日限额和冻结名单才真正收紧。
  *
- * 以前两件事各管各的 —— 断网是个 24 小时常开开关，限额全天累计 —— 想调「今天几点到几点
- * 要收着点」得改两个地方，还容易只改一半。现在只有这一个时段，谁要按时段生效就来读它。
+ * 断网不在这个时段里：它「默认常开、只在 {@link NetWindow} 的调整时段内放开」，
+ * 方向正好相反，硬绑在一个时段上必然一边是错的，所以 1.73 起两套时段彻底解耦：
+ * 这一个只管限额和冻结，断网读 {@link NetWindow}。
  *
  * 语义只有三条，所有判断都必须走 {@link #contains(long, int, int)}：
  * 1. 左闭右开：[22:00, 23:00) 表示 22:00:00 生效、22:59:59 还在、23:00:00 已经放开。
@@ -137,32 +138,45 @@ public final class TimeWindow {
 
     /* ==================== 选择时段 ==================== */
 
+    /** 存一对起止分钟。收束时段和断网调整时段共用同一套选择器，各自只管怎么落盘。 */
+    interface Saver {
+        void save(int start, int end) throws RuntimeException;
+    }
+
+    /** 收束时段的选择器：改的是限额/冻结闸，与断网无关，所以不用重翻隧道。 */
+    public static void pick(final Activity host, final Runnable after) {
+        pickSlots(host, start(host), end(host), new Saver() {
+            @Override
+            public void save(int start, int end) {
+                TimeWindow.save(host, start, end);
+            }
+        }, after);
+    }
+
     /**
-     * 两段式选择：先选开始，再选结束。半小时一档 —— 这个功能调的是「危险的一小时」，
+     * 两段式选择：先选开始，再选结束。半小时一档 —— 这个功能调的是「危险的几小时」，
      * 精确到分没有意义，反而让人在 47 个选项里找。
      */
-    public static void pick(final Activity host, final Runnable after) {
+    static void pickSlots(final Activity host, int openAt, int closeAt,
+                          final Saver saver, final Runnable after) {
         if (host == null || host.isFinishing()) return;
         final String[] slots = new String[48];
         for (int i = 0; i < slots.length; i++) slots[i] = clock(i * 30);
-        final int currentStart = start(host) / 30;
         ThemeStore.dialog(host)
                 .setTitle(T.s("从几点开始"))
-                .setSingleChoiceItems(slots, Math.min(currentStart, 47), (dialog, which) -> {
+                .setSingleChoiceItems(slots, Math.min(openAt / 30, 47), (dialog, which) -> {
                     dialog.dismiss();
                     final int chosenStart = which * 30;
                     ThemeStore.dialog(host)
                             .setTitle(T.s("到几点结束"))
-                            .setSingleChoiceItems(slots, Math.min(end(host) / 30, 47), (endDialog, item) -> {
+                            .setSingleChoiceItems(slots, Math.min(closeAt / 30, 47), (endDialog, item) -> {
                                 endDialog.dismiss();
-                                int chosenEnd = item * 30;
                                 try {
-                                    save(host, chosenStart, chosenEnd);
+                                    saver.save(chosenStart, item * 30);
                                 } catch (RuntimeException error) {
                                     toast(host, error.getMessage());
                                     return;
                                 }
-                                NetBlockService.reconcile(host);
                                 if (after != null) after.run();
                             })
                             .setNegativeButton(T.s("取消"), null)
@@ -172,7 +186,7 @@ public final class TimeWindow {
                 .show();
     }
 
-    private static void toast(Activity host, String value) {
+    static void toast(Activity host, String value) {
         try {
             android.widget.Toast.makeText(host, value == null ? T.s("操作未完成") : value,
                     android.widget.Toast.LENGTH_SHORT).show();

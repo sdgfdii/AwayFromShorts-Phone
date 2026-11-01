@@ -16,6 +16,9 @@ import java.util.Set;
  * 路由给 0.0.0.0/0，然后把收到的包直接丢掉、不转发 —— 对这些应用来说就是
  * 连不上任何服务器（表现为转圈、超时），其余应用完全不受影响。
  *
+ * 时段的朝向是「默认常开」：只有 {@link NetWindow} 的断网调整时段内才放开隧道，
+ * 其余时间只要开了断网、选了应用，隧道就该一直挂着。判断只有一行，见 {@link #reconcile}。
+ *
  * 三个必须写明的限制：
  * 1. 系统同一时间只允许一个 VPN。开了它就是「全网唯一 VPN」，代理、公司内网、
  *    其他加速器全部失效 —— 界面里明说，切换前先关代理。
@@ -45,8 +48,8 @@ public class NetBlockService extends VpnService {
             return START_NOT_STICKY;
         }
         if (tunnel != null) return START_STICKY;      // 已经在跑，不重建
-        if (!TimeWindow.on(this)) {                   // 收束时段外不接管：起服务也只起个空壳
-            Log.i(Guard.TAG, "netblock: outside window " + TimeWindow.label(this) + ", refuse");
+        if (NetWindow.inside(this)) {                 // 调整时段内放开：起服务也只起个空壳
+            Log.i(Guard.TAG, "netblock: inside adjust window " + NetWindow.label(this) + ", release");
             NetBlockStore.setRunning(this, false);
             stopSelf();
             return START_NOT_STICKY;
@@ -193,19 +196,29 @@ public class NetBlockService extends VpnService {
     /* ---------- 对外开关 ---------- */
 
     /**
-     * 按全局收束时段把隧道拨到正确状态，反复调用是安全的。
+     * 按断网调整时段把隧道拨到正确状态，反复调用是安全的。
      *
-     * 开关只认「想要」和「正在」的差：想要（开了断网、选了应用、在时段内）而没在跑就拉起，
-     * 反过来就收掉。边界跨越靠守护服务的周期 tick 和闹钟兜着，最晚延迟一个节拍生效。
+     * 方向是「除调整时段外都断」：想要（开了断网、选了应用、不在调整时段）而没在跑就拉起，
+     * 反过来（进了调整时段）就收掉。边界跨越靠守护服务的周期 tick 和闹钟兜着，最晚延迟一个节拍。
+     *
+     * 常开意味着「隧道没了」的每种原因都会走到重连：进程被系统杀过、VPN 授权被撤、
+     * establish 失败。连续重试没有意义，退避 60 秒再试。
      */
     public static void reconcile(Context c) {
-        boolean want = NetBlockStore.enabled(c) && TimeWindow.on(c);
-        if (want && !NetBlockStore.running(c)) start(c);
-        else if (!want && NetBlockStore.running(c)) stop(c);
+        boolean cut = NetWindow.shouldCut(NetBlockStore.enabled(c), NetWindow.inside(c));
+        if (cut && !NetBlockStore.running(c)) {
+            if (System.currentTimeMillis() - NetBlockStore.triedAt(c) > RETRY_GAP_MS) start(c);
+        } else if (!cut && NetBlockStore.running(c)) {
+            stop(c);
+        }
     }
+
+    /** 重连退避：隧道起不来时别每 30 秒刷一次日志、白烧电。 */
+    private static final long RETRY_GAP_MS = 60_000L;
 
     /** 开：需要先在界面里调 VpnService.prepare() 拿到授权。 */
     public static void start(Context c) {
+        NetBlockStore.markTried(c);
         try {
             // 不用 startForegroundService：VpnService 不需要常驻通知，
             // 而前台服务必须 5 秒内 startForeground()，否则直接崩。

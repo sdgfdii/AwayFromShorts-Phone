@@ -14,6 +14,6 @@ public class AlarmReceiver extends BroadcastReceiver {
         Guard.apply(ctx);
         Guard.schedule(ctx);
         Guard.ensureService(ctx);
-        NetBlockService.reconcile(ctx);   // 收束时段边界靠这里翻隧道
+        NetBlockService.reconcile(ctx);   // 断网调整时段边界靠这里翻隧道
     }
 }

@@ -19,6 +19,7 @@ public final class NetBlockStore {
     private static final String K_PKGS = "pkgs";
     private static final String K_RUNNING = "running";
     private static final String K_BEAT = "beat";
+    private static final String K_TRIED = "tried";
 
     /**
      * 隧道心跳的有效期。服务被系统杀掉时 {@code onDestroy} 不一定跑，
@@ -84,12 +85,26 @@ public final class NetBlockStore {
         sp(c).edit().putLong(K_BEAT, System.currentTimeMillis()).apply();
     }
 
+    /** 上一次申请拉起隧道的时间，用来给「连不上就重试」做退避。 */
+    static long triedAt(Context c) {
+        return sp(c).getLong(K_TRIED, 0L);
+    }
+
+    static void markTried(Context c) {
+        sp(c).edit().putLong(K_TRIED, System.currentTimeMillis()).apply();
+    }
+
+    /**
+     * 一句话状态：开没开、选了几个、隧道通没通、是不是正在调整时段里被放开。
+     *
+     * 方向是「默认常开」：调整时段内放开是本该如此，不能说成「没连上隧道」。
+     */
     public static String status(Context c) {
         if (!on(c)) return T.s("未开启");
         int n = packages(c).size();
         if (n == 0) return T.s("还没选应用");
-        if (!TimeWindow.on(c)) return T.f("%d 个应用 · %s 才生效", n, TimeWindow.label(c));
-        if (running(c)) return T.f("%d 个应用断网中 · %s", n, TimeWindow.label(c));
+        if (NetWindow.inside(c)) return T.f("%d 个应用 · 调整时段 %s 内放开", n, NetWindow.label(c));
+        if (running(c)) return T.f("%d 个应用断网中", n);
         return T.f("%d 个应用待断网（没连上隧道）", n);
     }
 }

@@ -93,8 +93,16 @@ public final class SettingsActivity extends ThemedActivity {
         row(control, Lang.t(this, "收束时段", "Focus window"), TimeWindow.label(this),
                 () -> TimeWindow.pick(this, this::render));
         addNote(control, Lang.t(this,
-                "收束时段是全局的：断网和每日限额只在这段时间内真正动手，时段外照常放行。改这一个时间，两件事一起跟着走。",
-                "The focus window is global: network cut and daily quotas only bite inside it. Change this one time and both follow."));
+                "收束时段管「收紧」那一头：每日限额只在时段内计时、冻结名单和移出应用也只在时段内能改，时段外照常放行。断网不归它管。",
+                "The focus window governs tightening: daily quotas tick only inside it, and the freeze list can be changed only inside it. Network blocking is not part of it."));
+        row(control, Lang.t(this, "断网调整时段", "Cut-off adjustment window"), NetWindow.label(this),
+                () -> {
+                    // 时段本身也是设置：能随便改时段就等于绕过了断网的锁。
+                    if (NetWindow.canEdit(this)) NetWindow.pick(this, this::render);
+                });
+        addNote(control, Lang.t(this,
+                "断网名单里的应用默认全天断网，只有这个时段内自动放开；开关、名单和时段本身也只能在此时段内修改。默认每晚 22:00–23:00，和收束时段各自独立。",
+                "Apps in the cut-off list have no network by default and are released only inside this window. The switch, the list and this window itself can be changed only inside it. Default 22:00-23:00 nightly, independent of the focus window."));
 
         /* ---------- 打卡 ---------- */
         body.addView(groupTitle(Lang.t(this, "打卡", "Check-in")));

@@ -223,9 +223,20 @@ public class FreezeBoardActivity extends ThemedActivity {
             empty.setPadding(dp(18), dp(30), dp(18), dp(30)); slotsView.addView(empty);
         }
         for (FreezeSlotStore.Slot slot : slots) slotsView.addView(slotCard(slot), gap(16));
-        usageCell();
-        slotsView.addView(gateNote,gateLp);
-        settingsArea();
+        // 首帧只建首屏：使用限额 / 设置区在首屏以下，以前它们也在同一帧里录绘制指令，
+        // 白白把切页那一帧拉长（整页 drawCmd 实测 55–77ms）。放到首帧之后再建，视觉无差别；
+        // 代次不匹配说明期间又 rebuild 过，这一批旧视图直接丢掉，避免串到新页面上。
+        final int rebuildGeneration = libraryGeneration;
+        final int restoreY = oldY;
+        final LinearLayout.LayoutParams gateParams = gateLp;
+        screen.post(() -> {
+            if (rebuildGeneration != libraryGeneration || isFinishing() || isDestroyed()) return;
+            usageCell();
+            if (gateNote != null && gateNote.getParent() == null) slotsView.addView(gateNote, gateParams);
+            settingsArea();
+            updateNetHint();
+            if (scroll != null) scroll.post(() -> scroll.scrollTo(0, restoreY));
+        });
         buildLibrary(); setContentView(FloatingNav.wrap(this,screen,2)); immersive();
         updateGateNote();
         scroll.setOnDragListener((view, event) -> {
@@ -234,7 +245,6 @@ public class FreezeBoardActivity extends ThemedActivity {
             if (event.getAction() == DragEvent.ACTION_DRAG_ENDED) finishDrag();
             return true;
         });
-        scroll.post(() -> scroll.scrollTo(0, oldY));
     }
     private LinearLayout.LayoutParams gap(int bottom) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2); lp.bottomMargin = dp(bottom); return lp;

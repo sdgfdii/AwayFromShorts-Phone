@@ -197,6 +197,7 @@
 %d 个	%d
 %d 个应用 · %d 个时段	%d apps · %d time slots
 %d 个应用 · %s 才生效	%d apps · active %s
+%d 个应用 · 已改用冻结（VPN 被占用）	%d apps · frozen instead (VPN slot taken)
 %d 个应用 · 断网没生效：VPN 通道被占用	%d apps · blocking inactive: the VPN channel is occupied
 %d 个应用 · 断网没生效：另一个 VPN 占着	%d apps · blocking inactive: another VPN is holding the only slot
 %d 个应用 · 断网没生效：没给 VPN 授权	%d apps · blocking inactive: VPN permission not granted
@@ -500,6 +501,7 @@ yyyy年M月d日	MMM d, yyyy
 从模板新建  ›	From template  ›
 从相册选一张…	Pick one from the gallery…
 仓库或 WebDAV HTTPS 地址	Repository or WebDAV HTTPS address
+代理占着 VPN 时	When a proxy holds the VPN
 以后再说	Later
 休息	Break
 休息 	Break 
@@ -766,6 +768,7 @@ yyyy年M月d日	MMM d, yyyy
 只在这些应用里检查屏幕文字	Screen text is only checked in these apps
 只排 30 天内，短间隔高频	Only 30 days out, short high-frequency intervals
 只接管选中的应用，别的应用照常上网。用系统 VPN 通道实现，所以和代理、公司内网、加速器互斥。	Only the selected apps go through the tunnel; everything else keeps its network. It uses the system VPN slot, so it excludes proxies, corporate networks and accelerators.
+只提示不处理	Only warn, do nothing
 只放一个应用，单独计时，用完就冻	One app, timed alone, frozen when used up
 只有关键应用不受学习闸门影响；其他应用在 20:00 检查后可能延长冻结。	Only key apps skip the study gate. Other apps may be frozen longer after the 20:00 check.
 只监控选中的应用；一个都不选就是全部	Only the apps you pick are watched; none means all
@@ -1283,6 +1286,7 @@ yyyy年M月d日	MMM d, yyyy
 打卡设置	Check-in settings
 打卡追加：	Check-in extension: 
 打卡页背景	Check-in background
+打开代理 App	Open the proxy app
 扩写	Expand
 批量导入	Bulk import
 批量导入文本 / TSV	Bulk import text / TSV
@@ -1349,6 +1353,7 @@ yyyy年M月d日	MMM d, yyyy
 收集曾经选择“忘了”的卡片。到期后自动进入学习队列。	Collects cards you once answered “forgot”. They rejoin the queue when due.
 改	Edit
 改每次默认完成量	Change the default amount
+改用冻结这些应用	Freeze these apps instead
 改这一组的时段	Change hours for this group
 放一个日子进去	Put a date in
 放弃	Discard
@@ -1880,6 +1885,7 @@ yyyy年M月d日	MMM d, yyyy
 精确闹钟	Exact alarms
 精简	Shorten
 系统使用记录暂不可读，额度保护性冻结	System usage records unreadable; quota frozen as a safeguard
+系统同一时间只允许一个 VPN：代理（FlClash 等）占着时隧道建不起来。选「改用冻结这些应用」后，时段外名单里的应用会被直接冻结（打不开，也就等于没网），时段内自动解冻；名单里别放必须用的应用。	Android allows only one VPN at a time: while a proxy (FlClash etc.) holds it, the tunnel cannot be built. With “Freeze these apps instead”, the listed apps are frozen outside the adjustment window (they cannot open, which also means no network) and released inside it. Do not put apps you must use in this list.
 系统同一时间只允许一个 VPN：开了它就要关掉代理，否则两边都用不了。	The system allows one VPN at a time: turn the proxy off first, or neither will work.
 系统设置	System Settings
 系统还没攒出本月数据（刚授权 / 刚开机）	The system has no data for this month yet (just granted / just booted)
@@ -2363,6 +2369,7 @@ yyyy年M月d日	MMM d, yyyy
 黑色	Black
 默认	Default
 默认 default	Default
+默认「只提示」不会动你的应用。要让断网在代理常开时也生效，得在代理 App 里加拒绝规则（Clash 覆写示例：DOMAIN-SUFFIX,bilibili.com,REJECT 与 DOMAIN-SUFFIX,bilivideo.com,REJECT）—— 代理是那台「唯一 VPN」，拦网只能它去做。	The default “only warn” leaves your apps alone. To make blocking work while a proxy is always on, add reject rules inside the proxy app (Clash override examples: DOMAIN-SUFFIX,bilibili.com,REJECT and DOMAIN-SUFFIX,bilivideo.com,REJECT) — the proxy is the only VPN, so only it can block traffic.
 默认学科（内容已含学科时可留空）	Default subject (leave empty if the content has one)
 默认笔记本	Default notebook
 默认笔记本不可删除，或笔记本已删除	The default notebook cannot be deleted, or it is gone

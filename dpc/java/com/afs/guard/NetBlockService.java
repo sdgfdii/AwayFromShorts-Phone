@@ -222,6 +222,8 @@ public class NetBlockService extends VpnService {
         } else if (!cut && NetBlockStore.running(c)) {
             stop(c);
         }
+        // VPN 通道被代理占着时，退到应用层：冻结名单里的应用（可选，默认开）。
+        NetFallback.reconcile(c);
     }
 
     /** 重连退避：隧道起不来时别每 30 秒刷一次日志、白烧电。 */

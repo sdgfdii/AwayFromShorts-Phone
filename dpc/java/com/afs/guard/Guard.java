@@ -488,7 +488,7 @@ public final class Guard {
     }
 
     static final Object POLICY_LOCK = new Object();
-    private static String[] setSuspended(DevicePolicyManager d, ComponentName a, String[] packages, boolean value) {
+    static String[] setSuspended(DevicePolicyManager d, ComponentName a, String[] packages, boolean value) {
         synchronized (POLICY_LOCK) { return d.setPackagesSuspended(a,packages,value); }
     }
     private static void setUninstall(DevicePolicyManager d, ComponentName a, String pkg, boolean value) {

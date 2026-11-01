@@ -21,7 +21,13 @@ public final class NetBlockStore {
     private static final String K_BEAT = "beat";
     private static final String K_TRIED = "tried";
     private static final String K_WHY = "why";
+    private static final String K_WHY_AT = "why_at";
+    private static final String K_FALLBACK = "fallback_mode";
+    private static final String K_FALLBACK_PKGS = "fallback_pkgs";
 
+    /** 系统只允许一个 VPN：别的 VPN（代理）占着时，断网改用「冻结这些应用」顶上。 */
+    static final int FALLBACK_FREEZE = 1;
+    static final int FALLBACK_NOTIFY = 0;
     /**
      * 隧道心跳的有效期。服务被系统杀掉时 {@code onDestroy} 不一定跑，
      * {@code running} 会留在 true —— 光看这个标志会让界面说「断网中」而其实什么都没拦。
@@ -102,12 +108,57 @@ public final class NetBlockStore {
     }
 
     static void setWhy(Context c, String value) {
-        sp(c).edit().putString(K_WHY, value == null ? "" : value).apply();
+        String next = value == null ? "" : value;
+        SharedPreferences.Editor edit = sp(c).edit().putString(K_WHY, next);
+        if (!next.isEmpty()) edit.putLong(K_WHY_AT, System.currentTimeMillis());
+        edit.apply();
+    }
+
+    /** 失败原因是什么时候记下的：给出「先等一等再判定被占用」的时间依据。 */
+    static long whyAt(Context c) {
+        return sp(c).getLong(K_WHY_AT, 0L);
+    }
+
+    /**
+     * 代理占着 VPN 时怎么办：0 = 只提示（默认），1 = 改用冻结。
+     *
+     * 默认只提示：冻结会让这些应用完全打不开，对「要看缓存视频」的场景是反效果，
+     * 不能默认替用户做这么重的决定；想要兜底的用户在断网设置里手动打开。
+     */
+    static int fallbackMode(Context c) {
+        int value = sp(c).getInt(K_FALLBACK, FALLBACK_NOTIFY);
+        return value == FALLBACK_FREEZE ? FALLBACK_FREEZE : FALLBACK_NOTIFY;
+    }
+
+    static void setFallbackMode(Context c, int mode) {
+        sp(c).edit().putInt(K_FALLBACK, mode == FALLBACK_NOTIFY ? FALLBACK_NOTIFY : FALLBACK_FREEZE).apply();
+    }
+
+    /** 兜底冻结里由「断网」自己挂起的应用：释放时只碰这一批，别动冻结时间表管的应用。 */
+    static Set<String> fallbackPackages(Context c) {
+        Set<String> out = new HashSet<String>();
+        String raw = sp(c).getString(K_FALLBACK_PKGS, "");
+        if (raw == null) return out;
+        for (String item : raw.split("\n")) {
+            String pkg = item.trim();
+            if (!pkg.isEmpty()) out.add(pkg);
+        }
+        return out;
+    }
+
+    static void setFallbackPackages(Context c, Set<String> list) {
+        StringBuilder sb = new StringBuilder();
+        for (String pkg : list) {
+            if (pkg == null || pkg.trim().isEmpty()) continue;
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(pkg.trim());
+        }
+        sp(c).edit().putString(K_FALLBACK_PKGS, sb.toString()).apply();
     }
 
     /**
      * 一句话状态：开没开、选了几个、隧道通没通、是不是正在调整时段里被放开，
-     * 以及「没通」到底卡在哪 —— 没授权还是被别的 VPN 占着。
+     * 以及「没通」到底卡在哪 —— 没授权、被别的 VPN 占着，还是已经改用冻结顶上。
      *
      * 方向是「默认常开」：调整时段内放开是本该如此，不能说成「没连上隧道」。
      */
@@ -117,6 +168,7 @@ public final class NetBlockStore {
         if (n == 0) return T.s("还没选应用");
         if (NetWindow.inside(c)) return T.f("%d 个应用 · 调整时段 %s 内放开", n, NetWindow.label(c));
         if (running(c)) return T.f("%d 个应用断网中", n);
+        if (!fallbackPackages(c).isEmpty()) return T.f("%d 个应用 · 已改用冻结（VPN 被占用）", n);
         String why = why(c);
         if (NetBlockService.WHY_PERMISSION.equals(why)) return T.f("%d 个应用 · 断网没生效：没给 VPN 授权", n);
         if (NetBlockService.WHY_OTHER_VPN.equals(why)) return T.f("%d 个应用 · 断网没生效：VPN 通道被占用", n);

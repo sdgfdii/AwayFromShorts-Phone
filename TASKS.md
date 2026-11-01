@@ -1241,6 +1241,42 @@ manifest 没 `notes` 所以弹窗只报版本号）正好一起清掉。
 - 划掉 App 后的恢复：从最近任务划掉守卫后轮询 8 分钟，进程 pid 在约 20 秒内从 5265 变成 7018（被系统/无障碍重新拉起），`KeywordGuardService`、`GuardService`、`NetBlockService` 都回来了、无障碍重新 bound；新增的 5 分钟保活闹钟在 `dumpsys alarm` 里同时排着，作为系统不主动拉起时的兜底。
 - 离线回归：`bash dpc/test/run.sh` 全绿（PageRuleTest 已按新内置规则更新，新增真机类名命中断言）；i18n `2363/2363 = 100%`；构建 2242/1.73.2 并真机覆盖安装。
 
+## 35 · 1.74.0 代理常开时怎么断网：限制说清 + 兜底与代理入口（2026-11-01 傍晚）
+
+用户原话：「现在谁不用vpn，赶紧想另一种方案，现在这样一开vpn就断网不了」；追问确认真实需求是「我要看 bilibili 缓存的视频，又不想被短视频干扰」——即**代理要常开、B 站要能开（离线看缓存）、但不能有网（刷不到短视频）**。
+
+### 技术结论（先别急着写代码）
+
+Android 同一时间只允许一个 VpnService；非 root 设备没有第二套「按应用断网」的平台 API：
+
+| 候选 | 为什么不行 |
+|---|---|
+| `NetworkPolicyManager.setUidPolicy` | `MANAGE_NETWORK_POLICY` 是 signature 权限，普通应用拿不到 |
+| iptables / nftables | 需要 root（本机没 root，设备所有者不等于 root） |
+| `Settings.Secure` 改 DNS / 私有 DNS | 全局生效且可被 IP 直连绕过，而且本机 `pm grant WRITE_SECURE_SETTINGS` 失败 |
+| `setPackagesSuspended` | 能拦，但整应用冻结 = 离线也用不了（正是用户不想要的） |
+| 两个 VPN 同时开 | 系统层面互斥，AOSP 起就没这个能力 |
+
+所以「代理常开 + 某个应用能开但没网」在本 App 这一层**做不到**；只能三选一：
+1. **看缓存视频时关代理**（缓存播放不需要网；关掉后本 App 隧道实测 3 秒内接管，22:00–23:00 以外自动恢复断网）。
+2. **在代理里加拒绝规则**：代理就是那台唯一的 VPN，拦网归它做 —— Clash 系覆写示例 `DOMAIN-SUFFIX,bilibili.com,REJECT` / `DOMAIN-SUFFIX,bilivideo.com,REJECT`（B 站缓存视频不联网，仍可播）。
+3. **用本 App 的兜底冻结**：打不开 = 没网，但离线也用不了，只适合根本不需要打开的应用。
+
+### 落点
+
+| 改动 | 文件 |
+|---|---|
+| 新增 `NetFallback`：VPN 被占用且过了确认宽限期时，按设置冻结/释放断网名单（排除自己、关键应用、未安装）；释放后 `Guard.applyAsync` 让冻结时间表重判 | `NetFallback` |
+| `NetBlockStore` 增加 `whyAt`、兜底模式（默认 0=只提示）、已冻结名单、状态文案「已改用冻结（VPN 被占用）」 | `NetBlockStore` |
+| 断网设置新增两行：「代理占着 VPN 时」（只提示 / 改用冻结）与「打开代理 App」；加两段说明（含 Clash 覆写规则示例） | `FreezeBoardActivity` |
+| 隧道状态变化时调 `NetFallback.reconcile` | `NetBlockService`、`GuardService` |
+| 纯逻辑单测：`shouldFreeze` 六种组合 + `conflictConfirmed` 宽限期/时间配对/其它原因 | `NetFallbackTest`（15 checks） |
+
+### 验证与状态
+
+- 离线回归全绿（207 PASS / 0 FAIL，含 NetFallbackTest）；i18n 2370/2370 = 100%；构建 2243/1.74.0。
+- **兜底冻结的真机全链路未验**：当前设备 VPN 由本 App 持有（无冲突），要验需要用户连上代理后观察 `afs_netblock.fallback_pkgs` 与目标包的 suspended 标志。按用户真实需求，这一项是可选退路，不是主推方案；没有拿它冒充「已解决需求」。
+
 
 
 

@@ -1335,6 +1335,12 @@ public class FreezeBoardActivity extends ThemedActivity {
         if (netHint != null) netHint.setText(netSummary());
     }
 
+    /** 「代理占着 VPN 时」那一行的当前值。 */
+    private String fallbackLabel() {
+        return NetBlockStore.fallbackMode(this) == NetBlockStore.FALLBACK_FREEZE
+                ? T.s("改用冻结这些应用") : T.s("只提示不处理");
+    }
+
     /** 断网名单、开关和调整时段本身都属于设置，只允许在断网调整时段内修改。 */
     private boolean netEditAllowed() {
         return NetWindow.canEdit(this);
@@ -1419,6 +1425,47 @@ public class FreezeBoardActivity extends ThemedActivity {
         });
         box.addView(windowRow);
 
+        // 系统只允许一个 VPN：代理占着时隧道建不起来，这里决定「断网」怎么退而求其次。
+        final TextView fallbackValue = text(fallbackLabel(), 13, look.accent());
+        LinearLayout fallbackRow = dialogRow(T.s("代理占着 VPN 时"), fallbackValue);
+        fallbackRow.setOnClickListener(v -> {
+            if (!netEditAllowed()) return;
+            final int[] modes = {NetBlockStore.FALLBACK_FREEZE, NetBlockStore.FALLBACK_NOTIFY};
+            String[] labels = {T.s("改用冻结这些应用"), T.s("只提示不处理")};
+            int checked = NetBlockStore.fallbackMode(this) == NetBlockStore.FALLBACK_FREEZE ? 0 : 1;
+            ThemeStore.dialog(this).setTitle(T.s("代理占着 VPN 时"))
+                    .setSingleChoiceItems(labels, checked, (d, which) -> {
+                        NetBlockStore.setFallbackMode(this, modes[which]);
+                        d.dismiss();
+                        fallbackValue.setText(fallbackLabel());
+                        paint.run();
+                        updateNetHint();
+                        NetFallback.reconcile(this);
+                    })
+                    .setNegativeButton(T.s("取消"), null).show();
+        });
+        box.addView(fallbackRow);
+
+        // 代理常开时想让这些应用没网，只能在代理里拦（系统只有一个 VPN）。给个直达入口。
+        final String proxyPkg = "com.follow.clash";
+        boolean proxyInstalled = true;
+        try {
+            getPackageManager().getApplicationInfo(proxyPkg, 0);
+        } catch (Exception missing) {
+            proxyInstalled = false;
+        }
+        if (proxyInstalled) {
+            LinearLayout proxyRow = dialogRow(T.s("打开代理 App"), text("›", 15, look.text3()));
+            proxyRow.setOnClickListener(v -> {
+                try {
+                    Intent launch = getPackageManager().getLaunchIntentForPackage(proxyPkg);
+                    if (launch != null) startActivity(launch);
+                } catch (RuntimeException ignored) {
+                }
+            });
+            box.addView(proxyRow);
+        }
+
         box.addView(dialogRow(T.s("状态"), statusValue));
 
         LinearLayout notes = new LinearLayout(this);
@@ -1432,6 +1479,12 @@ public class FreezeBoardActivity extends ThemedActivity {
         TextView third = text(T.f("断网默认常开：除了调整时段 %s 内自动放开，其余时间一直断网；开关、名单和调整时段本身都只能在此时段内修改。", NetWindow.label(this)), 12, look.text2());
         third.setPadding(0, dp(6), 0, 0);
         notes.addView(third);
+        TextView fourth = text(T.s("系统同一时间只允许一个 VPN：代理（FlClash 等）占着时隧道建不起来。选「改用冻结这些应用」后，时段外名单里的应用会被直接冻结（打不开，也就等于没网），时段内自动解冻；名单里别放必须用的应用。"), 12, look.text2());
+        fourth.setPadding(0, dp(6), 0, 0);
+        notes.addView(fourth);
+        TextView fifth = text(T.s("默认「只提示」不会动你的应用。要让断网在代理常开时也生效，得在代理 App 里加拒绝规则（Clash 覆写示例：DOMAIN-SUFFIX,bilibili.com,REJECT 与 DOMAIN-SUFFIX,bilivideo.com,REJECT）—— 代理是那台「唯一 VPN」，拦网只能它去做。"), 12, look.text2());
+        fifth.setPadding(0, dp(6), 0, 0);
+        notes.addView(fifth);
         box.addView(notes);
 
         paint.run();

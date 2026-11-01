@@ -105,6 +105,7 @@ public class GuardService extends Service {
                 // 用户在任何页面滑动都会撞上。后台串行跑，合并重复请求。
                 Guard.applyAsync(GuardService.this);   // 内部只有状态变化时才调 setPackagesSuspended
                 NetBlockService.reconcile(GuardService.this);   // 断网调整时段边界在这里翻隧道
+                NetFallback.reconcile(GuardService.this);       // VPN 被代理占着时改用冻结顶上
                 updateNotice();
             } catch (Throwable t) {
                 Log.e(Guard.TAG, "tick failed", t);

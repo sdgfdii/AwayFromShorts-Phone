@@ -3,6 +3,8 @@ package com.afs.guard;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import org.json.JSONArray;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -24,6 +26,7 @@ public final class PageRuleStore {
     private static final String K_LAST_RULE = "last_rule";
     private static final String K_SILENT = "silent";
     private static final String K_SEEDED = "builtin_seed";
+    private static final String K_DIAG = "diag";
 
     private PageRuleStore() {
     }
@@ -92,11 +95,21 @@ public final class PageRuleStore {
     }
 
     /**
-     * 补内置规则（版本升级用）：只有「页面拦截已经开着、而且已经有规则」的用户才补，
-     * 从没用过这个功能的人不该被塞一条他不知情的规则。一天只跑一次。
+     * 补内置规则 / 迁移旧规则。
+     *
+     * 旧版内置的「微信视频号」「微信朋友圈」是按页面文字写的，而微信把文字对无障碍隐藏，
+     * 永远命不中（等于配了没用）。这里见到旧的就换成按窗口类名的版本，使用体验一致、
+     * 但真的能拦住。一天只跑一次的那套逻辑只用于「首次补内置」，迁移每次渲染都会检查。
      */
     public static void seedBuiltins(Context c) {
         SharedPreferences p = sp(c);
+        Set<String> rules = raw(c);
+        if (rules.contains(PageRule.WECHAT_FINDER_TEXT) || rules.contains(PageRule.WECHAT_MOMENTS_TEXT)) {
+            remove(c, PageRule.WECHAT_FINDER_TEXT);
+            remove(c, PageRule.WECHAT_MOMENTS_TEXT);
+            add(c, PageRule.WECHAT_FINDER);
+            add(c, PageRule.WECHAT_MOMENTS);
+        }
         if (p.getBoolean(K_SEEDED, false)) return;
         if (on(c) && !raw(c).isEmpty()) {
             add(c, PageRule.WECHAT_MOMENTS);
@@ -172,5 +185,43 @@ public final class PageRuleStore {
         if (!on(c)) return T.s("已关闭");
         int hits = hits(c);
         return hits > 0 ? T.f("今天拦了 %d 次", hits) : T.s("还没有拦到");
+    }
+
+    /* ---------- 诊断（临时证据用） ---------- */
+
+    /**
+     * 记录最近见到的事件/窗口特征。
+     *
+     * 为什么要这个：微信这类应用把文字对无障碍隐藏，文字规则永远命不中；要按窗口类名
+     * 或 View id 拦，就得先知道真机上到底能读到什么。这里只保留最近 20 条特征串，
+     * 不含屏幕文字（只记「读到几个字/几个节点」和 id 名字）。
+     */
+    static synchronized void recordDiag(Context c, String line) {
+        if (line == null || line.trim().isEmpty()) return;
+        List<String> entries = new ArrayList<String>();
+        try {
+            JSONArray array = new JSONArray(sp(c).getString(K_DIAG, "[]"));
+            for (int i = 0; i < array.length(); i++) entries.add(array.optString(i));
+        } catch (Exception ignored) {
+        }
+        entries.add(line.length() > 600 ? line.substring(0, 600) : line);
+        while (entries.size() > 20) entries.remove(0);
+        JSONArray out = new JSONArray();
+        for (String entry : entries) out.put(entry);
+        sp(c).edit().putString(K_DIAG, out.toString()).apply();
+    }
+
+    public static List<String> diag(Context c) {
+        List<String> out = new ArrayList<String>();
+        try {
+            JSONArray array = new JSONArray(sp(c).getString(K_DIAG, "[]"));
+            for (int i = 0; i < array.length(); i++) out.add(array.optString(i));
+        } catch (Exception ignored) {
+        }
+        return out;
+    }
+
+    public static void clearDiag(Context c) {
+        sp(c).edit().remove(K_DIAG).apply();
     }
 }

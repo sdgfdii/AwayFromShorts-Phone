@@ -39,6 +39,7 @@ public class KeywordGuardService extends AccessibilityService {
 
     private long lastScanAt;
     private long lastBlockAt;
+    private long lastDiagAt;
     private String lastBlockPkg = "";
 
     /** 每个应用连续读到「零个字」的次数，到 3 次就记为「这个应用不给文字」。 */
@@ -73,17 +74,22 @@ public class KeywordGuardService extends AccessibilityService {
                     && KeywordRule.inspect(pkg, KeywordStore.targets(this));
             if (pageRules.isEmpty() && !keywordHere) return;
 
-            long now = System.currentTimeMillis();
-            if (now - lastScanAt < SCAN_GAP_MS) return;
-            lastScanAt = now;
+            maybeRecordDiag(pkg, event);
 
-            // 类名规则不用读屏，先判——视频号这类页面窗口类名一进就变。
+            long now = System.currentTimeMillis();
             String className = event.getClassName() == null ? "" : event.getClassName().toString();
-            PageRule.Rule pageHit = PageRule.hitByClass(pageRules, pkg, className);
-            if (pageHit != null) {
-                blockPage(pkg, pageHit, now);
+
+            // 类名规则要在「读屏节流」之前判：进新页面的 TYPE_WINDOW_STATE_CHANGED 往往紧跟
+            // 在一次内容变化之后，被 800ms 节流丢掉就永远拦不到（微信视频号实测就是这样漏掉的）。
+            // 类名匹配不读视图树，代价可以忽略，不必走节流。
+            PageRule.Rule pageByClass = PageRule.hitByClass(pageRules, pkg, className);
+            if (pageByClass != null) {
+                blockPage(pkg, pageByClass, now);
                 return;
             }
+
+            if (now - lastScanAt < SCAN_GAP_MS) return;
+            lastScanAt = now;
 
             // 要文字的规则（页面文字 / 关键词）才读一次树，两边共用这一份。
             AccessibilityNodeInfo root = getRootInActiveWindow();
@@ -95,7 +101,7 @@ public class KeywordGuardService extends AccessibilityService {
             collect(root, blocks, 0, new int[]{0});
             trackSilent(pkg, pageRules, blocks);
 
-            pageHit = PageRule.hitByText(pageRules, pkg, blocks);
+            PageRule.Rule pageHit = PageRule.hitByText(pageRules, pkg, blocks);
             if (pageHit != null) {
                 blockPage(pkg, pageHit, now);
                 return;
@@ -213,6 +219,91 @@ public class KeywordGuardService extends AccessibilityService {
             Log.w(Guard.TAG, "page mask failed: " + error.getClass().getSimpleName());
             performGlobalAction(GLOBAL_ACTION_HOME);
         }
+    }
+
+    /**
+     * 诊断采样：把「这个页面到底给不给我们信息」记下来。
+     *
+     * 微信这类应用把文字藏了，要按窗口类名/View id 拦就必须先知道真机上能读到什么。
+     * 只记结构与 id 名字（最多 300 节点），不记屏幕文字内容。
+     */
+    private void maybeRecordDiag(String pkg, AccessibilityEvent event) {
+        try {
+            // 只给「读不到文字」的应用记：这些应用只能靠类名/其他信号认页面，
+            // 留着最近 20 条特征方便以后为它们补规则。文字能读到的应用用不着这个。
+            if (!PageRuleStore.hidesText(this, pkg)) return;
+            long now = System.currentTimeMillis();
+            // 窗口切换事件很少见，必须无条件记下来；内容变化事件每 5 秒最多记一条（别频繁写盘）。
+            boolean windowChange = event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
+            if (!windowChange && now - lastDiagAt < 5000L) return;
+            lastDiagAt = now;
+            StringBuilder line = new StringBuilder();
+            line.append(new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.CHINA)
+                    .format(new java.util.Date(now)))
+                    .append(' ').append(pkg)
+                    .append(" type=").append(event.getEventType())
+                    .append(" cls=").append(clip(event.getClassName()))
+                    .append(" desc=").append(clip(event.getContentDescription()));
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root == null) {
+                line.append(" root=null");
+            } else {
+                line.append(" rootCls=").append(clip(root.getClassName()))
+                        .append(" rootPkg=").append(clip(root.getPackageName()))
+                        .append(" kids=").append(root.getChildCount());
+                StringBuilder ids = new StringBuilder();
+                int[] counter = new int[]{0};
+                collectDiag(root, ids, counter, 0);
+                line.append(" nodes=").append(counter[0]).append(" ids=").append(ids);
+            }
+            try {
+                java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
+                line.append(" winc=").append(windows == null ? 0 : windows.size());
+                if (windows != null) {
+                    for (int i = 0; i < windows.size() && i < 4; i++) {
+                        android.view.accessibility.AccessibilityWindowInfo window = windows.get(i);
+                        android.view.accessibility.AccessibilityNodeInfo windowRoot = window.getRoot();
+                        line.append(" w").append(i)
+                                .append(":t=").append(clip(window.getTitle()))
+                                .append(",c=").append(windowRoot == null ? "-" : clip(windowRoot.getClassName()))
+                                .append(",p=").append(windowRoot == null ? "-" : clip(windowRoot.getPackageName()));
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            PageRuleStore.recordDiag(this, line.toString());
+            Log.i(Guard.TAG + "-diag", line.toString());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void collectDiag(AccessibilityNodeInfo node, StringBuilder ids, int[] counter, int depth) {
+        if (node == null || depth > 10 || counter[0] >= 300) return;
+        counter[0]++;
+        try {
+            String id = node.getViewIdResourceName();
+            if (id != null && ids.indexOf(id) < 0 && ids.length() < 240) {
+                if (ids.length() > 0) ids.append(',');
+                ids.append(id);
+            }
+        } catch (Throwable ignored) {
+        }
+        int children = node.getChildCount();
+        for (int i = 0; i < children && counter[0] < 300; i++) {
+            AccessibilityNodeInfo child = null;
+            try {
+                child = node.getChild(i);
+            } catch (Throwable ignored) {
+            }
+            if (child != null) collectDiag(child, ids, counter, depth + 1);
+        }
+    }
+
+    private static String clip(CharSequence value) {
+        if (value == null) return "-";
+        String text = value.toString().replace('\n', ' ').trim();
+        if (text.isEmpty()) return "-";
+        return text.length() > 40 ? text.substring(0, 40) : text;
     }
 
     @Override

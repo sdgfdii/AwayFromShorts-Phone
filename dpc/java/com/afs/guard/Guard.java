@@ -67,6 +67,22 @@ public final class Guard {
     private static final int ALARM_REQ = 1001;
     private static final int JOB_ID    = 2001;
     private static final long FALLBACK_MS = 15L * 60L * 1000L;
+    /** 保活闹钟间隔：进程被划掉后，最长空窗这么久。 */
+    private static final long KEEPALIVE_MS = 5L * 60L * 1000L;
+
+    /** 排一个精确唤醒（不弹闹钟图标）。排不上就退回允闲时唤醒。 */
+    private static void armExact(Context ctx, AlarmManager am, int request, long at) {
+        PendingIntent pending = alarms(ctx, request);
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending);
+        } catch (Throwable first) {
+            try {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending);
+            } catch (Throwable second) {
+                Log.w(TAG, "aux alarm " + request + " failed: " + second.getClass().getSimpleName());
+            }
+        }
+    }
 
     private Guard() {
     }
@@ -636,6 +652,14 @@ public final class Guard {
                 lastLoggedAt = at;
                 Log.i(TAG, "alarm armed at " + at + " (clock=" + okClock + " idle=" + okIdle + ")");
             }
+
+            // 保活闹钟：从「最近任务」把 App 划掉会连进程一起被杀（ColorOS 实测），
+            // 无障碍拦截和定时提醒都住在进程里 —— 没人把进程叫起来，它们就一直不工作。
+            // 这个闹钟每 5 分钟兜一次底：闹钟由系统投递，不依赖进程活着。
+            armExact(ctx, am, ALARM_REQ + 2, System.currentTimeMillis() + KEEPALIVE_MS);
+            // 定时提醒（休息提醒）到点：让系统在那一刻把进程叫起来，别等下一个节拍。
+            long reminderAt = RestAlert.nextDueAt(ctx);
+            if (reminderAt > 0L) armExact(ctx, am, ALARM_REQ + 3, reminderAt);
         }
 
         JobScheduler js = (JobScheduler) ctx.getSystemService(Context.JOB_SCHEDULER_SERVICE);

@@ -1207,4 +1207,40 @@ manifest 没 `notes` 所以弹窗只报版本号）正好一起清掉。
 
 证据文件：`.codex-fix/motion-opt/20261101-jank/`（measure-*.txt、frames-*.txt、framestats-*.txt），测量脚本同目录 `measure.ps1`。
 
+## 34 · 1.73.2 定时提醒不弹、微信页面拦截不生效（2026-11-01 傍晚）
+
+用户原话：「定时提醒没有提醒过」「应用内关键词拦截、页面拦截不起作用」，追问后确认：定时提醒 = 自律规则里的「定时提醒」（每隔 N 分钟休息提醒）；拦截是在微信视频号/朋友圈里试的；并且「把守卫从最近任务划掉之后就不拦了」。
+
+### 三处根因（全部真机取证）
+
+| 现象 | 证据 | 根因 |
+|---|---|---|
+| 定时提醒一次都没看到 | `dumpsys notification`：17:26 发过一条，但通道 `afs_rest` 的 `mImportance=LOW`、`mShowBanner=false`、`mImportanceExplanation=user` | 旧通道被系统/用户降成静默：通知只在通知栏出现，不弹横幅、不响，等于没提醒。通道一旦创建，应用改不了它的重要性 |
+| 微信视频号/朋友圈拦不住 | `afs_page` 的 `silent` 里有 com.tencent.mm；诊断记录显示微信窗口 `kids=0 nodes=1`（一屏读不到字），但进视频号时 `TYPE_WINDOW_STATE_CHANGED` 的 class 是 `com.tencent.mm.plugin.finder.ui.FinderHo…` | 旧内置规则按「页面文字」认页面，而微信不给文字 → 永远命不中；另外类名规则被放在 800ms 读屏节流**之后**，入场事件常被节流丢掉 |
+| 划掉守卫后拦截/提醒停摆 | `dumpsys accessibility` 只在 App 被打开后才 bound；ColorOS 划掉最近任务会连进程一起杀 | 无障碍拦截和休息提醒都住在进程里；没有周期性「把进程叫起来」的机制，闹钟只排了下一个规则边界（可能几小时后） |
+
+### 修复落点
+
+| 改动 | 文件 |
+|---|---|
+| 提醒通道换新 id（`afs_rest_v2` / `memo_reminders_v2`），IMPORTANCE_HIGH + 声音/震动/横幅 + `CATEGORY_REMINDER` | `RestAlert`、`MemoReminder` |
+| 休息提醒到点也排系统闹钟（`RestAlert.nextDueAt`），进程不在也会被叫醒补发；备忘录提醒改 `setAlarmClock`（精确，退路 exact/idle） | `RestAlert`、`Guard.schedule`、`MemoReminder` |
+| 保活闹钟：每 5 分钟一条 `setExactAndAllowWhileIdle` 指向 `AlarmReceiver`→`ensureService`；`GuardJob` 里也补 `ensureService` | `Guard`、`GuardJob` |
+| 微信内置页面规则改成按窗口类名：`class:plugin.finder.ui.`、`class:plugin.sns.ui.`；旧的文字规则启动时自动迁移掉 | `PageRule`、`PageRuleStore.seedBuiltins`（`GuardClock` 启动时也跑一次） |
+| 类名规则在节流**之前**判（不读屏、开销极小） | `KeywordGuardService` |
+| 关键词只开开关没选目标应用时，自动并入冻结名单 + 断网名单 | `ControlActivity` |
+| 界面说明：微信读不到文字、划掉守卫的后果（提醒/拦截最长停约 5 分钟） | `ControlActivity` |
+| 临时诊断：把微信事件的 class/节点数/窗口标题记进 `afs_page.diag`（20 条滚存），用于定位能读到什么 | `KeywordGuardService`、`PageRuleStore` |
+
+### 验证
+
+- 关键词拦截真机复测：Chrome 打开含「推荐」的搜索页 → 遮罩弹出、`hits` 0→1、`last_word=推荐`、`last_pkg=com.android.chrome`。
+- 新的休息提醒：注入「已到点」的 prefs 后启动，`dumpsys notification` 里通道为 `afs_rest_v2`、`mImportance=4 (HIGH)`、`mShowBanner=true`、`sound=default`、`vibrate=default`、`category=reminder`，通知 id 51 已发出；`dumpsys alarm` 同时能看到保活闹钟（约 +5 分钟）与提醒到点闹钟。
+- 页面规则迁移：设备上 `afs_page.rules` 从两条 `text:` 变成两条 `class:plugin.finder.ui.` / `class:plugin.sns.ui.`。
+- 微信实测（用户配合开页面）：`afs_page` 的 `hits=12`、`last_rule=com.tencent.mm|class:plugin.sns.ui.`、`last_pkg=com.tencent.mm`；用户确认视频号、朋友圈都会被盖住并送回桌面。
+- 划掉 App 后的恢复：从最近任务划掉守卫后轮询 8 分钟，进程 pid 在约 20 秒内从 5265 变成 7018（被系统/无障碍重新拉起），`KeywordGuardService`、`GuardService`、`NetBlockService` 都回来了、无障碍重新 bound；新增的 5 分钟保活闹钟在 `dumpsys alarm` 里同时排着，作为系统不主动拉起时的兜底。
+- 离线回归：`bash dpc/test/run.sh` 全绿（PageRuleTest 已按新内置规则更新，新增真机类名命中断言）；i18n `2363/2363 = 100%`；构建 2242/1.73.2 并真机覆盖安装。
+
+
+
 

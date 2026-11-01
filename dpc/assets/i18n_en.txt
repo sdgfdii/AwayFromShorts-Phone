@@ -343,6 +343,7 @@ yyyy年M月d日	MMM d, yyyy
 。\n删除后从学科列表移除，内容和学习记录保留，可以撤回或在回收站恢复。	.\nIt leaves the subject list but its content and history are kept; you can undo or restore it from the trash.
 。需单独完成这张总结卡。	. This summary card must be completed on its own.
 「	“
+「%s」不把页面文字交给系统，所以微信视频号 / 朋友圈这两条是按窗口类名（plugin.finder.ui.* / plugin.sns.ui.*）认页面的；进到这两个页面会被盖住并送回桌面。	“%s” never exposes page text to the system, so the WeChat Channels / Moments rules recognise pages by window class (plugin.finder.ui.* / plugin.sns.ui.*). Entering those pages shows the mask and sends you back to the home screen.
 「%s」今天已用的时间会保留；重新添加同一只应用会接着累计。原有冻结规则仍然生效。	Time “%s” used today is kept; re-adding the same app continues from there. Existing freeze rules still apply.
 「%s」的成员会并进「%s」，共用每天 %d 分钟（取两者较小值）。今天各自已用的分钟数照常累加进这个格子。	Members of “%s” move into “%s”, sharing %d min per day (the smaller of the two). Minutes each has used today still add up into this slot.
 」	”
@@ -910,6 +911,7 @@ yyyy年M月d日	MMM d, yyyy
 备忘录已满，请先导出或整理已有记录	Notes are full; export or tidy existing ones first
 备忘录提醒	Note reminder
 备忘录数量超过容量	Too many notes for the capacity
+备忘录里设置的提醒时间到了	A reminder you set in Memos is due
 备注	Note
 备注与解释	Notes and explanation
 备注：	Notes: 
@@ -991,6 +993,7 @@ yyyy年M月d日	MMM d, yyyy
 完整覆盖恢复？	Full overwrite restore?
 官方源没响应，正在试镜像…	Official source did not answer, trying a mirror…
 定位编辑	Edit here
+定时提醒：每隔一段时间提醒你起来休息	Rest reminder: nudges you to take a break every so often
 实测「%s」把页面内容对无障碍隐藏了（一屏读到 0 个字），所以「微信视频号」「微信朋友圈」这两条在它那儿不会命中。想限住它只能用整应用冻结或每日限额。	Measured: %s hides its page content from accessibility (0 characters read on a full screen), so the Channels and Moments rules never match inside it. Only whole-app freezing or a daily limit can hold it back.
 实测「%s」把页面内容对无障碍隐藏了（一屏读到 0 个字），所以「微信视频号」这条在它那儿不会命中。想限住它只能用整应用冻结或每日限额。	Measured: %s hides its page content from accessibility (a full screen yields 0 characters), so the WeChat Channels rule can never match there. To limit it, use whole-app freeze or a daily limit instead.
 密钥	Secret
@@ -2134,6 +2137,7 @@ yyyy年M月d日	MMM d, yyyy
 还没有额度。点右上角 ⋯ 新建一个单独额度或共享额度。	No quotas yet. Tap ⋯ at the top right to create a single or shared quota.
 还没生成	Not generated
 还没选应用	No apps selected
+还没选目标应用，已先按冻结/断网名单加了 %d 个	No target apps yet; seeded %d from the freeze / cut-off lists
 还没配亲友解锁码	No family code configured
 还没配规则	No rules yet
 还要去系统设置里打开无障碍服务	Also turn on the accessibility service in system settings

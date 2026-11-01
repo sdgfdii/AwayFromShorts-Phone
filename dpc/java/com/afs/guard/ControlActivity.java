@@ -301,6 +301,9 @@ public final class ControlActivity extends ThemedActivity {
         row(card, T.s("时间段"), ReminderStore.window(this), this::pickRestWindow);
         note(card, T.s("只发一条通知，不拦人。灭屏、正在锁机、放行期里都不打扰。"));
         note(card, T.s("和上面的定时锁机是两回事：锁机是硬拦，这个是轻提醒，可以只开一个。"));
+        note(card, Lang.t(this,
+                "把守卫从最近任务里划掉会让系统直接杀掉进程，提醒会停到系统下一次把它叫起来（最长约 5 分钟，到点的那条会补发）。建议在最近任务里锁定守卫，别划掉它。",
+                "Swiping the guard away from recents makes the system kill its process; reminders pause until it is woken again (up to about 5 minutes, missed ones are then delivered). Lock the guard in recents instead of swiping it away."));
     }
 
     private void pickEvery() {
@@ -536,6 +539,17 @@ public final class ControlActivity extends ThemedActivity {
             if (KeywordStore.on(this) && !Capability.accessibilityOn(this)) {
                 toast(T.s("还要去系统设置里打开无障碍服务"));
             }
+            if (KeywordStore.on(this) && KeywordStore.targets(this).isEmpty()) {
+                // 只开开关、不选应用 = 什么都拦不到。默认并入冻结名单和断网名单：
+                // 这两个名单本来就是「想少碰的应用」，正好是关键词该管的地方。
+                java.util.Set<String> seed = new java.util.LinkedHashSet<String>();
+                seed.addAll(RuleStore.all(this).keySet());
+                seed.addAll(NetBlockStore.packages(this));
+                if (!seed.isEmpty()) {
+                    KeywordStore.setTargets(this, seed);
+                    toast(T.f("还没选目标应用，已先按冻结/断网名单加了 %d 个", seed.size()));
+                }
+            }
             render();
         });
         List<String> words = KeywordStore.keywords(this);
@@ -561,6 +575,12 @@ public final class ControlActivity extends ThemedActivity {
         int shortWords = KeywordRule.shortCount(words);
         note(card, T.s("命中就盖住整屏并回桌面。文字只在本机比对，不保存屏幕内容、不上传。")
                 + T.s("只记录哪个应用、哪个词、第几次。"));
+        note(card, Lang.t(this,
+                "微信这类应用不把屏幕文字交给系统，在它里面关键词读不到任何内容：要限住微信请用「应用内页面拦截」（按页面拦），或者直接整应用冻结。",
+                "Apps such as WeChat never expose screen text to the system, so keywords can never match inside them. Use page blocking or freeze the app instead."));
+        note(card, Lang.t(this,
+                "同样靠无障碍服务在后台跑：别把守卫从最近任务划掉，划掉后拦截会停最多约 5 分钟才自动恢复。",
+                "This also runs through the accessibility service. Do not swipe the guard away from recents, or blocking stops for up to about 5 minutes."));
         if (shortWords > 0) {
             note(card, T.f("有 %d 个词只有一个字，几乎一定会误拦，建议改成两三个字的词。", shortWords));
         }
@@ -609,15 +629,16 @@ public final class ControlActivity extends ThemedActivity {
         row(card, T.s("微信朋友圈"), hasBuiltin(PageRule.WECHAT_MOMENTS) ? T.s("已添加") : T.s("一键添加"),
                 () -> addBuiltin(PageRule.WECHAT_MOMENTS, T.s("已加上朋友圈规则")));
         row(card, T.s("状态"), PageRuleStore.status(this), null);
-        if ((hasBuiltin(PageRule.WECHAT_FINDER) || hasBuiltin(PageRule.WECHAT_MOMENTS))
-                && PageRuleStore.hidesText(this, PageRule.WECHAT_PKG)) {
-            // 照实说：这条在微信上不会命中，别让人以为配了就管用。
-            note(card, T.f("实测「%s」把页面内容对无障碍隐藏了（一屏读到 0 个字），所以「微信视频号」「微信朋友圈」这两条在它那儿不会命中。想限住它只能用整应用冻结或每日限额。",
-                    appName(PageRule.WECHAT_PKG)));
+        if (hasBuiltin(PageRule.WECHAT_FINDER) || hasBuiltin(PageRule.WECHAT_MOMENTS)) {
+            // 微信不给文字，内置这两条是按窗口类名拦的：得说清楚，不然用户会以为是靠认页面文字。
+            note(card, T.f("「%s」不把页面文字交给系统，所以微信视频号 / 朋友圈这两条是按窗口类名（plugin.finder.ui.* / plugin.sns.ui.*）认页面的；进到这两个页面会被盖住并送回桌面。", appName(PageRule.WECHAT_PKG)));
         }
         note(card, T.s("进到指定页面就盖住并把人送回桌面，同一个应用里的其他页面不受影响。"));
         note(card, T.s("认页面靠页面文字或窗口类名。有些手机读不到窗口类名，所以文字才是主力：几个词用 + 连接，都出现才算，只填一个词很容易误拦。"));
         note(card, T.s("规则只在选定的应用里生效。屏幕内容只在本机比对，不保存、不上传。"));
+        note(card, Lang.t(this,
+                "拦截靠无障碍服务在后台跑：把守卫从最近任务里划掉会让系统杀掉进程，拦截会停最多约 5 分钟（之后自动恢复）。请别划掉守卫，或在最近任务里锁定它。",
+                "Blocking runs in the background via the accessibility service. Swiping the guard away from recents lets the system kill its process, so blocking pauses for up to about 5 minutes. Do not swipe it away; lock it in recents instead."));
     }
 
     /** 应用名；查不到就退回包名，别显示空白。 */

@@ -99,6 +99,8 @@ public class GuardService extends Service {
                 Hub.kick(GuardService.this);
                 // 20:00 判断点：今天打卡没打完 → 各应用本次冻结再延 30 分钟（一天只入账一次）
                 CheckinPenalty.tick(GuardService.this);
+                // 备忘录提醒的兜底：闹钟被系统清掉时靠这里补排（内部 10 分钟节流）。
+                MemoReminder.rescheduleThrottled(GuardService.this);
                 // apply 里要查使用记录（单次 186–538ms），绝不能占主线程：每 30 秒卡一下，
                 // 用户在任何页面滑动都会撞上。后台串行跑，合并重复请求。
                 Guard.applyAsync(GuardService.this);   // 内部只有状态变化时才调 setPackagesSuspended

@@ -41,14 +41,17 @@ public final class PageRuleTest {
     }
 
     public static void main(String[] args) {
-        /* ---------- 解析：文字规则 ---------- */
+        /* ---------- 解析：内置视频号规则（按窗口类名） ---------- */
         PageRule.Rule finder = PageRule.parse(PageRule.WECHAT_FINDER);
         yes(finder != null, "内置视频号规则能解析");
         eq(WX, finder.pkg, "包名取分隔符左边");
-        eq(PageRule.KIND_TEXT, finder.kind, "内置规则是文字规则");
-        no(finder.byClass(), "文字规则 byClass 为假");
-        eq("视频号+推荐", finder.value, "值取 text: 之后");
+        eq(PageRule.KIND_CLASS, finder.kind, "内置视频号规则是类名规则（微信不给页面文字）");
+        yes(finder.byClass(), "类名规则 byClass 为真");
+        eq("plugin.finder.ui.", finder.value, "值取 class: 之后");
         eq(PageRule.WECHAT_FINDER, finder.encode(), "编解码round-trip一致");
+        /* 旧版按文字写的两条只能当普通文字规则用 */
+        eq(PageRule.KIND_TEXT, PageRule.parse(PageRule.WECHAT_FINDER_TEXT).kind, "旧版视频号规则是文字规则");
+        eq(PageRule.KIND_TEXT, PageRule.parse(PageRule.WECHAT_MOMENTS_TEXT).kind, "旧版朋友圈规则是文字规则");
 
         /* ---------- 解析：类名规则 ---------- */
         PageRule.Rule byClass = PageRule.parse(WX + "|class:finder");
@@ -112,10 +115,19 @@ public final class PageRuleTest {
         eq(null, PageRule.hitByClass(classRules, WX, null), "类名为空不命中");
         eq(null, PageRule.hitByClass(classRules, WX, "   "), "类名全空格不命中");
         /* 文字规则不该被类名判命中 */
-        eq(null, PageRule.hitByClass(rules(PageRule.WECHAT_FINDER), WX, "whatever.视频号+推荐"), "文字规则不参与类名判");
+        eq(null, PageRule.hitByClass(rules(PageRule.WECHAT_FINDER_TEXT), WX, "whatever.视频号+推荐"), "文字规则不参与类名判");
 
-        /* ---------- hitByText：内置视频号 ---------- */
-        List<PageRule.Rule> textRules = rules(PageRule.WECHAT_FINDER);
+        /* 内置微信两条按类名命中真机类名（2026-11-01 诊断拿到的实际值） */
+        List<PageRule.Rule> builtins = rules(PageRule.WECHAT_FINDER, PageRule.WECHAT_MOMENTS);
+        yes(PageRule.hitByClass(builtins, WX, "com.tencent.mm.plugin.finder.ui.FinderHomeUI") != null,
+                "视频号首页按类名命中");
+        yes(PageRule.hitByClass(builtins, WX, "com.tencent.mm.plugin.sns.ui.SnsTimeLineUI") != null,
+                "朋友圈按类名命中");
+        eq(null, PageRule.hitByClass(builtins, WX, "com.tencent.mm.ui.LauncherUI"), "聊天列表不命中");
+        eq(null, PageRule.hitByClass(builtins, WX, "android.widget.FrameLayout"), "系统 View 类名不命中");
+
+        /* ---------- hitByText：旧版文字规则 ---------- */
+        List<PageRule.Rule> textRules = rules(PageRule.WECHAT_FINDER_TEXT);
         yes(PageRule.hitByText(textRules, WX, page("视频号", "推荐", "朋友")) != null,
                 "两个词都在同一个页面就命中");
         eq(null, PageRule.hitByText(textRules, WX, page("视频号")), "只有「视频号」不命中（发现页）");
@@ -181,7 +193,7 @@ public final class PageRuleTest {
         eq(60, PageRule.clean(longValue.toString()).length(), "超长截断到 60");
 
         /* ---------- label ---------- */
-        yes(finder.label().contains("视频号+推荐"), "label 里要带上凭据");
+        yes(finder.label().contains("plugin.finder.ui."), "label 里要带上凭据");
         yes(byClass.label().contains("finder"), "类名规则 label 也带凭据");
 
         /* ---------- ALL 常量与切分口径一致 ---------- */

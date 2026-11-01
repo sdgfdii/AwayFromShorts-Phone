@@ -15,12 +15,11 @@ import java.util.Locale;
  *   text:视频号+推荐       页面文字里这几个词**都**出现（用 + 连接）
  * </pre>
  *
- * 为什么内置的视频号规则用文字而不是类名：ColorOS 上 {@code AccessibilityEvent#getClassName()}
- * 只给 {@code android.widget.FrameLayout}，根本读不到 Activity 名（实测 2026-10-31）。
- * 类名匹配仍然保留 —— AOSP 和部分机型能给真名，只是不能指望它。
- *
- * 文字规则为什么要多个词：单个「视频号」在微信聊天和「发现」页都会出现，
- * 只匹配一个词等于把聊天也拦了。要求「视频号」和「推荐」同时出现才够像视频号首页。
+ * 关于两类凭据的真实可用性（2026-11-01 真机诊断）：
+ * - `AccessibilityEvent#getClassName()` 在 **TYPE_WINDOW_STATE_CHANGED** 事件上给的是窗口/Activity
+ *   类名（微信进视频号实测给 `com.tencent.mm.plugin.finder.ui.FinderHo…`），可以拿来拦页面。
+ * - 在 TYPE_WINDOW_CONTENT_CHANGED 上给的是具体 View 类名（RecyclerView 之类），不具页面区分度。
+ * - 微信这类应用把**文字**对无障碍隐藏（一屏 0 个字），文字规则对它们永远命不中，只能靠类名。
  */
 public final class PageRule {
 
@@ -37,18 +36,24 @@ public final class PageRule {
     public static final String WECHAT_PKG = "com.tencent.mm";
 
     /**
-     * 内置示例：微信视频号。
-     * 发现页只有「视频号」没有「推荐」，聊天里偶尔两个词都有但极少 —— 组合比单词稳得多。
+     * 内置：微信视频号 —— 按窗口类名拦。
+     *
+     * 微信把页面文字对无障碍隐藏（一屏读到 0 个字），文字规则永远命不中；
+     * 但实测 `AccessibilityEvent#getClassName()` 在进视频号时会给
+     * `com.tencent.mm.plugin.finder.ui.FinderHo…`（2026-11-01 真机诊断）。
+     * 用类名前缀覆盖整个视频号（首页 / 详情 / 直播都算），不用逐个页面精确匹配。
      */
-    public static final String WECHAT_FINDER = WECHAT_PKG + "|text:视频号+推荐";
+    public static final String WECHAT_FINDER = WECHAT_PKG + "|class:plugin.finder.ui.";
 
     /**
-     * 内置示例：微信朋友圈。
-     *
-     * 「朋友圈」三个字在发现页也有，单靠它会把发现页一起拦掉；朋友圈里每条动态下面都有
-     * 「赞」，发现页没有 —— 两个一起出现才算进了朋友圈。
+     * 内置：微信朋友圈 —— 按窗口类名拦（`plugin.sns.ui.*` 是朋友圈那一组页面）。
+     * 同样是因为文字读不到，只能靠类名。
      */
-    public static final String WECHAT_MOMENTS = WECHAT_PKG + "|text:朋友圈+赞";
+    public static final String WECHAT_MOMENTS = WECHAT_PKG + "|class:plugin.sns.ui.";
+
+    /** 旧版按文字写的两条（微信读不到文字，永远命不中）；升级时清掉，避免列表里留两条废规则。 */
+    public static final String WECHAT_FINDER_TEXT = WECHAT_PKG + "|text:视频号+推荐";
+    public static final String WECHAT_MOMENTS_TEXT = WECHAT_PKG + "|text:朋友圈+赞";
 
     private PageRule() {
     }

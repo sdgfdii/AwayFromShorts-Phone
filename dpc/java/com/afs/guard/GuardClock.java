@@ -31,6 +31,10 @@ public final class GuardClock extends Application {
             try{DailyQuotaStore.migrateLegacy(GuardClock.this);}
             catch(RuntimeException error){android.util.Log.w("AFS","legacy quota migration: "+error.getClass().getSimpleName());}
         });
+        runAsync("afs-page-rule-migrate", () -> {
+            // 旧版内置的微信页面规则是按文字写的，微信不给文字 → 换成按窗口类名的版本。
+            try{PageRuleStore.seedBuiltins(GuardClock.this);}catch(RuntimeException ignored){}
+        });
         Startup.prewarm(this);
     }
 

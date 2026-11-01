@@ -20,7 +20,13 @@ import android.util.Log;
  */
 public final class RestAlert {
 
-    private static final String CHANNEL = "afs_rest";
+    /**
+     * 通道 id 带版本号。<br>
+     * 真机上旧的 `afs_rest` 通道被系统/用户降成了 LOW（通知栏里躺着、不弹横幅，
+     * 用户完全感知不到 = 等于没提醒）。通道一旦创建，应用改不了它的重要性 ——
+     * 只能换一个新的 id 重新按 HIGH 建一次，用户没动过的新通道就会正常弹横幅。
+     */
+    private static final String CHANNEL = "afs_rest_v2";
     private static final int ID = 51;
 
     private RestAlert() {
@@ -58,8 +64,12 @@ public final class RestAlert {
         NotificationManager manager = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null || !manager.areNotificationsEnabled()) return;
         if (Build.VERSION.SDK_INT >= 26) {
-            manager.createNotificationChannel(new NotificationChannel(
-                    CHANNEL, T.s("休息提醒"), NotificationManager.IMPORTANCE_DEFAULT));
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL, T.s("休息提醒"), NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription(T.s("定时提醒：每隔一段时间提醒你起来休息"));
+            channel.enableVibration(true);
+            channel.setShowBadge(true);
+            manager.createNotificationChannel(channel);
         }
         Intent open = new Intent(c, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -71,6 +81,10 @@ public final class RestAlert {
                 .setContentTitle(T.s("该歇会儿了"))
                 .setContentText(T.f("已经连续 %d 分钟没休息，站起来走走，看看远处。", every))
                 .setContentIntent(pending)
+                .setWhen(System.currentTimeMillis())
+                .setCategory(Notification.CATEGORY_REMINDER)
+                .setPriority(Notification.PRIORITY_HIGH)
+                .setDefaults(Notification.DEFAULT_ALL)
                 .setAutoCancel(true)
                 .setVisibility(Notification.VISIBILITY_PRIVATE);
         try {
@@ -84,5 +98,30 @@ public final class RestAlert {
     public static void clear(Context c) {
         NotificationManager manager = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) manager.cancel(ID);
+    }
+
+    /**
+     * 下一次该提醒的时刻（给守护闹钟用）；没开返回 0。
+     *
+     * 为什么要算这个：进程被「最近任务」划掉后没人跑 tick，提醒会整个错过。
+     * 把到点时刻排给 AlarmManager，系统会在那一刻把进程叫醒，tick 一跑就补发。
+     * 时段外则排到下一次开门，避免每分钟空转。
+     */
+    static long nextDueAt(Context c) {
+        if (!ReminderStore.on(c)) return 0L;
+        long now = System.currentTimeMillis();
+        java.util.Calendar calendar = GuardClock.now(c);
+        int minute = LockPlan.minuteOfDay(now, LockStore.dayStartMs(calendar));
+        int from = ReminderStore.from(c);
+        int to = ReminderStore.to(c);
+        if (!LockPlan.inWindow(minute, from, to)) {
+            long dayStart = LockStore.dayStartMs(calendar);
+            long open = dayStart + from * LockPlan.MINUTE;
+            while (open <= now) open += 24L * 60L * LockPlan.MINUTE;
+            return open;
+        }
+        long last = ReminderStore.lastFired(c);
+        long due = last <= 0L ? now + 60_000L : last + ReminderStore.every(c) * LockPlan.MINUTE;
+        return due > now ? due : now + 60_000L;
     }
 }

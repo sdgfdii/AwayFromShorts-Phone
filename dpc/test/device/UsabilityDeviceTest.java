@@ -25,31 +25,9 @@ import java.util.List;
 
 /** Real Android dispatch and draft-save regression; no learning data or blocking rules are changed. */
 public final class UsabilityDeviceTest extends Instrumentation {
-    private int checks, clicks;
+    private int checks;
 
     private void check(boolean ok,String label){checks++;if(!ok)throw new AssertionError(label);}
-
-    private class Host extends SwipeNavHost {
-        int navigations;
-        Host(Activity a,View v){super(a,v,1);}
-        @Override protected void navigate(int target){navigations++;}
-    }
-
-    private long time;
-    private void event(Host h,int action,float x,float y){
-        MotionEvent e=MotionEvent.obtain(time,time+20,action,x,y,0);
-        h.dispatchTouchEvent(e);e.recycle();time+=20;
-    }
-    private void gesture(Host h,int end,float dx,float dy){
-        event(h,MotionEvent.ACTION_DOWN,600,100);
-        event(h,MotionEvent.ACTION_MOVE,600+dx,100+dy);
-        event(h,end,600+dx,100+dy);
-    }
-    private void layout(Host h){
-        h.measure(View.MeasureSpec.makeMeasureSpec(1200,View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(1200,View.MeasureSpec.EXACTLY));
-        h.layout(0,0,1200,1200);
-    }
 
     private TextView findText(View v,String text){
         if(v instanceof TextView){
@@ -226,64 +204,8 @@ public final class UsabilityDeviceTest extends Instrumentation {
     @Override public void onStart(){
         Bundle result=new Bundle();Activity a=null;
         try{
-            a=startActivitySync(new Intent().setClassName(getTargetContext(),"com.afs.guard.ToolkitActivity")
-                    .putExtra("tool","dates").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            final Activity screen=a;
-            runOnMainSync(()->{
-                TextView button=new TextView(screen);button.setText("QA");
-                button.setOnTouchListener((v,e)->{if(e.getActionMasked()==MotionEvent.ACTION_UP)clicks++;return true;});
-                Host h=new Host(screen,button);screen.setContentView(h);layout(h);
-                time=android.os.SystemClock.uptimeMillis();
-                gesture(h,MotionEvent.ACTION_UP,0,0);check(clicks==1&&h.navigations==0,"tap clicks once");
-                gesture(h,MotionEvent.ACTION_UP,-400,0);check(clicks==1&&h.navigations==1,"swipe cancels button");
-                gesture(h,MotionEvent.ACTION_CANCEL,-400,0);check(h.navigations==1,"cancel never navigates");
-                gesture(h,MotionEvent.ACTION_UP,0,400);check(h.navigations==1,"vertical never navigates");
-                event(h,MotionEvent.ACTION_DOWN,600,100);h.requestDisallowInterceptTouchEvent(true);
-                event(h,MotionEvent.ACTION_MOVE,200,100);event(h,MotionEvent.ACTION_UP,200,100);
-                check(h.navigations==1,"child owns gesture");
-                event(h,MotionEvent.ACTION_DOWN,600,100);event(h,MotionEvent.ACTION_POINTER_DOWN,600,100);
-                event(h,MotionEvent.ACTION_UP,200,100);check(h.navigations==1,"multiple pointers cancel navigation");
-                gesture(h,MotionEvent.ACTION_UP,0,0);check(h.navigations==1,"tap after cancellation");
-
-                // R02: the first slop-crossing MOVE must reach a real HorizontalScrollView
-                // before the host decides to switch pages.
-                HorizontalScrollView strip=new HorizontalScrollView(screen);
-                strip.setHorizontalScrollBarEnabled(false);
-                LinearLayout row=new LinearLayout(screen);row.setOrientation(LinearLayout.HORIZONTAL);
-                row.addView(new View(screen),new LinearLayout.LayoutParams(3000,400));
-                strip.addView(row);
-                Host hStrip=new Host(screen,strip);layout(hStrip);
-                event(hStrip,MotionEvent.ACTION_DOWN,600,200);
-                event(hStrip,MotionEvent.ACTION_MOVE,100,200);   // first slop-crossing MOVE
-                event(hStrip,MotionEvent.ACTION_MOVE,50,200);    // child still owns the gesture
-                event(hStrip,MotionEvent.ACTION_UP,50,200);
-                check(hStrip.navigations==0,"first move lets horizontal scroll view take over");
-                check(strip.getScrollX()>0,"horizontal scroll view consumed the gesture");
-
-                // R02: a child may only claim the gesture inside this first MOVE.
-                final boolean[] tookOver={false};
-                View takeover=new View(screen);
-                takeover.setOnTouchListener((v,e)->{
-                    if(e.getActionMasked()==MotionEvent.ACTION_MOVE){
-                        tookOver[0]=true;
-                        v.getParent().requestDisallowInterceptTouchEvent(true);
-                    }
-                    return true;
-                });
-                Host hTake=new Host(screen,takeover);layout(hTake);
-                gesture(hTake,MotionEvent.ACTION_UP,-400,0);
-                check(tookOver[0]&&hTake.navigations==0,"child takes over within first move");
-
-                // Ordinary buttons still navigate on a swipe, but never receive the click.
-                Button real=new Button(screen);real.setText("QA 按钮");
-                final int[] realClicks={0};real.setOnClickListener(v->realClicks[0]++);
-                Host hReal=new Host(screen,real);layout(hReal);
-                gesture(hReal,MotionEvent.ACTION_UP,-400,0);
-                check(realClicks[0]==0&&hReal.navigations==1,"real button swipe navigates without click");
-
-                screen.finish();
-            });
-            waitForIdleSync();
+            // 全局滑页手势已删（2026-11-02）：原来的 Host/event/gesture 手势分发用例
+            // 随 SwipeNavHost 一起移除，这里只剩草稿与页面渲染回归。
             draftFailure();
             for(String page:new String[]{"MainActivity","MemoryActivity","QuizActivity","FreezeBoardActivity","CheckinActivity"}){
                 Activity opened=startActivitySync(new Intent().setClassName(getTargetContext(),"com.afs.guard."+page).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

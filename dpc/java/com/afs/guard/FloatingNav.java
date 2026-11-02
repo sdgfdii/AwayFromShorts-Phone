@@ -97,7 +97,9 @@ public final class FloatingNav extends FrameLayout {
         }
         FrameLayout host=new FrameLayout(activity);
         host.setBackgroundColor(ui.bg());host.setClipChildren(false);host.setClipToPadding(false);
-        host.addView(new SwipeNavHost(activity,content,selected),new LayoutParams(-1,-1));
+        // 全局滑页手势已删（2026-11-02 用户要求）：切页只走底栏。
+        // 页面内容直接进 host，不再套 SwipeNavHost。
+        host.addView(content,new LayoutParams(-1,-1));
         FloatingNav nav=new FloatingNav(activity,content,host,selected,null);
         LiveNavWindow.attach(activity,host,nav);
         return host;
@@ -337,13 +339,13 @@ public final class FloatingNav extends FrameLayout {
         navigationQueue.post(pendingOpen);
     }
     private void dismissSnapshot(boolean recycle) { snapshotView=null; }
+    /** 全局滑页手势已删；这个入口只剩设备测试在用，用来模拟一次切页请求。 */
+    static void swipeNavigate(Activity activity,int from,int to) {request(activity,from,to);}
     public static void open(Activity activity,int index) {
         Intent intent=new Intent(activity,PAGES[index]);intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         intent.putExtra("from_bottom_nav",true);
         activity.startActivity(intent);activity.overridePendingTransition(0,0);
     }
-    /** 页面级左右滑切页走这里：记录一次与点底栏相同的过渡，再拉起目标 Activity。 */
-    static void swipeNavigate(Activity activity,int from,int to) {request(activity,from,to);}
     /**
      * 新页面正文直接显示；消费导航请求并更新底栏选中位置，不播放正文过渡。
      */

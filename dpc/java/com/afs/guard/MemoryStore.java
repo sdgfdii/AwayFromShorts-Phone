@@ -111,6 +111,7 @@ public final class MemoryStore {
     }
     public static synchronized void deleteDeck(Context c,String id) {data(c).deleteDeck(id,System.currentTimeMillis());save(c);}
     public static synchronized void restoreDeck(Context c,String id) {data(c).restoreDeck(id);save(c);}
+    public static synchronized int purgeDeck(Context c,String id) {int removed=data(c).purgeDeck(id);save(c);return removed;}
     public static synchronized void saveCard(Context c, JSONObject card) { data(c).saveCard(card); save(c); }
     public static synchronized boolean rate(Context c, String id, int rating) {
         boolean credit = data(c).rate(id, rating, System.currentTimeMillis()); save(c); return credit;

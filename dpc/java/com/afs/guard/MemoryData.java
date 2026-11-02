@@ -75,6 +75,37 @@ public final class MemoryData {
         JSONArray active=activeDecks();for(int i=0;i<active.length();i++)if(d.optString("name").equals(active.optJSONObject(i).optString("name")))throw new IllegalArgumentException(T.s("已有同名学科，请先修改名称再恢复"));
         d.remove("deletedAt");
     }
+    /**
+     * 从回收站彻底删掉：学科、它的卡片、复习日志和当日计划一起清空，之后不可恢复。
+     * 返回被删掉的卡片数。
+     */
+    public int purgeDeck(String id) {
+        JSONObject d=deck(id);if(d==null || !deleted(id))throw new IllegalArgumentException(T.s("回收站中没有这个学科"));
+        int removed=0;JSONArray keptCards=new JSONArray();
+        for(int i=0;i<cards().length();i++){
+            JSONObject c=cards().optJSONObject(i);
+            if(c!=null && id.equals(c.optString("deck"))){cardIndex.remove(c.optString("id"));removed++;continue;}
+            keptCards.put(c);
+        }
+        put(db,"cards",keptCards);
+        JSONArray keptDecks=new JSONArray();
+        for(int i=0;i<decks().length();i++){
+            JSONObject x=decks().optJSONObject(i);
+            if(x!=null && id.equals(x.optString("id")))continue;
+            keptDecks.put(x);
+        }
+        put(db,"decks",keptDecks);deckIndex.remove(id);
+        JSONArray logs=db.optJSONArray("logs"),keptLogs=new JSONArray();
+        if(logs!=null)for(int i=0;i<logs.length();i++){
+            JSONObject log=logs.optJSONObject(i);
+            if(log!=null && id.equals(log.optString("deck")))continue;
+            keptLogs.put(log);
+        }
+        put(db,"logs",keptLogs);
+        JSONObject plans=db.optJSONObject("plans");
+        if(plans!=null){java.util.Iterator<String> days=plans.keys();while(days.hasNext()){JSONObject day=plans.optJSONObject(days.next());if(day!=null)day.remove(id);}}
+        return removed;
+    }
     public JSONObject addDeck(String name, String subject) {
         name=name.trim();subject=subject.trim();
         if(name.isEmpty() || name.length()>40 || subject.isEmpty() || subject.length()>40 || name.matches(".*[\\p{Cntrl}].*") || subject.matches(".*[\\p{Cntrl}].*"))

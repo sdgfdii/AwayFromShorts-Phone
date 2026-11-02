@@ -144,6 +144,22 @@ public final class MemoryTest {
         check(restored.db.optJSONArray("logs").length()==logs,"undo does not duplicate review records");
         org.json.JSONArray active=restored.activeDecks();for(int i=0;i<active.length();i++)restored.deleteDeck(active.optJSONObject(i).optString("id"),now);
         check(new MemoryData(restored.db.toString()).activeDecks().length()==0,"all defaults can stay deleted");
+        // 回收站彻底删除：卡片、日志、当天计划、索引一起清掉，重启也不残留
+        MemoryData purge=new MemoryData();String pid=deck(purge,0),keep=deck(purge,1);
+        JSONObject gone=add(purge,pid,"purge me");add(purge,keep,"keep me");
+        purge.plan(pid,now);purge.rate(gone.optString("id"),4,now);
+        int keepCards=purge.count(keep),logCount=purge.db.optJSONArray("logs").length();
+        purge.deleteDeck(pid,now);
+        check(purge.purgeDeck(pid)==1 && purge.count(pid)==0,"purge removes every card of the subject");
+        check(purge.deck(pid)==null && purge.card(gone.optString("id"))==null,"purge clears deck and card indexes");
+        check(purge.count(keep)==keepCards,"purge leaves other subjects untouched");
+        check(purge.db.optJSONArray("logs").length()==logCount-1,"purge drops that subject's review logs");
+        JSONObject day=purge.db.optJSONObject("plans").optJSONObject(MemoryData.date(now));
+        check(day==null || day.optJSONObject(pid)==null,"purge drops that subject's daily plan");
+        reject(()->purge.purgeDeck(pid),"purging twice is rejected");
+        reject(()->purge.purgeDeck(keep),"active subject cannot be purged");
+        MemoryData reopened=new MemoryData(purge.db.toString());
+        check(reopened.deck(pid)==null && reopened.deletedDecks().length()==0 && reopened.count(keep)==keepCards,"purged subject stays gone after restart");
     }
     private static void customSubjects() {
         MemoryData m=new MemoryData();JSONObject d=m.addDeck(" 电路 ","电路");String id=d.optString("id");

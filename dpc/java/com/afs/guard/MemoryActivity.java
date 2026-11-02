@@ -76,6 +76,8 @@ public class MemoryActivity extends ThemedActivity {
     protected void onCreate(Bundle saved) {
         if (Ui.isDark(this)) setTheme(getResources().getIdentifier("NavThemeDark", "style", getPackageName()));
         super.onCreate(saved); ui = new Ui(this);
+        if(saved==null&&getIntent().getBooleanExtra("backup_only",false))getWindow().getDecorView().post(()->ThemeStore.dialog(this).setTitle(T.s("记忆备份"))
+            .setItems(new String[]{T.s("导出备份（含图片与复习记录）"),T.s("恢复备份")},(dialog,which)->{if(which==0)pickExport();else confirmRestore();}).show());
         managementMode=getIntent().getBooleanExtra(CardManagementActivity.EXTRA_MANAGE,false);
         if(managementMode&&saved==null)page="tools";
         deck = saved == null ? getIntent().getStringExtra("deck") : saved.getString("deck", "");
@@ -104,7 +106,7 @@ public class MemoryActivity extends ThemedActivity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);
         if("editor".equals(page)&&(intent.getBooleanExtra("from_bottom_nav",false)||intent.getBooleanExtra("open_learning",false))){ThemeStore.dialog(this).setTitle(T.s("离开卡片编辑？")).setMessage(T.s("尚未保存的修改会被放弃。")).setNegativeButton(T.s("继续编辑"),null).setPositiveButton(T.s("放弃并进入记忆"),(d,w)->{setIntent(intent);resetPageScroll();managementMode=false;home();}).show();return;}setIntent(intent);
         if(intent.getBooleanExtra("from_bottom_nav",false)||intent.getBooleanExtra("open_learning",false)){
-            resetPageScroll();managementMode=false;handler.removeCallbacksAndMessages(null);home();
+            resetPageScroll();pageScrollCache.clear();managementMode=false;handler.removeCallbacksAndMessages(null);home();
         }else if(intent.getBooleanExtra(CardManagementActivity.EXTRA_MANAGE,false)){managementMode=true;tools();}
     }
     protected void onResume() {
@@ -125,13 +127,30 @@ public class MemoryActivity extends ThemedActivity {
         } else if ("tools".equals(page)&&managementMode) finish();
         else if(managementMode)tools();else home();
     }
+    /**
+     * 页内换页（学科列表 ↔ 卡片列表 ↔ 卡片编辑）不走 onPause/onResume，
+     * 基类那套滚动保存在这里失效，所以每次换内容前自己存一份，换完再按页恢复。
+     * 卡片列表按学科分开记：A 学科滚到第 50 张，不能影响 B 学科进来时的位置。
+     */
+    private final java.util.Map<String, Bundle> pageScrollCache = new java.util.HashMap<>();
+    private String renderedScrollKey;
+
+    private String scrollKey() { return "cards".equals(page) ? "cards|" + deck : page; }
+
+    private void swapContent(View content) {
+        if (renderedScrollKey != null) pageScrollCache.put(renderedScrollKey, PageScrollState.capture(this));
+        renderedScrollKey = scrollKey();
+        super.setContentView(content);
+        PageScrollState.restore(this, pageScrollCache.get(renderedScrollKey));
+    }
+
     private void base(String title, String subtitle) {
         clearPageWorkUi();
         handler.removeCallbacks(queueTick); handler.removeCallbacks(advanceTick); current = null;
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); ui.page(scroll);
         body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32)); scroll.addView(body);
-        setContentView(FloatingNav.wrap(this, scroll, managementMode?4:0)); getWindow().setStatusBarColor(ui.bg()); getWindow().setNavigationBarColor(ui.bg());
+        swapContent(FloatingNav.wrap(this, scroll, managementMode?4:0)); getWindow().setStatusBarColor(ui.bg()); getWindow().setNavigationBarColor(ui.bg());
         FloatingNav.fullscreen(this);
         if (!"home".equals(page)) {
         TextView back = ui.sub("tools".equals(page) ? T.s("‹  卡管理") : T.s("‹  记忆卡设置"));
@@ -210,7 +229,7 @@ public class MemoryActivity extends ThemedActivity {
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(ui.dp(20), ui.dp(16), ui.dp(20), ui.dp(24));
-        setContentView(FloatingNav.wrap(this, body, managementMode ? 4 : 0));
+        swapContent(FloatingNav.wrap(this, body, managementMode ? 4 : 0));
         getWindow().setStatusBarColor(ui.bg()); getWindow().setNavigationBarColor(ui.bg());
         FloatingNav.fullscreen(this);
     }
@@ -266,7 +285,7 @@ public class MemoryActivity extends ThemedActivity {
     private void tools() {
         page = "tools"; flashMode = false; draft = null; MemoryData m;
         try { m = MemoryStore.snapshot(this); } catch (RuntimeException e) { errorPage(e); return; }
-        base(T.s("记忆卡设置"), T.s("学科、卡片、错题、学习设置与备份。"));
+        base(T.s("记忆卡设置"), T.s("学科、卡片、错题与学习设置。"));
         MemoryFlashcards.Progress flash = MemoryFlashcards.progress(m, System.currentTimeMillis());
         JSONObject config = MemoryFlashcards.settings(m);
         button(body, T.s("抽取设置  ·  ") + ("sequence".equals(config.optString("mode")) ? T.s("顺序") : T.s("随机"))
@@ -301,8 +320,6 @@ public class MemoryActivity extends ThemedActivity {
             small(row, T.s("设置"), v -> { deck = id; settings(d); });
         }
         button(body,T.s("学科回收站 · ")+m.deletedDecks().length(),false,v->subjectTrash());
-        button(body, T.s("导出备份（含图片与复习记录）"), false, v -> pickExport());
-        button(body, T.s("恢复备份"), false, v -> confirmRestore());
         button(body, T.s("开源组件与许可证"), false, v -> license());
         hint(body, T.s("每天每张卡只计一次。新卡和遗忘卡须完成学习步骤后才计数。\n今日目标最多为今日队列数量。开始答题后，当日计划固定，设置次日生效。"));
     }
@@ -332,12 +349,28 @@ public class MemoryActivity extends ThemedActivity {
     }
     private void subjectTrash() {
         try {
-            MemoryData data=MemoryStore.snapshot(this);JSONArray trash=data.deletedDecks();
+            final MemoryData data=MemoryStore.snapshot(this);final JSONArray trash=data.deletedDecks();
             if(trash.length()==0){toast(T.s("回收站为空"));return;}
             String[] names=new String[trash.length()];
-            for(int i=0;i<names.length;i++){JSONObject d=trash.optJSONObject(i);names[i]=T.s("恢复「")+d.optString("name")+"」 · "+data.count(d.optString("id"))+T.s(" 张卡片");}
-            ThemeStore.dialog(this).setTitle(T.s("学科回收站")).setItems(names,(d,which)->restoreSubject(trash.optJSONObject(which).optString("id"))).setNegativeButton(T.s("关闭"),null).show();
+            for(int i=0;i<names.length;i++){JSONObject d=trash.optJSONObject(i);names[i]=d.optString("name")+" · "+data.count(d.optString("id"))+T.s(" 张卡片");}
+            ThemeStore.dialog(this).setTitle(T.s("学科回收站")).setItems(names,(d,which)->{
+                final JSONObject deck=trash.optJSONObject(which);
+                final String id=deck.optString("id"),name=deck.optString("name");
+                ThemeStore.dialog(this).setTitle(name)
+                        .setItems(new String[]{T.s("恢复"),T.s("彻底删除（不可恢复）")},(pick,index)->{
+                            if(index==0)restoreSubject(id);else confirmPurge(id,name,data.count(id));
+                        }).setNegativeButton(T.s("取消"),null).show();
+            }).setNegativeButton(T.s("关闭"),null).show();
         }catch(RuntimeException e){toast(e.getMessage());}
+    }
+    private void confirmPurge(final String id,String name,int cards){
+        ThemeStore.dialog(this).setTitle(T.f("彻底删除「%s」？",name))
+                .setMessage(T.f("这个学科的 %d 张卡片、复习记录和今日计划会一起删掉，删完找不回来。",cards))
+                .setNegativeButton(T.s("取消"),null)
+                .setPositiveButton(T.s("彻底删除"),(d,w)->{
+                    try{int removed=MemoryStore.purgeDeck(this,id);lastDeleted="";syncGuard();tools();toast(T.f("已彻底删除，共 %d 张卡片",removed));}
+                    catch(RuntimeException e){toast(e.getMessage());}
+                }).show();
     }
     private void small(LinearLayout row, String s, View.OnClickListener onClick) {
         TextView t = new TextView(this); t.setText(s); t.setTextColor(ui.accent()); t.setGravity(Gravity.CENTER);
@@ -825,7 +858,7 @@ public class MemoryActivity extends ThemedActivity {
     }
     private void errorPage(RuntimeException e) {
         page = "home"; base(T.s("记忆库暂时不可用"), e.getMessage());
-        button(body, T.s("恢复备份"), true, v -> confirmRestore());
+        button(body, T.s("数据与备份"), true, v -> startActivity(new Intent(this,DataManagementActivity.class)));
         button(body, T.s("返回首页"), false, v -> finish());
     }
     private void toast(String s) { Toast.makeText(this, s == null ? T.s("操作失败") : s, Toast.LENGTH_LONG).show(); }

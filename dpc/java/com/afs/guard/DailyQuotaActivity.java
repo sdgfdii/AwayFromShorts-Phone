@@ -14,6 +14,8 @@ public final class DailyQuotaActivity extends ThemedActivity {
     private final java.util.concurrent.ExecutorService worker=java.util.concurrent.Executors.newSingleThreadExecutor();
     private final List<String> catalog=new ArrayList<>();private boolean destroyed;private TextView window;
     private final Map<String,String> names=new HashMap<>();private final Map<TextView,String> counters=new HashMap<>();private final List<View> controls=new ArrayList<>();private final Map<TextView,UsageQuotaProgress> bars=new HashMap<>();
+    /** 跨设备格子的明细行：group id → 那一块 TextView。 */
+    private final Map<TextView,String> lanDetails=new LinkedHashMap<>();
     private final Runnable tick=new Runnable(){public void run(){refreshLabels();handler.postDelayed(this,1000);}};
     @Override protected void onCreate(Bundle state){super.onCreate(state);ui=new Ui(this);render();
         worker.execute(()->{Set<String> found=new HashSet<>();Map<String,String> labels=new HashMap<>();for(android.content.pm.ApplicationInfo app:getPackageManager().getInstalledApplications(0))if(!app.packageName.equals(getPackageName())&&getPackageManager().getLaunchIntentForPackage(app.packageName)!=null){found.add(app.packageName);labels.put(app.packageName,Guard.labelOf(getPackageManager(),app.packageName));}
@@ -33,14 +35,27 @@ public final class DailyQuotaActivity extends ThemedActivity {
     private void toast(String value){Toast.makeText(this,value==null?T.s("操作未完成"):value,Toast.LENGTH_SHORT).show();}
     /** 能不能「减」：移出应用、调小分钟数、删格子、关总开关。只在编辑窗口里为真。 */
     private boolean canReduce(){return DailyQuotaStore.editable(this);}
-    private void render(){Bundle position=PageScrollState.capture(this);counters.clear();controls.clear();bars.clear();ScrollView scroll=new ScrollView(this);ui.page(scroll);body=new LinearLayout(this);body.setOrientation(1);body.setPadding(ui.dp(20),ui.dp(24),ui.dp(20),ui.dp(36));scroll.addView(body);
+    private void render(){Bundle position=PageScrollState.capture(this);counters.clear();controls.clear();bars.clear();lanDetails.clear();ScrollView scroll=new ScrollView(this);ui.page(scroll);body=new LinearLayout(this);body.setOrientation(1);body.setPadding(ui.dp(20),ui.dp(24),ui.dp(20),ui.dp(36));scroll.addView(body);
         action(body,T.s("‹  冻结应用"),ALWAYS,this::finish);body.addView(ui.title(T.s("使用限额")));hint(body,T.f("一个格子放一个应用，就是它单独的一份额度；放多个应用，就是它们共用同一份额度。应用放进冻结时段后，只累计所绑时段内的用量，额度用完才冻结；未绑定时段则全天累计。%s重置，改格子不清空已用时间。加到格子里的操作随时都能做（加应用、加分钟数）；移出应用、调小分钟数、删格子只在收束时段 %s 内开放。学习联动与禁忌惩罚继续生效。",DayBoundary.label(this),TimeWindow.label(this)));body.addView(window);
         window=text("",13,ui.accent());body.addView(window);
         action(body,T.f("收束时段 · %s",TimeWindow.label(this)),ALWAYS,()->TimeWindow.pick(this,this::render));
         DailyQuotaData d=DailyQuotaStore.snapshot(this);CheckBox enabled=new CheckBox(this);enabled.setText(T.s("启用每日限额"));enabled.setTextColor(ui.text());enabled.setChecked(d.enabled());body.addView(enabled);enabled.setOnClickListener(v->{if(!canReduce()&&!enabled.isChecked()){enabled.setChecked(true);toast(T.f("关闭限额要等收束时段 %s",TimeWindow.label(this)));return;}JSONObject next=MemoryData.copy(d.config);DailyQuotaData.put(next,"enabled",enabled.isChecked());save(next);});
         action(body,T.s("使用情况访问权限"),ALWAYS,()->startActivity(new Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)));
-        for(int i=0;i<d.groups().length();i++){JSONObject g=d.groups().optJSONObject(i);LinearLayout box=ui.card();body.addView(box,ui.gap(12));box.addView(ui.title(g.optString("name")));JSONArray apps=g.optJSONArray("apps");StringBuilder labels=new StringBuilder();for(int j=0;j<apps.length();j++){if(j>0)labels.append(T.s("、"));String pkg=apps.optString(j);Rule rule=RuleStore.all(this).get(pkg);labels.append(name(pkg)).append(rule==null||FreezeSlotStore.unassigned(rule)?T.s("（全天）"):T.s("（所绑时段）"));}hint(box,(apps.length()>1?T.s("共用 · "):"")+labels);
-            TextView counter=text("",16,ui.text());box.addView(counter);counters.put(counter,g.optString("id"));UsageQuotaProgress bar=new UsageQuotaProgress(this);LinearLayout.LayoutParams barLp=new LinearLayout.LayoutParams(-1,ui.dp(8));barLp.topMargin=ui.dp(8);barLp.bottomMargin=ui.dp(14);box.addView(bar,barLp);bars.put(counter,bar);action(box,T.s("修改应用和时长"),ALWAYS,()->edit(g,new LinkedHashSet<>(),null));
+        for(int i=0;i<d.groups().length();i++){JSONObject g=d.groups().optJSONObject(i);LinearLayout box=ui.card();body.addView(box,ui.gap(12));
+            // 跨设备格子：标题上带标记，下面摊开「手机这一份 / 电脑这一份」，
+            // 再给一个进设置面板的按钮 —— 和电脑面板那条格子的按钮是同一个意思。
+            boolean shared=LanQuota.isShared(this,g.optString("id"));
+            box.addView(ui.title(shared?g.optString("name")+T.s(" · 跨设备"):g.optString("name")));JSONArray apps=g.optJSONArray("apps");StringBuilder labels=new StringBuilder();for(int j=0;j<apps.length();j++){if(j>0)labels.append(T.s("、"));String pkg=apps.optString(j);Rule rule=RuleStore.all(this).get(pkg);labels.append(name(pkg)).append(rule==null||FreezeSlotStore.unassigned(rule)?T.s("（全天）"):T.s("（所绑时段）"));}hint(box,(apps.length()>1?T.s("共用 · "):"")+labels);
+            TextView counter=text("",16,ui.text());box.addView(counter);counters.put(counter,g.optString("id"));UsageQuotaProgress bar=new UsageQuotaProgress(this);LinearLayout.LayoutParams barLp=new LinearLayout.LayoutParams(-1,ui.dp(8));barLp.topMargin=ui.dp(8);barLp.bottomMargin=ui.dp(14);box.addView(bar,barLp);bars.put(counter,bar);
+            if(shared){TextView lan=text("",12,ui.text3());lan.setPadding(0,ui.dp(2),0,ui.dp(10));box.addView(lan);lanDetails.put(lan,g.optString("id"));}
+            action(box,T.s("修改应用和时长"),ALWAYS,()->edit(g,new LinkedHashSet<>(),null));
+            action(box,shared?T.s("⇄ 跨设备设置"):T.s("⇄ 设为跨设备共享"),ALWAYS,()->{
+                if(shared){LanQuotaPanel.show(this,this::render);return;}
+                ThemeStore.dialog(this).setTitle(T.s("把这一格设成跨设备共享？"))
+                        .setMessage(T.s("这个格子的额度和电脑合成一个池子：电脑那边也要有一条格子标成跨设备，两边合计到上限就同时停。池子的分钟数以电脑那条为准。"))
+                        .setNegativeButton(T.s("取消"),null)
+                        .setPositiveButton(T.s("设为共享"),(a,b)->{LanQuota.setGroup(this,g.optString("id"),g.optString("name"));LanQuota.setEnabled(this,true);LanQuota.clearCache(this);render();LanQuotaPanel.show(this,this::render);}).show();
+            });
             action(box,T.s("移除格子"),WINDOW_ONLY,()->ThemeStore.dialog(this).setTitle(T.s("移除这个限额格子？")).setMessage(T.s("当天已用时间会保留。重新添加相同应用会继续累计；原有冻结规则仍然生效。")).setNegativeButton(T.s("取消"),null).setPositiveButton(T.s("移除"),(a,b)->remove(g.optString("id"))).show());
         }
         if(d.groups().length()==0)hint(body,T.s("尚未设置每日限额。一个格子可以只放一个应用，也可以放多个应用共用一份。"));
@@ -48,7 +63,19 @@ public final class DailyQuotaActivity extends ThemedActivity {
         setContentView(FloatingNav.wrap(this,scroll,2));FloatingNav.fullscreen(this);PageScrollState.restore(this,position);refreshLabels();
     }
     private void refreshLabels(){if(window==null)return;Calendar now=GuardClock.now(this);boolean allowed=DailyQuotaData.editable(now,TimeWindow.start(this),TimeWindow.end(this));window.setText(allowed?T.s("随时可修改 · 当天已用时间保留"):T.s("现在只能加 · 移除或减少要等 ")+new java.text.SimpleDateFormat("MM-dd HH:mm",Locale.CHINA).format(new Date(DailyQuotaData.nextEdit(now,TimeWindow.start(this),TimeWindow.end(this)))));window.setTextColor(allowed?ui.accent():ui.red());for(View control:controls){control.setEnabled(allowed);control.setAlpha(allowed?1f:.45f);}
-        DailyQuotaData data=DailyQuotaStore.snapshot(this);for(Map.Entry<TextView,String> row:counters.entrySet())for(int i=0;i<data.groups().length();i++){JSONObject group=data.groups().optJSONObject(i);if(row.getValue().equals(group.optString("id"))){row.getKey().setText(DailyQuotaStore.description(this,data,group));bars.get(row.getKey()).bind(data.used(group),group.optInt("minutes")*60000L,DailyQuotaStore.readable(this,data),data.enabled());}}}
+        DailyQuotaData data=DailyQuotaStore.snapshot(this);for(Map.Entry<TextView,String> row:counters.entrySet())for(int i=0;i<data.groups().length();i++){JSONObject group=data.groups().optJSONObject(i);if(row.getValue().equals(group.optString("id"))){row.getKey().setText(DailyQuotaStore.description(this,data,group));bars.get(row.getKey()).bind(data.used(group),group.optInt("minutes")*60000L,DailyQuotaStore.readable(this,data),data.enabled());}}
+        // 跨设备格子每轮跟着刷新：两端明细是从轮询缓存读的，慢一秒就不同步
+        for(Map.Entry<TextView,String> row:lanDetails.entrySet())row.getKey().setText(lanDetail(row.getValue()));}
+    /** 跨设备格子下面那三行：池子余量、手机这一份、电脑这一份。 */
+    private String lanDetail(String groupId){
+        DailyQuotaData data=DailyQuotaStore.snapshot(this);
+        JSONObject group=data.groupById(groupId);
+        StringBuilder out=new StringBuilder(LanQuota.summary(this));
+        if(!LanQuota.fresh(this))return out.toString();
+        out.append('\n').append(T.s("手机这一份：")).append(LanQuotaPanel.appsText(LanQuota.appDetail(this,data,group)));
+        out.append('\n').append(T.s("电脑这一份：")).append(LanQuotaPanel.appsText(LanQuota.pcApps(this)));
+        return out.toString();
+    }
     private void save(JSONObject config){try{DailyQuotaStore.save(this,config);toast(T.s("每日限额已保存"));render();worker.execute(()->{try{Guard.apply(this);}catch(RuntimeException ignored){}});}catch(RuntimeException error){toast(error.getMessage());render();}}
     private JSONArray without(Set<String> ids){JSONArray out=new JSONArray();JSONArray groups=DailyQuotaStore.snapshot(this).groups();for(int i=0;i<groups.length();i++)if(!ids.contains(groups.optJSONObject(i).optString("id")))out.put(groups.optJSONObject(i));return out;}
     private void remove(String id){JSONObject next=MemoryData.copy(DailyQuotaStore.snapshot(this).config);JSONArray groups=without(Collections.singleton(id));DailyQuotaData.put(next,"groups",groups);if(groups.length()==0)DailyQuotaData.put(next,"enabled",false);save(next);}

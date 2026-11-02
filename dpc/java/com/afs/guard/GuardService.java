@@ -67,7 +67,9 @@ public class GuardService extends Service {
                     DailyQuotaData d=DailyQuotaStore.snapshot(GuardService.this);
                     org.json.JSONObject group=d.groupById(LanQuota.group(GuardService.this));
                     long used=group==null?0:d.used(group);
-                    LanQuota.pollAsync(GuardService.this,used,()->{
+                    // 连同明细一起报：电脑面板要照它列出「手机这一份」是哪些应用花的。
+                    org.json.JSONArray apps=LanQuota.appDetail(GuardService.this,d,group);
+                    LanQuota.pollAsync(GuardService.this,used,apps,()->{
                         boolean now=LanQuota.exhausted(GuardService.this);
                         if(now!=lanExhausted){lanExhausted=now;handler.post(()->Guard.apply(GuardService.this));}
                     });

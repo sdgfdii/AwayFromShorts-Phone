@@ -91,6 +91,8 @@ public class FreezeBoardActivity extends ThemedActivity {
     private TextView slotTab, quotaTab;
     private final Map<UsageQuotaProgress,String> dailyBars=new java.util.HashMap<>();
     private final Map<TextView,String> dailyTexts=new java.util.HashMap<>();
+    /** 跨设备格子的明细行：和电脑共享的那一格要看得到两端各花了多少。 */
+    private final Map<TextView,String> lanTexts=new java.util.HashMap<>();
     private final Map<UsageQuotaProgress,String> legacyBars=new java.util.HashMap<>();
     private int libraryGeneration;
     private boolean disposed;
@@ -206,7 +208,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         int oldY = scroll == null ? 0 : scroll.getScrollY();
         rules = RuleStore.all(this); slots = FreezeSlotStore.all(this);
         statusSnapshot();
-        timelines.clear(); libraryApps.clear();dailyBars.clear();dailyTexts.clear();legacyBars.clear();slotViews.clear();
+        timelines.clear(); libraryApps.clear();dailyBars.clear();dailyTexts.clear();lanTexts.clear();legacyBars.clear();slotViews.clear();
         libraryGeneration++;fillLibrary=null;
         ruleSnapshot = RuleStore.exportRules(this);
         dailySnapshot=DailyQuotaStore.snapshot(this).config.toString();
@@ -323,7 +325,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         @Override protected void onDetachedFromWindow(){getViewTreeObserver().removeOnScrollChangedListener(listener);removeCallbacks(update);scheduled=false;pool.clear();super.onDetachedFromWindow();}
     }
     private boolean inside(View child,View parent){for(ViewParent p=child.getParent();p!=null;p=p.getParent())if(p==parent)return true;return child==parent;}
-    private void forget(View parent){timelines.removeIf(v->inside(v,parent));dailyBars.keySet().removeIf(v->inside(v,parent));dailyTexts.keySet().removeIf(v->inside(v,parent));legacyBars.keySet().removeIf(v->inside(v,parent));}
+    private void forget(View parent){timelines.removeIf(v->inside(v,parent));dailyBars.keySet().removeIf(v->inside(v,parent));dailyTexts.keySet().removeIf(v->inside(v,parent));lanTexts.keySet().removeIf(v->inside(v,parent));legacyBars.keySet().removeIf(v->inside(v,parent));}
     private void refreshAssignments(){
         Map<String,Rule> old=rules;rules=RuleStore.all(this);statusSnapshot();ruleSnapshot=RuleStore.exportRules(this);dailySnapshot=DailyQuotaStore.snapshot(this).config.toString();
         for(FreezeSlotStore.Slot slot:slots)if(!FreezeSlotStore.members(slot,old).equals(FreezeSlotStore.members(slot,rules))){View before=slotViews.get(slot.id);if(before==null){rebuild();return;}int at=slotsView.indexOfChild(before);forget(before);slotsView.removeView(before);View next=slotCard(slot);slotViews.put(slot.id,next);slotsView.addView(next,at,gap(16));}
@@ -977,6 +979,13 @@ public class FreezeBoardActivity extends ThemedActivity {
         TextView detail=text("",11,look.text2());
         LinearLayout.LayoutParams detailLp=new LinearLayout.LayoutParams(-1,ViewGroup.LayoutParams.WRAP_CONTENT);detailLp.topMargin=dp(7);
         card.addView(detail,detailLp);dailyTexts.put(detail,group.optString("id"));
+        // 跨设备：格子上就有一个入口，和电脑面板那条格子的按钮是同一个意思。
+        // 已共享时这里直接摊开「手机这一份 / 电脑这一份」，不点进去也看得到。
+        TextView lan=text("",11,look.text3());
+        LinearLayout.LayoutParams lanLp=new LinearLayout.LayoutParams(-1,ViewGroup.LayoutParams.WRAP_CONTENT);lanLp.topMargin=dp(6);
+        lan.setLineSpacing(dp(2),1f);
+        lan.setOnClickListener(v->lanQuotaTap(group));
+        card.addView(lan,lanLp);lanTexts.put(lan,group.optString("id"));
         UsageQuotaProgress bar=new UsageQuotaProgress(this);
         LinearLayout.LayoutParams barLp=new LinearLayout.LayoutParams(-1,dp(8));barLp.topMargin=dp(8);card.addView(bar,barLp);
         dailyBars.put(bar,group.optString("id"));
@@ -997,9 +1006,33 @@ public class FreezeBoardActivity extends ThemedActivity {
         });
         return card;
     }
+    /** 点格子上的跨设备那一行：没共享就问一句，共享了就进同一块设置面板。 */
+    private void lanQuotaTap(final org.json.JSONObject group){
+        if(LanQuota.isShared(this,group.optString("id"))){LanQuotaPanel.show(this,this::rebuild);return;}
+        ThemeStore.dialog(this).setTitle(T.s("把这一格设成跨设备共享？"))
+                .setMessage(T.s("这个格子的额度和电脑合成一个池子：电脑那边也要有一条格子标成跨设备，两边合计到上限就同时停。池子的分钟数以电脑那条为准。"))
+                .setNegativeButton(T.s("取消"),null)
+                .setPositiveButton(T.s("设为共享"),(a,b)->{
+                    LanQuota.setGroup(this,group.optString("id"),group.optString("name"));
+                    LanQuota.setEnabled(this,true);
+                    LanQuota.clearCache(this);
+                    rebuild();
+                    LanQuotaPanel.show(this,this::rebuild);
+                }).show();
+    }
+    /** 格子下面那几行字：未共享时是入口提示，共享后是两端的明细。 */
+    private String lanCardText(String groupId){
+        if(!LanQuota.isShared(this,groupId))return T.s("⇄ 与电脑共享这份额度");
+        if(!LanQuota.fresh(this))return T.s("⇄ 跨设备 · 未连上电脑，暂按本机计");
+        DailyQuotaData data=DailyQuotaStore.snapshot(this);
+        org.json.JSONObject group=data.groupById(groupId);
+        StringBuilder out=new StringBuilder(LanQuota.summary(this));
+        out.append('\n').append(T.s("手机这一份：")).append(LanQuotaPanel.appsText(LanQuota.appDetail(this,data,group)));
+        out.append('\n').append(T.s("电脑这一份：")).append(LanQuotaPanel.appsText(LanQuota.pcApps(this)));
+        return out.toString();
+    }
     /** 收束时段：限额的「减」、冻结名单的移出都只在这一小时里放开；部署宽限期内不设限。 */
-    private boolean windowOpen(){return TimeWindow.on(this)||Config.inGrace(this);}
-    private boolean quotaEditable(){return DailyQuotaData.editable(GuardClock.now(this),TimeWindow.start(this),TimeWindow.end(this));}
+    private boolean windowOpen(){return TimeWindow.on(this)||Config.inGrace(this);}    private boolean quotaEditable(){return DailyQuotaData.editable(GuardClock.now(this),TimeWindow.start(this),TimeWindow.end(this));}
     /** 把一只应用迁进目标额度：从原格子里摘掉，加到这一格；被搬空的格子一起删掉。 */
     private void moveIntoGroup(final org.json.JSONObject target,String pkg){
         if(pkg==null||!availableApps.contains(pkg))return;
@@ -1061,6 +1094,14 @@ public class FreezeBoardActivity extends ThemedActivity {
         sheet.addView(panelSection(T.s("调整额度")));
         panelGap(sheet,panelAction("✎",look.accent(),T.s("修改成员和分钟数"),T.s("调整应用组合、名称和每日上限"),()->quotaEditor(group,null,false)));
         if(!others.isEmpty())panelGap(sheet,panelAction("⇄",look.green(),T.s("并到另一个额度"),T.s("成员合并，共用较小的一份分钟数"),()->pickMergeTarget(group,others)));
+        // 跨设备：和电脑面板上那条格子的按钮一一对应，点进去是同一块设置面板
+        final boolean lanShared=LanQuota.isShared(this,group.optString("id"));
+        sheet.addView(panelSection(T.s("跨设备")));
+        panelGap(sheet,panelAction("⇄",lanShared?look.green():look.accent(),
+                lanShared?T.s("跨设备设置"):T.s("设为跨设备共享"),
+                lanShared?T.s("电脑地址、令牌和两端明细"):T.s("和电脑合成一个额度池子"),
+                ()->lanQuotaTap(group)));
+        if(lanShared)panelGap(sheet,panelNote(lanCardText(group.optString("id"))));
         sheet.addView(panelSection(T.s("删除")));
         panelGap(sheet,panelAction("⌫",look.red(),T.s("删除这个额度"),T.s("今天已用时间保留，冻结规则仍会生效"),()->confirmRemove(group)));
 
@@ -1224,6 +1265,11 @@ public class FreezeBoardActivity extends ThemedActivity {
             org.json.JSONObject group=data.groups().optJSONObject(i);if(!row.getValue().equals(group.optString("id")))continue;
             org.json.JSONArray members=group.optJSONArray("apps");
             row.getKey().setText((members!=null&&members.length()>1?T.s("共用 ")+members.length()+T.s(" 个应用 · "):"")+DailyQuotaStore.description(this,data,group));
+        }
+        for(Map.Entry<TextView,String> row:lanTexts.entrySet()){
+            String id=row.getValue();
+            row.getKey().setText(lanCardText(id));
+            row.getKey().setTextColor(LanQuota.isShared(this,id)?look.accent():look.text3());
         }
         long now=GuardClock.now(this).getTimeInMillis();
         for(Map.Entry<UsageQuotaProgress,String> row:legacyBars.entrySet()){

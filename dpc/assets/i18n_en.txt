@@ -2595,3 +2595,21 @@ yyyy年M月d日	MMM d, yyyy
 🔒 关键应用名单 · 	🔒 Key apps · 
 🧊 全部冻结	🧊 All frozen
 🧊 冻结中 	🧊 Frozen 
+ · 跨设备	 · Shared
+⇄ 跨设备设置	⇄ Shared quota settings
+⇄ 设为跨设备共享	⇄ Share with PC
+把这一格设成跨设备共享？	Share this bucket with the PC?
+这个格子的额度和电脑合成一个池子：电脑那边也要有一条格子标成跨设备，两边合计到上限就同时停。池子的分钟数以电脑那条为准。	This bucket and the PC charge one pool: the PC side must also flag a bucket as shared, and either side running dry stops both. The pool size follows the PC bucket.
+设为共享	Share
+手机这一份：	Phone side: 
+电脑这一份：	PC side: 
+ · 两端明细见下	 · details below
+池子 %d 分钟 · 已用 %.1f 分钟 · 剩 %d 分钟	Pool %d min · used %.1f min · %d min left
+（离线估算，数字偏乐观）	(offline estimate, reads optimistic)
+今天还没有用量	No usage today
+⇄ 与电脑共享这份额度	⇄ Share this bucket with the PC
+⇄ 跨设备 · 未连上电脑，暂按本机计	⇄ Shared · PC offline, counting this phone only
+跨设备设置	Shared quota settings
+设为跨设备共享	Share with the PC
+电脑地址、令牌和两端明细	PC address, token and both sides
+和电脑合成一个额度池子	Charge one pool together with the PC

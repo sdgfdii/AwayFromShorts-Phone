@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
@@ -211,6 +212,58 @@ final class LanQuota {
         return sp(c).getLong("at", 0L);
     }
 
+    /**
+     * 电脑那一份花在哪些进程上（[{"name":"无畏契约","seconds":2902.9}]）。
+     *
+     * 只缓存电脑那边的明细：手机自己这一份随时能从账本里算出来，而且更准；
+     * 电脑的是它在局域网另一头算的，拿不到就没了。
+     */
+    static JSONArray pcApps(Context c) {
+        return parseArray(sp(c).getString("pcAppsJson", ""));
+    }
+
+    private static JSONArray parseArray(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return new JSONArray();
+        }
+        try {
+            return new JSONArray(raw);
+        } catch (Exception error) {
+            return new JSONArray();
+        }
+    }
+
+    /**
+     * 本机组内每个应用的用量（秒），用于随上报一起发给电脑，也用于手机自己展示。
+     *
+     * 名称用应用标题而不是包名：对面是给人看的列表，com.xx.yy 那种串没意义。
+     */
+    static JSONArray appDetail(Context c, DailyQuotaData data, org.json.JSONObject group) {
+        JSONArray out = new JSONArray();
+        if (data == null || group == null) {
+            return out;
+        }
+        JSONArray apps = group.optJSONArray("apps");
+        org.json.JSONObject targets = data.usage.optJSONObject("targets");
+        if (apps == null || targets == null) {
+            return out;
+        }
+        for (int i = 0; i < apps.length() && out.length() < 30; i++) {
+            String pkg = apps.optString(i);
+            long ms = targets.optLong(pkg);
+            if (ms <= 0) {
+                continue;
+            }
+            try {
+                out.put(new JSONObject()
+                        .put("name", Guard.labelOf(c.getPackageManager(), pkg))
+                        .put("seconds", Math.round(ms / 100.0) / 10.0));
+            } catch (Exception ignored) {
+            }
+        }
+        return out;
+    }
+
     static boolean fresh(Context c) {
         long stamp = at(c);
         if (stamp <= 0) return false;
@@ -241,7 +294,7 @@ final class LanQuota {
     static void clearCache(Context c) {
         sp(c).edit().remove("minutes").remove("pcUsed").remove("phoneUsed")
                 .remove("total").remove("exhausted").remove("at").remove("lastError")
-                .remove("source").apply();
+                .remove("source").remove("pcAppsJson").apply();
     }
 
     /* ---------------- 轮询 ---------------- */
@@ -250,9 +303,11 @@ final class LanQuota {
      * 上报手机这一段的用量并取回合计。节流在调用侧做，这里只保证"同一时刻一个在飞"。
      *
      * @param phoneUsedMs 绑定组今天的已用毫秒（来自 DailyQuotaStore 的快照）
+     * @param apps        组内每个应用的用量明细，电脑面板要照着它列出「手机这一份」；
+     *                    可以为 null（老调用点 / 懒得算的时候）
      * @param onResult    UI 线程回调；可以为 null
      */
-    static void pollAsync(final Context c, final long phoneUsedMs, final Runnable onResult) {
+    static void pollAsync(final Context c, final long phoneUsedMs, final JSONArray apps, final Runnable onResult) {
         if (!active(c)) return;
         synchronized (LOCK) {
             long now = System.currentTimeMillis();
@@ -262,7 +317,7 @@ final class LanQuota {
         final Context app = c.getApplicationContext();
         EXEC.execute(() -> {
             try {
-                poll(app, phoneUsedMs);
+                poll(app, phoneUsedMs, apps);
                 sp(app).edit().remove("lastError").apply();
             } catch (Throwable error) {
                 Log.w(TAG, "lan quota poll failed: " + error);
@@ -281,7 +336,7 @@ final class LanQuota {
         });
     }
 
-    private static void poll(Context c, long phoneUsedMs) throws Exception {
+    private static void poll(Context c, long phoneUsedMs, JSONArray apps) throws Exception {
         SharedPreferences p = sp(c);
         String host = p.getString("host", "");
         int port = p.getInt("port", 8738);
@@ -291,6 +346,9 @@ final class LanQuota {
         JSONObject body = new JSONObject();
         body.put("usedSeconds", Math.max(0L, phoneUsedMs) / 1000.0);
         body.put("group", group);
+        if (apps != null && apps.length() > 0) {
+            body.put("apps", apps);
+        }
         JSONObject o = call(host, port, token, body);
         apply(c, o);
     }
@@ -338,6 +396,7 @@ final class LanQuota {
         long pcUsed = (long) (o.optDouble("pcUsed", 0) * 1000);
         long phoneUsed = (long) (o.optDouble("phoneUsed", 0) * 1000);
         long total = (long) (o.optDouble("total", 0) * 1000);
+        JSONArray pcApps = o.optJSONArray("pcApps");
         sp(c).edit()
                 .putInt("minutes", minutes)
                 .putLong("pcUsed", pcUsed)
@@ -346,6 +405,8 @@ final class LanQuota {
                 .putBoolean("exhausted", o.optBoolean("exhausted", false))
                 .putLong("at", System.currentTimeMillis())
                 .putString("source", "lan")
+                // 电脑那一份的进程明细：额度页要照着它列出「电脑这一份」
+                .putString("pcAppsJson", pcApps == null ? "[]" : pcApps.toString())
                 .apply();
     }
 
@@ -386,6 +447,7 @@ final class LanQuota {
         long pcUsed = (long) (o.optDouble("pcUsed", 0) * 1000);
         long phoneUsed = Math.max(0L, phoneUsedMs);
         long total = pcUsed + phoneUsed;
+        JSONArray pcApps = o.optJSONArray("pcApps");
         sp(c).edit()
                 .putInt("minutes", minutes)
                 .putLong("pcUsed", pcUsed)
@@ -394,6 +456,7 @@ final class LanQuota {
                 .putBoolean("exhausted", total >= minutes * 60_000L)
                 .putLong("at", System.currentTimeMillis())
                 .putString("source", "gist")
+                .putString("pcAppsJson", pcApps == null ? "[]" : pcApps.toString())
                 .apply();
     }
 

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    跨设备共享额度要访问电脑上的局域网 HTTP 服务（http://192.168.x.x:8738）。
+    Android 9 起默认禁止明文 HTTP，请求会直接抛异常，而这类异常在后台线程里
+    很容易被吞掉 —— 表现就是「配置都对，但永远不同步」。
+
+    LanQuota.setServer() 只接受私有网段的地址，其余一律拒绝，所以这里的放开
+    不会让任何公网域名走明文：app 里其余网络请求（GitHub API / Gist）全是 HTTPS。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

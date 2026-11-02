@@ -80,6 +80,8 @@ final class DailyQuotaData {
     JSONArray groups(){return config.optJSONArray("groups");}
     Set<String> packages(){Set<String> out=new LinkedHashSet<>();for(int i=0;i<groups().length();i++){JSONArray apps=groups().optJSONObject(i).optJSONArray("apps");for(int j=0;j<apps.length();j++)out.add(apps.optString(j));}return out;}
     JSONObject group(String pkg){for(int i=0;i<groups().length();i++){JSONObject group=groups().optJSONObject(i);JSONArray apps=group.optJSONArray("apps");for(int j=0;j<apps.length();j++)if(pkg.equals(apps.optString(j)))return group;}return null;}
+    /** 按 id 取额度组；跨设备共享那边只存着组 id。 */
+    JSONObject groupById(String id){if(id==null||id.isEmpty())return null;for(int i=0;i<groups().length();i++){JSONObject group=groups().optJSONObject(i);if(id.equals(group.optString("id")))return group;}return null;}
     long used(JSONObject group){long total=0;JSONArray apps=group.optJSONArray("apps");for(int i=0;i<apps.length();i++)total+=usage.optJSONObject("targets").optLong(apps.optString(i));return total;}
     boolean exceeded(String pkg){JSONObject g=group(pkg);return enabled()&&g!=null&&(usage.optBoolean("unavailable")||!usage.optString("error").isEmpty()||used(g)>=g.optInt("minutes")*60000L);}
     static boolean inScope(Rule rule,long now){Calendar c=Calendar.getInstance();c.setTimeInMillis(now);return rule==null||FreezeSlotStore.unassigned(rule)||!rule.inWindow(c);}

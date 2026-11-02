@@ -51,6 +51,32 @@ public class GuardService extends Service {
         handler.postDelayed(this,interactive()?20000:60000);
     }};
 
+    /** 上一次从电脑那边看到的共享池状态，用来判断“刚超”还是“一直超”。 */
+    private volatile boolean lanExhausted;
+    /**
+     * 跨设备共享额度的上报节拍（3 秒）。
+     *
+     * 只做三件事：算本机在共享组里的用量 → 报给电脑 → 合计翻转时重算一次拦截。
+     * 不并进 20 秒的额度节拍：那条要 refresh 快照 + 扫全部包，压到 3 秒会烧电；
+     * 这里命中快照缓存，开销就是一次局域网往返。
+     */
+    private final Runnable lanTick=new Runnable(){public void run(){
+        if(LanQuota.active(GuardService.this)){
+            quotaWorker.execute(()->{
+                try{
+                    DailyQuotaData d=DailyQuotaStore.snapshot(GuardService.this);
+                    org.json.JSONObject group=d.groupById(LanQuota.group(GuardService.this));
+                    long used=group==null?0:d.used(group);
+                    LanQuota.pollAsync(GuardService.this,used,()->{
+                        boolean now=LanQuota.exhausted(GuardService.this);
+                        if(now!=lanExhausted){lanExhausted=now;handler.post(()->Guard.apply(GuardService.this));}
+                    });
+                }catch(Throwable error){Log.w(Guard.TAG,"lan quota tick failed",error);}
+            });
+        }
+        handler.postDelayed(this,LanQuota.POLL_MS);
+    }};
+
     /**
      * 锁机节拍：5 秒问一次「现在该不该锁」。
      *
@@ -123,6 +149,7 @@ public class GuardService extends Service {
         handler.post(tick);
         handler.post(quotaTick);
         handler.post(lockTick);
+        handler.post(lanTick);
         Log.i(Guard.TAG, "service started");
     }
 
@@ -133,6 +160,7 @@ public class GuardService extends Service {
         handler.post(tick);
         handler.removeCallbacks(quotaTick);handler.post(quotaTick);
         handler.removeCallbacks(lockTick);handler.post(lockTick);
+        handler.removeCallbacks(lanTick);handler.post(lanTick);
         // 上一条 START_STICKY 的实例可能没走 onDestroy，锁要补上
         acquireWakeLock();
         return START_STICKY;

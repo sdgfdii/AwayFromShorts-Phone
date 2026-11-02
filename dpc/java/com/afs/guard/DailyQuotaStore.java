@@ -129,9 +129,18 @@ final class DailyQuotaStore {
     static boolean hasAllowance(Context c,String pkg){DailyQuotaData d=snapshot(c);return d.enabled()&&d.group(pkg)!=null;}
     /** 先放开权限：没授权也能配额度，但判不出用量就不冻结；授权后立刻恢复计时与冻结。 */
     /** 超限判定：只看额度本身和应用自身冻结时段，与全局收束时段无关；额度用完当场就冻。 */
-    static boolean exceeded(Context c,String pkg){if(!AppUsageQuota.permission(c))return false;DailyQuotaData d=snapshot(c);Rule rule=RuleStore.all(c).get(pkg);return DailyQuotaData.inScope(rule,GuardClock.now(c).getTimeInMillis())&&d.enabled()&&d.group(pkg)!=null&&(writeFailed||d.usage.optBoolean("unavailable")||d.exceeded(pkg));}
+    static boolean exceeded(Context c,String pkg){if(!AppUsageQuota.permission(c))return false;DailyQuotaData d=snapshot(c);Rule rule=RuleStore.all(c).get(pkg);JSONObject group=d.group(pkg);boolean shared=group!=null&&LanQuota.isShared(c,group.optString("id"));boolean local=DailyQuotaData.inScope(rule,GuardClock.now(c).getTimeInMillis())&&d.enabled()&&group!=null&&(writeFailed||d.usage.optBoolean("unavailable")||d.exceeded(pkg));
+        // 共享池：合计（电脑 + 手机）超了就算超。本机先满也继续冻 —— 合计一定不小与它。
+        return local||(shared&&LanQuota.exhausted(c));}
     static boolean enforcementChanged(Context c){try{refresh(c);}catch(IllegalStateException error){if(!writeFailed)throw error;}StringBuilder out=new StringBuilder();for(String pkg:packages(c))if(exceeded(c,pkg))out.append(pkg).append(';');synchronized(DailyQuotaStore.class){String next=out.toString();boolean changed=!next.equals(signature);signature=next;return changed;}}
     static String status(Context c,String pkg){DailyQuotaData d=snapshot(c);JSONObject g=d.group(pkg);Rule rule=RuleStore.all(c).get(pkg);if(g==null)return "";return (rule==null||FreezeSlotStore.unassigned(rule)?T.s("全天限额 · "):T.s("所绑时段限额 · "))+description(c,d,g);}
     static boolean readable(Context c,DailyQuotaData d){return !writeFailed&&AppUsageQuota.permission(c)&&!d.usage.optBoolean("unavailable")&&d.usage.optString("error").isEmpty();}
-    static String description(Context c,DailyQuotaData d,JSONObject g){if(!d.enabled())return T.s("每日限额已暂停");if(!AppUsageQuota.permission(c))return T.s("未授予使用情况权限，暂不计时");if(writeFailed||d.usage.optBoolean("unavailable")||!d.usage.optString("error").isEmpty())return T.s("用量暂不可读，保护性冻结");long used=d.used(g),limit=g.optInt("minutes")*60000L;return String.format(Locale.CHINA,T.s("已用 %.1f / %d 分钟 · 剩余 %.1f 分钟"),used/60000.0,g.optInt("minutes"),Math.max(0,limit-used)/60000.0);}
+    static String description(Context c,DailyQuotaData d,JSONObject g){if(!d.enabled())return T.s("每日限额已暂停");if(!AppUsageQuota.permission(c))return T.s("未授予使用情况权限，暂不计时");if(writeFailed||d.usage.optBoolean("unavailable")||!d.usage.optString("error").isEmpty())return T.s("用量暂不可读，保护性冻结");
+        if(LanQuota.isShared(c,g.optString("id"))){
+            // 共享组不能只报本机用量 —— 用户看到的“剩 30 分钟”必须和两台设备都能用的一致。
+            if(!LanQuota.fresh(c))return T.s("跨设备额度 · 未连上电脑，暂按本机计");
+            long total=LanQuota.total(c),limit=LanQuota.minutes(c)*60000L;
+            return String.format(Locale.CHINA,T.s("跨设备 · 已用 %.1f / %d 分钟（电脑 %.1f + 手机 %.1f）"),total/60000.0,LanQuota.minutes(c),LanQuota.pcUsed(c)/60000.0,LanQuota.phoneUsed(c)/60000.0);
+        }
+        long used=d.used(g),limit=g.optInt("minutes")*60000L;return String.format(Locale.CHINA,T.s("已用 %.1f / %d 分钟 · 剩余 %.1f 分钟"),used/60000.0,g.optInt("minutes"),Math.max(0,limit-used)/60000.0);}
 }

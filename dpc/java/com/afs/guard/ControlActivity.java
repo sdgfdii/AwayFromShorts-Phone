@@ -301,7 +301,12 @@ public final class ControlActivity extends ThemedActivity {
         row(card, T.s("每隔多久提醒"), RestReminder.minutes(ReminderStore.every(this)), this::pickEvery);
         row(card, T.s("时间段"), ReminderStore.window(this), this::pickRestWindow);
         row(card, T.s("后台提醒弹窗"), RestReminderActivity.backgroundAllowed(this) ? T.s("已允许") : T.s("去授权"), this::openReminderPermission);
-        note(card, T.s("到点弹出提醒页面，关闭后返回原界面。灭屏、正在锁机、放行期里都不打扰。"));
+        note(card, Lang.t(this,
+                "到点只弹提醒页面，不发通知；关掉页面就回到原来的界面。灭屏、正在锁机、放行期里都不打扰。",
+                "When it is time, only a reminder page appears — no notification. Close it and you are back to where you were. Nothing fires while the screen is off, while the phone is locked, or during an unlock pass."));
+        note(card, Lang.t(this,
+                "因为没有通知兜底，「后台提醒弹窗」必须允许；不给这个权限，系统会直接拦掉弹窗，这一次提醒就什么都不会出现。",
+                "There is no notification fallback, so the background pop-up permission is required. Without it the system blocks the launch and that reminder never appears."));
         note(card, T.s("和上面的定时锁机是两回事：锁机是硬拦，这个是轻提醒，可以只开一个。"));
         note(card, Lang.t(this,
                 "把守卫从最近任务里划掉会让系统直接杀掉进程，提醒会停到系统下一次把它叫起来（最长约 5 分钟，到点的那条会补发）。建议在最近任务里锁定守卫，别划掉它。",

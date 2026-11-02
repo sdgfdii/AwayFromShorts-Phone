@@ -374,6 +374,8 @@ public class MainActivity extends ThemedActivity {
         getWindow().getDecorView().post(() -> SetupGuide.showIfNeeded(this));
         // 成就解锁提示：放在首帧之后再弹，别和首页绘制抢同一帧
         getWindow().getDecorView().post(() -> AchievementCenter.announce(this));
+        // 没给弹窗权限时被拦下的那次定时提醒，趁这次回到前台补上
+        getWindow().getDecorView().post(() -> RestAlert.deliverPending(this));
         homeVisible = true;
         GrayMode.apply(this, false);
         if (ui.dark != Ui.isDark(this)) {

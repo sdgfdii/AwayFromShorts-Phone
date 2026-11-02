@@ -18,6 +18,7 @@ public final class ReminderStore {
     private static final String K_FROM = "from";
     private static final String K_TO = "to";
     private static final String K_LAST = "last";
+    private static final String K_PENDING = "pending";
 
     public static final int DEFAULT_FROM = 8 * 60;
     public static final int DEFAULT_TO = 22 * 60;
@@ -70,6 +71,20 @@ public final class ReminderStore {
 
     public static void setLastFired(Context c, long ms) {
         sp(c).edit().putLong(K_LAST, ms).apply();
+    }
+
+    /**
+     * 上一次被系统拦下、还没弹出去的提醒时刻；0 表示没有待补的。
+     *
+     * 不发通知之后，弹窗权限就是唯一通路。权限没给时系统会静默拦掉 launch，
+     * 这里先记一笔，等用户下次回到 App 再补弹，别让提醒就这么消失。
+     */
+    public static long pending(Context c) {
+        return sp(c).getLong(K_PENDING, 0L);
+    }
+
+    public static void setPending(Context c, long ms) {
+        sp(c).edit().putLong(K_PENDING, ms).apply();
     }
 
     /** "08:00–22:00" 这种时段文案，和锁机那边同一格式。 */

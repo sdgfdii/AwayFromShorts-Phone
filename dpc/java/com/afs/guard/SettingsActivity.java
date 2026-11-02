@@ -127,7 +127,9 @@ public final class SettingsActivity extends ThemedActivity {
         permRow(perms, T.s("使用情况访问"), AppUsageQuota.permission(this),
                 T.s("时间限额、用量统计要用；不授权就不计时"), () ->
                         open(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)));
-        permRow(perms, T.s("通知"), notifications(), T.s("前台服务状态与提醒"), () -> {
+        permRow(perms, T.s("通知"), notifications(), Lang.t(this,
+                "守卫常驻状态与备忘录提醒（定时提醒不占通知）",
+                "Guard status and memo reminders (rest reminders never post notifications)"), () -> {
             Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                     .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
             open(intent);

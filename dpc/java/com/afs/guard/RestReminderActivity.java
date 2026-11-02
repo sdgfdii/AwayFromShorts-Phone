@@ -43,6 +43,7 @@ public final class RestReminderActivity extends Activity {
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         current = new WeakReference<>(this);
+        ReminderStore.setPending(this, 0L);   // 页面真出来了，待补的那笔就算消化掉
         setFinishOnTouchOutside(true);
         getWindow().setWindowAnimations(0);
         render();

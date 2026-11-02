@@ -439,9 +439,9 @@ final class LanQuota {
         } catch (Exception error) {
             return;
         }
-        String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
         // 隔天的账不能往今天扣：Gist 上躺着的可能是昨晚推的。
-        if (!today.equals(o.optString("date", ""))) return;
+        // 「今天」按额度日算（早上 8 点翻页），与电脑端 quota-pool.json 的 date 同一口径。
+        if (!DayBoundary.key(c, System.currentTimeMillis()).equals(o.optString("date", ""))) return;
         int minutes = o.optInt("minutes", 0);
         if (minutes <= 0) return;
         long pcUsed = (long) (o.optDouble("pcUsed", 0) * 1000);

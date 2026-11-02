@@ -2613,3 +2613,4 @@ yyyy年M月d日	MMM d, yyyy
 设为跨设备共享	Share with the PC
 电脑地址、令牌和两端明细	PC address, token and both sides
 和电脑合成一个额度池子	Charge one pool together with the PC
+每天早上 8 点	Every day at 8:00 am

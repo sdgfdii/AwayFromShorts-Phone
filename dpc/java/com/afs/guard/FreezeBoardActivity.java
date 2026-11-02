@@ -859,29 +859,14 @@ public class FreezeBoardActivity extends ThemedActivity {
         box.addView(text(T.s("一行就是一个额度：只放一个应用是它单独的一份，放多个应用就是共用同一份。点一行改成员和分钟数，长按可以并到另一个额度或删掉。未绑定时段按全天计时，放进时段只累计时段内的用量，额度用完才冻结，今日额度")+DayBoundary.label(this)+T.s("重置。"),12,look.text2()));
         LinearLayout reset=new LinearLayout(this);reset.setGravity(Gravity.CENTER_VERTICAL);reset.setPadding(0,dp(10),0,dp(2));
         reset.addView(text(T.s("额度重置时刻"),13,look.text2()),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        reset.addView(text(DayBoundary.label(this),13,look.accent()));
+        reset.addView(text(DayBoundary.label(this),13,look.text2()));
         reset.setContentDescription(T.s("额度重置时刻 ")+DayBoundary.label(this));
-        reset.setOnClickListener(v->pickResetHour());
         box.addView(reset);
         List<String> allDay=new ArrayList<>();for(String pkg:DailyQuotaStore.packages(this))if(!rules.containsKey(pkg)||FreezeSlotStore.unassigned(rules.get(pkg)))allDay.add(pkg);
         for(String pkg:rules.keySet())if(FreezeSlotStore.unassigned(rules.get(pkg))&&AppUsageQuota.minutes(this,pkg)>0&&!allDay.contains(pkg))allDay.add(pkg);
         if(DailyQuotaStore.snapshot(this).groups().length()==0)box.addView(text(T.s("还没有额度。点右上角 ⋯ 新建一个单独额度或共享额度。"),12,look.text3()));
         quotaRows(box,allDay);
         box.setOnDragListener((v,e)->{if(e.getAction()==DragEvent.ACTION_DRAG_STARTED)return validDrag(e);if(e.getAction()==DragEvent.ACTION_DROP&&validDrag(e)){String pkg=(String)e.getLocalState();pendingDrop=()->moveToAllDay(pkg);return true;}if(e.getAction()==DragEvent.ACTION_DRAG_ENDED)finishDrag();return true;});slotsView.addView(box,gap(16));
-    }
-    /** 额度重置时刻：原来在设置页，用额度的地方就在这一页，搬过来少跳一次。 */
-    private void pickResetHour(){
-        final int current=DayBoundary.selectedHour(this);
-        String[] labels=new String[24];
-        for(int hour=0;hour<24;hour++)labels[hour]=hour==0?T.s("00:00（零点）"):String.format(java.util.Locale.CHINA,"%02d:00",hour);
-        ThemeStore.dialog(this).setTitle(T.s("每天几点重置额度")).setSingleChoiceItems(labels,current,(dialog,which)->{
-            try{
-                if(!DayBoundary.saveHour(this,which))throw new IllegalStateException(T.s("没能保存"));
-                dialog.dismiss();
-                toast(T.s("重置时间已保存，将在当前额度日结束后生效"));
-                rebuild();
-            }catch(RuntimeException error){toast(error.getMessage());}
-        }).setNegativeButton(T.s("取消"),null).show();
     }
     private void moveToAllDay(String pkg){
         if(!availableApps.contains(pkg))return;

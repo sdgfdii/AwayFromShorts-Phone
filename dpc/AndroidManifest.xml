@@ -35,6 +35,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".GuardClock"
@@ -43,6 +44,7 @@
         android:label="@string/app_name"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
+        <activity android:name=".RestReminderActivity" android:exported="false" android:theme="@style/RestReminderTheme" android:excludeFromRecents="true" android:launchMode="singleTask" android:taskAffinity="com.afs.guard.reminder" />
         <activity android:name=".DataManagementActivity" android:exported="false" android:theme="@style/NavTheme" />
         <activity android:name=".DailyQuotaActivity" android:exported="false" android:theme="@style/NavTheme" android:windowSoftInputMode="adjustResize" android:label="每日限额" />
         <activity android:name=".QuotaBlockedActivity" android:exported="false" android:theme="@style/NavTheme" android:excludeFromRecents="true" android:launchMode="singleTop" android:label="额度用尽" />

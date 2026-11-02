@@ -85,10 +85,11 @@ try {
         $foreground = Invoke-AfsAdb -Arguments @('shell','am','get-current-user')
         if ($foreground.Trim() -ne '0') { throw '请先切回手机主用户。' }
     }
+    if($owner -eq 'ours'){Write-Host '检测到现有授权：将保留数据升级，不重新设置管理者。'}else{Write-Host '首次部署：需要明确同意设备管理限制。'}
     Write-Host '部署前检查通过。'
     if ($CheckOnly) { Write-Host '只完成检查，未安装或修改手机。'; exit 0 }
     if ($owner -eq 'none' -and !$AcceptDeviceOwner) {
-        if ($NonInteractive) { throw '首次部署请明确提供 -AcceptDeviceOwner。' }
+        if ($NonInteractive) { throw '首次部署需要同意设备管理：请在图形向导勾选确认；命令行使用 -AcceptDeviceOwner。' }
         Write-Host '将把本应用设为设备所有者，启用冻结、禁止强停/清数据/卸载、禁止安全模式和系统内恢复出厂。'
         Write-Host 'Android 7/8 强制自动时间，冻结时段固定按首次配置时区。日常使用不需要连接电脑。'
         Write-Host '当前正式包不能保证用 remove-active-admin 解除。请先阅读同目录的恢复说明。'
@@ -125,6 +126,11 @@ try {
     if($alarms -notmatch 'com\.afs\.guard'){throw '未确认边界闹钟，部署验证未通过。'}
     Invoke-AfsAdb -Arguments @('shell','am','start','-n','com.afs.guard/.MainActivity') | Out-Null
     Write-Host '部署完成并通过管理限制验证。请在手机上配置冻结规则，并点“立即应用”。'
-    Write-Host '个人同步可在打卡页点“同步”设置；不配置也能离线学习和冻结。'
+    Write-Host '请到手机守卫 → 部署与权限检查完成剩余权限；个人同步在卡管理 → 打卡设置中，不配置也能离线使用。'
     exit 0
-} catch { Write-Host ("部署停止：" + $_.Exception.Message) -ForegroundColor Red; exit 1 }
+} catch {
+    $detail=$_.Exception.Message
+    if($detail -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE'){$detail='签名不兼容：请使用与原应用同签名的升级包。工具没有卸载原应用。'+"`n"+$detail}
+    elseif($detail -match 'INSTALL_FAILED_VERSION_DOWNGRADE'){$detail='安装包版本比手机旧，请使用更新的同签名包。'+"`n"+$detail}
+    Write-Host ("部署停止："+$detail) -ForegroundColor Red;exit 1
+}

@@ -426,8 +426,7 @@ public final class SettingsActivity extends ThemedActivity {
 
     private String themeSummary() {
         AppearanceConfig appearance = ThemeStore.load(this);
-        String skin = appearance.ripple() ? T.s("涟漪风格")
-                : appearance.amap() ? T.s("简约风格") : T.s("原有风格");
+        String skin = appearance.amap() ? T.s("简约风格") : T.s("原有风格");
         String mode = Ui.themeName(this);
         if ("auto".equals(mode)) mode = T.s("跟随系统");
         else if ("dark".equals(mode)) mode = T.s("深色");

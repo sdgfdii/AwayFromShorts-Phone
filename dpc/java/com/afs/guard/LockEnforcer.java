@@ -140,11 +140,11 @@ public final class LockEnforcer {
     /** 有没有哪个应用连续用超了。白名单、没被选中的应用和自己在内不算。 */
     static String appCandidate(Context c, long now) {
         if (!LockStore.appOn(c)) return null;
-        String foreground = AppUsageQuota.foreground(c, now);
+        String foreground = AppUsageQuota.foregroundCached(c, now);
         if (foreground == null || foreground.equals(c.getPackageName())) return null;
         if (!LockStore.appMonitored(c, foreground)) return null;
         if (LockStore.keys(c).contains(foreground)) return null;
-        long since = AppUsageQuota.continuousStart(c, foreground, now);
+        long since = AppUsageQuota.continuousStartCached(foreground);
         if (since <= 0) return null;
         return LockPlan.appOverLimit(now - since, LockStore.appLimit(c)) ? foreground : null;
     }

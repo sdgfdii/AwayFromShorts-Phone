@@ -9,6 +9,8 @@ import java.util.TimeZone;
 
 /** Android 7/8 cannot prohibit timezone edits. Their schedules use a pinned zone. */
 public final class GuardClock extends Application {
+    @Override public void onTrimMemory(int level){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)AppIcons.trim();}
+    @Override public void onLowMemory(){super.onLowMemory();AppIcons.trim();}
     @Override public void onCreate() { super.onCreate();
         /* 这一层在**第一帧之前**跑，任何几十毫秒的活都会变成白屏/卡顿。
            所以同步做的只有「必须立刻就对」的两件：语言开关（决定 T.s 的行为）和

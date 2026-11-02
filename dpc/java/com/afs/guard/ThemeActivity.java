@@ -139,8 +139,8 @@ public final class ThemeActivity extends ThemedActivity {
     }
     private void skins(){
         section("",T.s("界面风格"),null,null);LinearLayout options=row();options.setPadding(ui.dp(20),0,ui.dp(20),ui.dp(16));body.addView(options);
-        String[] names={T.s("原有风格"),T.s("简约风格"),T.s("涟漪风格")},keys={"classic","amap","ripple"};
-        String[] notes={T.s("液态玻璃"),T.s("线条清晰"),T.s("浅底白卡")};
+        String[] names={T.s("原有风格"),T.s("简约风格")},keys={"classic","amap"};
+        String[] notes={T.s("液态玻璃"),T.s("线条清晰")};
         for(int i=0;i<keys.length;i++){
             final String key=keys[i];boolean chosen=key.equals(config.skin);AppearanceConfig sample=config.copy();sample.skin=key;
             LinearLayout option=new LinearLayout(this);option.setOrientation(LinearLayout.VERTICAL);option.setGravity(Gravity.CENTER);option.setPadding(ui.dp(10),ui.dp(10),ui.dp(10),ui.dp(10));
@@ -180,7 +180,7 @@ public final class ThemeActivity extends ThemedActivity {
         section("◌",T.s("主题色彩"),defaultColors()?null:"↺",()->ThemeStore.dialog(this).setTitle(T.s("重置主题色彩？")).setMessage(T.s("恢复默认色板、默认主题色和鲜明风格。")).setNegativeButton(T.s("取消"),null).setPositiveButton(T.s("重置"),(d,w)->{AppearanceConfig next=ThemeStore.load(this);next.resetColors();save(next);}).show());
         LinearLayout box=card();box.setPadding(ui.dp(10),ui.dp(8),ui.dp(10),ui.dp(8));GridLayout grid=new GridLayout(this);
         int available=getResources().getDisplayMetrics().widthPixels-ui.dp(60),columns=Math.max(1,available/ui.dp(50));grid.setColumnCount(columns);
-        List<Integer> values=new ArrayList<>();values.add(0);if(config.amap()&&config.selectedSeed()==AppearanceConfig.AMAP_COLOR&&!config.colors.contains(AppearanceConfig.AMAP_COLOR))values.add(AppearanceConfig.AMAP_COLOR);if(config.ripple()&&config.selectedSeed()==AppearanceConfig.RIPPLE_COLOR&&!config.colors.contains(AppearanceConfig.RIPPLE_COLOR))values.add(AppearanceConfig.RIPPLE_COLOR);values.addAll(config.colors);
+        List<Integer> values=new ArrayList<>();values.add(0);if(config.amap()&&config.selectedSeed()==AppearanceConfig.AMAP_COLOR&&!config.colors.contains(AppearanceConfig.AMAP_COLOR))values.add(AppearanceConfig.AMAP_COLOR);values.addAll(config.colors);
         for(int i=0;i<=values.size();i++){
             boolean add=i==values.size();int color=add?0:values.get(i);Swatch swatch=new Swatch(color,add);
             GridLayout.LayoutParams lp=new GridLayout.LayoutParams();lp.width=available/columns;lp.height=ui.dp(50);grid.addView(swatch,lp);

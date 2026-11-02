@@ -50,6 +50,8 @@ public class FreezeBoardActivity extends ThemedActivity {
     private Ui look;
     private LinearLayout screen, slotsView, library;
     private ScrollView scroll;
+    private final Map<String,View> slotViews=new java.util.HashMap<>();
+    private LinearLayout usageContainer;
     private List<FreezeSlotStore.Slot> slots;
     private Map<String, Rule> rules;
     private String ruleSnapshot = "";
@@ -59,6 +61,11 @@ public class FreezeBoardActivity extends ThemedActivity {
     private Map<String, Rule> statusRules;
     private boolean statusHold, statusTaboo, statusReward;
     private int statusTick;
+    private boolean statusWorkerBusy;
+    private String reasonRevision="";
+    private Map<String,Integer> reasonCache=java.util.Collections.emptyMap();
+    private Map<String,Boolean> frozenCache=java.util.Collections.emptyMap();
+    private String reasonLabel(int reason){return reason<0?T.s("正在检查状态"):Guard.blockReasonText(reason);}
     private TextView gateNote;   // 学习联动还差什么（点一下跳到对应页面）
     private TextView netHint;    // 底部「断网应用设置」那行小字，运行状态会变，单独留个引用
     private final Handler handler = new Handler();
@@ -76,6 +83,8 @@ public class FreezeBoardActivity extends ThemedActivity {
     private TextView libraryLabel;
     private HorizontalScrollView libraryTray;
     private LinearLayout libraryTrayApps;
+    private final Map<String,android.widget.FrameLayout> libraryCells=new java.util.LinkedHashMap<>();
+    private int libraryRenderSeq;
     private final List<String> libraryCatalog=new ArrayList<>();
     /** 应用库分两页：0＝冻结时段、1＝时间限额；拖拽时悬停另一页会自动切过去。 */
     private int libraryTab;
@@ -89,7 +98,7 @@ public class FreezeBoardActivity extends ThemedActivity {
     private final java.util.concurrent.ExecutorService catalogWorker = java.util.concurrent.Executors.newSingleThreadExecutor();
     private final Map<String,String> appNames = new java.util.HashMap<>();
     @Override protected void onDestroy() {
-        finishLibraryMotion();disposed=true;libraryGeneration++;catalogWorker.shutdownNow();
+        dismissApplicationPanel();finishLibraryMotion();disposed=true;libraryGeneration++;catalogWorker.shutdownNow();
         handler.removeCallbacksAndMessages(null);super.onDestroy();
     }
     private boolean libraryHidden, sheetMoving;
@@ -197,7 +206,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         int oldY = scroll == null ? 0 : scroll.getScrollY();
         rules = RuleStore.all(this); slots = FreezeSlotStore.all(this);
         statusSnapshot();
-        timelines.clear(); libraryApps.clear();dailyBars.clear();dailyTexts.clear();legacyBars.clear();
+        timelines.clear(); libraryApps.clear();dailyBars.clear();dailyTexts.clear();legacyBars.clear();slotViews.clear();
         libraryGeneration++;fillLibrary=null;
         ruleSnapshot = RuleStore.exportRules(this);
         dailySnapshot=DailyQuotaStore.snapshot(this).config.toString();
@@ -220,6 +229,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         gateLp.topMargin = dp(4);
 
         scroll = new ScrollView(this); scroll.setClipToPadding(false);
+        scroll.setOnScrollChangeListener((v,x,y,ox,oy)->{for(View card:slotViews.values())if(card instanceof ViewGroup){ViewGroup group=(ViewGroup)card;for(int i=0;i<group.getChildCount();i++)if(group.getChildAt(i) instanceof VirtualApps)((VirtualApps)group.getChildAt(i)).schedule();}});
         scroll.setPadding(0, dp(14), 0, dp(8));
         slotsView = new LinearLayout(this); slotsView.setOrientation(LinearLayout.VERTICAL);
         slotsView.setClipChildren(false); slotsView.setClipToPadding(false); scroll.addView(slotsView);
@@ -228,7 +238,7 @@ public class FreezeBoardActivity extends ThemedActivity {
             TextView empty = text(T.s("还没有冻结时段\n在设置里新建时间格，再拖入应用"), 16, look.text2());
             empty.setPadding(dp(18), dp(30), dp(18), dp(30)); slotsView.addView(empty);
         }
-        for (FreezeSlotStore.Slot slot : slots) slotsView.addView(slotCard(slot), gap(16));
+        for (FreezeSlotStore.Slot slot : slots){View card=slotCard(slot);slotViews.put(slot.id,card);slotsView.addView(card,gap(16));}
         // 首帧只建首屏：使用限额 / 设置区在首屏以下，以前它们也在同一帧里录绘制指令，
         // 白白把切页那一帧拉长（整页 drawCmd 实测 55–77ms）。放到首帧之后再建，视觉无差别；
         // 代次不匹配说明期间又 rebuild 过，这一批旧视图直接丢掉，避免串到新页面上。
@@ -270,14 +280,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         TextView days = text((slot.rule.freeze ? Rule.daysText(slot.rule.days) + " · " : "")
                 + timeTitle(slot.rule).replace('\n', ' '), 12, look.text2());
         days.setPadding(0, dp(3), 0, dp(13)); card.addView(days);
-        LinearLayout row = null;
-        for (int i = 0; i < members.size(); i++) {
-            if (i % 2 == 0) { row = new LinearLayout(this); row.setPadding(0, 0, 0, dp(8)); card.addView(row); }
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
-            if (i % 2 == 1) lp.leftMargin = dp(8);
-            row.addView(appTile(members.get(i), false), lp);
-            if (i == members.size() - 1 && i % 2 == 0) row.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1));
-        }
+        card.addView(new VirtualApps(members),new LinearLayout.LayoutParams(-1,-2));
         quotaRows(card,members);
         final TextView drop = text(members.isEmpty() ? T.s("拖入应用，放到这个时间里") : T.s("长按应用可移动到其他时段"), 12, look.text3());
         drop.setGravity(Gravity.CENTER); drop.setPadding(dp(8), dp(10), dp(8), dp(10));
@@ -302,6 +305,31 @@ public class FreezeBoardActivity extends ThemedActivity {
         });
         return card;
     }
+    /** Lightweight row shells stay in layout; only viewport tiles retain images/listeners. */
+    private final class VirtualApps extends LinearLayout {
+        final List<String> members=new ArrayList<>();final List<LinearLayout> rows=new ArrayList<>();final java.util.ArrayDeque<View> pool=new java.util.ArrayDeque<>();int created,reused;boolean scheduled;final String landing=landed;
+        final android.view.ViewTreeObserver.OnScrollChangedListener listener=()->schedule();
+        final Runnable update=()->{scheduled=false;if(!isAttachedToWindow())return;int[] viewport=new int[2];scroll.getLocationOnScreen(viewport);int top=viewport[1]-dp(100),bottom=viewport[1]+scroll.getHeight()+dp(100);
+            for(int i=0;i<rows.size();i++){LinearLayout row=rows.get(i);int[] at=new int[2];row.getLocationOnScreen(at);boolean visible=at[1]+row.getHeight()>=top&&at[1]<=bottom;
+                if(visible&&row.getChildCount()==0){row.setMinimumHeight(0);int first=i*2;for(int j=0;j<2;j++){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);if(j==1)lp.leftMargin=dp(8);View tile;if(first+j<members.size()){String pkg=members.get(first+j);tile=pool.pollFirst();if(tile==null){tile=appTile(pkg,false);created++;}else{bindSlotTile(tile,pkg);reused++;}if(pkg.equals(landing)&&motion()){tile.setScaleX(1.05f);tile.setScaleY(1.05f);tile.animate().scaleX(1).scaleY(1).setDuration(260).setInterpolator(new OvershootInterpolator(1.1f)).start();}}else tile=new View(FreezeBoardActivity.this);row.addView(tile,lp);}}
+                else if(!visible&&!dragging&&row.getChildCount()>0){int height=row.getHeight();for(int n=0;n<row.getChildCount();n++){View tile=row.getChildAt(n);if(tile instanceof LinearLayout&&pool.size()<24){tile.animate().cancel();((ImageView)((LinearLayout)tile).getChildAt(0)).setImageDrawable(null);tile.setOnClickListener(null);tile.setOnLongClickListener(null);pool.addLast(tile);}}row.removeAllViews();row.setMinimumHeight(height);}
+            }};
+        VirtualApps(List<String> values){super(FreezeBoardActivity.this);members.addAll(values);setOrientation(VERTICAL);setBaselineAligned(false);
+            for(int i=0;i<values.size();i+=2){LinearLayout row=new LinearLayout(FreezeBoardActivity.this);row.setBaselineAligned(false);row.setPadding(0,0,0,dp(8));row.setMinimumHeight(dp(76));rows.add(row);addView(row,new LinearLayout.LayoutParams(-1,-2));}
+            addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->schedule());
+        }
+        void schedule(){if(!scheduled){scheduled=true;postOnAnimation(update);}}
+        @Override protected void onAttachedToWindow(){super.onAttachedToWindow();getViewTreeObserver().addOnScrollChangedListener(listener);schedule();}
+        @Override protected void onDetachedFromWindow(){getViewTreeObserver().removeOnScrollChangedListener(listener);removeCallbacks(update);scheduled=false;pool.clear();super.onDetachedFromWindow();}
+    }
+    private boolean inside(View child,View parent){for(ViewParent p=child.getParent();p!=null;p=p.getParent())if(p==parent)return true;return child==parent;}
+    private void forget(View parent){timelines.removeIf(v->inside(v,parent));dailyBars.keySet().removeIf(v->inside(v,parent));dailyTexts.keySet().removeIf(v->inside(v,parent));legacyBars.keySet().removeIf(v->inside(v,parent));}
+    private void refreshAssignments(){
+        Map<String,Rule> old=rules;rules=RuleStore.all(this);statusSnapshot();ruleSnapshot=RuleStore.exportRules(this);dailySnapshot=DailyQuotaStore.snapshot(this).config.toString();
+        for(FreezeSlotStore.Slot slot:slots)if(!FreezeSlotStore.members(slot,old).equals(FreezeSlotStore.members(slot,rules))){View before=slotViews.get(slot.id);if(before==null){rebuild();return;}int at=slotsView.indexOfChild(before);forget(before);slotsView.removeView(before);View next=slotCard(slot);slotViews.put(slot.id,next);slotsView.addView(next,at,gap(16));}
+        if(usageContainer!=null&&usageContainer.getParent()==slotsView){int at=slotsView.indexOfChild(usageContainer);forget(usageContainer);slotsView.removeView(usageContainer);usageCell();slotsView.removeView(usageContainer);slotsView.addView(usageContainer,at,gap(16));}
+        renderLibrary();refreshBadges(screen);refreshDailyCounters();
+    }
     private GradientDrawable slotBackground(boolean active) {
         return look.round(look.surface(), 22, active ? look.accent() : look.line(), active ? 2 : 0.6f);
     }
@@ -324,6 +352,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         return s.toString();
     }
     private void buildLibrary() {
+        libraryCells.clear();
         libraryHidden = getSharedPreferences(Ui.SP, 0).getBoolean("freeze_library_hidden", false);
         library = new LibrarySheet(); library.setOrientation(LinearLayout.VERTICAL);
         library.setPadding(dp(12), dp(5), dp(12), dp(7)); library.setBackground(look.round(look.surface(), 20));
@@ -401,27 +430,24 @@ public class FreezeBoardActivity extends ThemedActivity {
      */
     private void renderLibrary(){
         if(libraryTrayApps==null)return;
-        libraryTrayApps.removeAllViews();
-        libraryApps.clear();
-        final List<String> shown=new ArrayList<>();
-        for(String pkg:libraryCatalog)if(libraryVisible(pkg))shown.add(pkg);
-        if(libraryLabel!=null)libraryLabel.setText(T.s("应用库  ·  ")+shown.size());
+        final int seq=++libraryRenderSeq;final List<String> shown=new ArrayList<>();for(String pkg:libraryCatalog)if(libraryVisible(pkg))shown.add(pkg);
+        Set<String> wanted=new LinkedHashSet<>(shown);
+        java.util.Iterator<Map.Entry<String,android.widget.FrameLayout>> entries=libraryCells.entrySet().iterator();
+        while(entries.hasNext()){Map.Entry<String,android.widget.FrameLayout> e=entries.next();if(!wanted.contains(e.getKey())){libraryTrayApps.removeView(e.getValue());libraryApps.removeIf(app->app.pkg.equals(e.getKey()));entries.remove();}}
         final List<android.widget.FrameLayout> cells=new ArrayList<>();
-        for(int i=0;i<shown.size();i++){
-            android.widget.FrameLayout cell=new android.widget.FrameLayout(this);
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(100),dp(104));lp.rightMargin=dp(8);
-            libraryTrayApps.addView(cell,lp);cells.add(cell);
+        for(int i=0;i<shown.size();i++){String pkg=shown.get(i);android.widget.FrameLayout cell=libraryCells.get(pkg);
+            if(cell==null){cell=new android.widget.FrameLayout(this);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(100),dp(104));lp.rightMargin=dp(8);libraryCells.put(pkg,cell);libraryTrayApps.addView(cell,i,lp);}
+            else if(libraryTrayApps.indexOfChild(cell)!=i){libraryTrayApps.removeView(cell);libraryTrayApps.addView(cell,i);}
+            cells.add(cell);
         }
+        if(libraryLabel!=null)libraryLabel.setText(T.s("应用库  ·  ")+shown.size());
         final Runnable populate=()->{
-            if(disposed||libraryHidden||libraryTray==null)return;
-            int first=Math.max(0,libraryTray.getScrollX()/dp(108)-1);
-            int last=Math.min(shown.size(),(libraryTray.getScrollX()+Math.max(libraryTray.getWidth(),dp(320)))/dp(108)+2);
-            for(int i=first;i<last;i++)if(cells.get(i).getChildCount()==0)
-                cells.get(i).addView(appTile(shown.get(i),true),new android.widget.FrameLayout.LayoutParams(-1,-1));
+            if(seq!=libraryRenderSeq||disposed||libraryHidden||libraryTray==null)return;
+            int first=Math.max(0,libraryTray.getScrollX()/dp(108)-1),last=Math.min(shown.size(),(libraryTray.getScrollX()+Math.max(libraryTray.getWidth(),dp(320)))/dp(108)+2);
+            if(!dragging){Set<String> visible=new LinkedHashSet<>(shown.subList(Math.min(first,shown.size()),Math.max(Math.min(first,shown.size()),last)));java.util.Iterator<LibraryApp> apps=libraryApps.iterator();while(apps.hasNext()){LibraryApp app=apps.next();if(!visible.contains(app.pkg)){ViewParent parent=app.tile.getParent();if(parent instanceof android.widget.FrameLayout)((android.widget.FrameLayout)parent).removeAllViews();apps.remove();}}}
+            for(int i=first;i<last;i++)if(cells.get(i).getChildCount()==0)cells.get(i).addView(appTile(shown.get(i),true),new android.widget.FrameLayout.LayoutParams(-1,-1));
         };
-        fillLibrary=populate;
-        libraryTray.setOnScrollChangeListener((v,x,y,ox,oy)->populate.run());
-        libraryTray.postOnAnimation(populate);
+        fillLibrary=populate;libraryTray.setOnScrollChangeListener((v,x,y,ox,oy)->populate.run());libraryTray.postOnAnimation(populate);
     }
     private boolean libraryVisible(String pkg){
         if(libraryTab==1)return DailyQuotaStore.snapshot(this).group(pkg)==null;    // 还能设额度
@@ -530,19 +556,23 @@ public class FreezeBoardActivity extends ThemedActivity {
         if (!compact) labelLp.leftMargin = dp(8); else labelLp.topMargin = dp(6);
         tile.addView(labels, labelLp);
         tile.setOnClickListener(v -> chooseDestination(pkg));
-        tile.setOnLongClickListener(v -> {
-            if (lockedForMove(pkg)) { toast(T.s("应用正在冻结，解冻后才能移动")); return true; }
-            dragging = true; dragSource = tile; pendingDrop = null;
-            boolean started = tile.startDragAndDrop(ClipData.newPlainText("freeze-app", pkg), new LiftShadow(tile), pkg, 0);
-            if (!started) { dragging = false; dragSource = null; return true; }
-            tile.setAlpha(0.35f); tile.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
-            handler.post(autoScroll); return true;
-        });
+        tile.setOnLongClickListener(v -> beginAppDrag(tile,pkg));
         if (pkg.equals(landed) && !compact && motion()) {
             tile.setScaleX(1.05f); tile.setScaleY(1.05f);
             tile.animate().scaleX(1).scaleY(1).setDuration(260).setInterpolator(new OvershootInterpolator(1.1f)).start();
         }
         return tile;
+    }
+    private boolean beginAppDrag(View tile,String pkg){
+        if(lockedForMove(pkg)){toast(T.s("应用正在冻结，解冻后才能移动"));return true;}
+        dragging=true;dragSource=tile;pendingDrop=null;
+        if(!tile.startDragAndDrop(ClipData.newPlainText("freeze-app",pkg),new LiftShadow(tile),pkg,0)){dragging=false;dragSource=null;return true;}
+        tile.setAlpha(.35f);tile.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);handler.post(autoScroll);return true;
+    }
+    private void bindSlotTile(View view,String pkg){
+        LinearLayout tile=(LinearLayout)view;ImageView icon=(ImageView)tile.getChildAt(0);icon.clearColorFilter();android.graphics.drawable.Drawable drawable=appIcon(pkg);if(drawable!=null)icon.setImageDrawable(drawable);else icon.setImageResource(android.R.drawable.sym_def_app_icon);
+        LinearLayout labels=(LinearLayout)tile.getChildAt(1);((TextView)labels.getChildAt(0)).setText(appNames.containsKey(pkg)?appNames.get(pkg):Guard.labelOf(getPackageManager(),pkg));TextView state=(TextView)labels.getChildAt(1);state.setTag(pkg);refreshBadges(state);
+        tile.setAlpha(1f);tile.setScaleX(1f);tile.setScaleY(1f);tile.setOnClickListener(v->chooseDestination(pkg));tile.setOnLongClickListener(v->beginAppDrag(tile,pkg));
     }
     private DailyQuotaData badgeQuota;
     private Map<String, Integer> badgeLimits;
@@ -555,7 +585,7 @@ public class FreezeBoardActivity extends ThemedActivity {
             for (LibraryApp app : libraryApps) updateLibraryApp(app);
         }
         if (view instanceof TextView && view.getTag() instanceof String) {
-            String pkg = (String)view.getTag(); int reason = statusReason(pkg); boolean blocked = reason != 0;
+            String pkg = (String)view.getTag(); int reason = statusReason(pkg); boolean blocked = reason > 0;
             org.json.JSONObject quotaGroup=(badgeQuota == null ? DailyQuotaStore.snapshot(this) : badgeQuota).group(pkg);
             String quotaLabel=quotaGroup==null?"":" · "+(quotaGroup.optJSONArray("apps").length()>1?T.s("共享 "):"")+quotaGroup.optInt("minutes")+T.s("分/日");
             Integer limitBox = badgeLimits == null ? null : badgeLimits.get(pkg);
@@ -563,7 +593,7 @@ public class FreezeBoardActivity extends ThemedActivity {
             TextView t = (TextView)view;
             // 文案没变就别 setText：setText 会给这个 TextView 判脏，整屏几十个一起改就是一次
             // 全页重新录制 display list（实测这类刷新帧 40ms+）。颜色同理。
-            CharSequence next = Guard.blockReasonText(reason)+quotaLabel + (statusKeys.contains(pkg) ? T.s(" · 关键") : "")+(limit>0?" · "+(FreezeSlotStore.unassigned(rules.get(pkg))?T.s("全天"):T.s("时段"))+T.s("额度 ")+limit+T.s("分/日"):"");
+            CharSequence next = reasonLabel(reason)+quotaLabel + (statusKeys.contains(pkg) ? T.s(" · 关键") : "")+(limit>0?" · "+(FreezeSlotStore.unassigned(rules.get(pkg))?T.s("全天"):T.s("时段"))+T.s("额度 ")+limit+T.s("分/日"):"");
             if (!next.equals(t.getText())) t.setText(next);
             int color = blocked ? look.red() : look.green();
             if (t.getCurrentTextColor() != color) t.setTextColor(color);
@@ -576,12 +606,25 @@ public class FreezeBoardActivity extends ThemedActivity {
      * 以前 statusReason 逐个应用调 Guard.blockReasonNow，里面每个应用都重跑一遍
      * StudyGate.holding（读联动配置+罚时），一屏四十多个应用就是几百毫秒。
      */
+    private void visibleStatusPackages(View view,Set<String> result){
+        if(view==null)return;if(view instanceof TextView&&view.getTag() instanceof String)result.add((String)view.getTag());
+        if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++)visibleStatusPackages(((ViewGroup)view).getChildAt(i),result);
+    }
     private void statusSnapshot() {
-        statusNow=GuardClock.now(this);statusKeys=RuleStore.keyApps(this);
-        statusHold=StudyGate.holding(this,statusNow);
-        statusTaboo=StudyGate.tabooHolding(statusNow.getTimeInMillis(),StudyGate.tabooUntil(this));
-        statusRules=Guard.enforcedRules(this);
-        statusReward=CardStore.rewardUntil(this,statusNow.getTimeInMillis())>0;
+        statusNow=GuardClock.now(this);statusKeys=RuleStore.keyApps(this);statusRules=Guard.enforcedRules(this);
+        final String revision=RuleStore.exportRules(this)+DailyQuotaStore.snapshot(this).config.toString();
+        if(!revision.equals(reasonRevision)){reasonRevision=revision;reasonCache=java.util.Collections.emptyMap();frozenCache=java.util.Collections.emptyMap();}
+        if(statusWorkerBusy||disposed)return;statusWorkerBusy=true;
+        final Calendar now=(Calendar)statusNow.clone();final Map<String,Rule> snapshot=new java.util.LinkedHashMap<>(statusRules);final Set<String> keys=new LinkedHashSet<>(statusKeys);final Set<String> catalog=new LinkedHashSet<>();visibleStatusPackages(slotsView,catalog);for(LibraryApp app:libraryApps)catalog.add(app.pkg);
+        if(catalog.isEmpty())for(String pkg:snapshot.keySet()){catalog.add(pkg);if(catalog.size()>=24)break;}
+        catalogWorker.execute(()->{
+            Map<String,Integer> reasons=new java.util.HashMap<>();Map<String,Boolean> frozen=new java.util.HashMap<>();
+            try{boolean hold=StudyGate.holding(this,now),taboo=StudyGate.tabooHolding(now.getTimeInMillis(),StudyGate.tabooUntil(this)),reward=CardStore.rewardUntil(this,now.getTimeInMillis())>0;
+                Set<String> packages=catalog;
+                for(String pkg:packages){reasons.put(pkg,Guard.blockReasonNow(this,pkg,now,snapshot,keys,hold,taboo,reward));try{frozen.put(pkg,(getPackageManager().getApplicationInfo(pkg,0).flags&android.content.pm.ApplicationInfo.FLAG_SUSPENDED)!=0);}catch(android.content.pm.PackageManager.NameNotFoundException ignored){frozen.put(pkg,false);}}
+            }catch(RuntimeException ignored){}
+            handler.post(()->{statusWorkerBusy=false;if(disposed)return;if(!revision.equals(reasonRevision)){statusSnapshot();return;}reasonCache=reasons;frozenCache=frozen;for(LibraryApp app:libraryApps)updateLibraryApp(app);refreshBadges(slotsView);});
+        });
     }
     /** 写清「学习联动为什么还在冻」，点这一行直接跳到该补的那件事。 */
     private void updateGateNote() {
@@ -608,18 +651,11 @@ public class FreezeBoardActivity extends ThemedActivity {
             toast(T.s("禁忌惩罚到点自动解除，没有解除按钮"));
         }
     }
-    private int statusReason(String pkg) {
-        if (statusRules == null || statusNow == null) statusSnapshot();
-        return Guard.blockReasonNow(this,pkg,statusNow,statusRules,statusKeys,statusHold,statusTaboo,statusReward);
-    }
+    private int statusReason(String pkg) {Integer reason=reasonCache.get(pkg);return reason==null?-1:reason;}
     private void updateLibraryApp(LibraryApp app) {
         int reason = app.installed ? statusReason(app.pkg) : 0;
         // The library reflects the phone's current suspension state, not a future schedule.
-        boolean frozen = false;
-        if (app.installed) {
-            try { frozen = (getPackageManager().getApplicationInfo(app.pkg, 0).flags & android.content.pm.ApplicationInfo.FLAG_SUSPENDED) != 0; }
-            catch (android.content.pm.PackageManager.NameNotFoundException ignored) { }
-        }
+        boolean frozen = Boolean.TRUE.equals(frozenCache.get(app.pkg));
         boolean muted = frozen;
         if (muted) {
             android.graphics.ColorMatrix matrix = new android.graphics.ColorMatrix(); matrix.setSaturation(0);
@@ -636,8 +672,8 @@ public class FreezeBoardActivity extends ThemedActivity {
             app.detail.setTextColor(muted?look.text3():look.text2());
             return;
         }
-        app.detail.setText(!app.installed ? T.s("未安装") : frozen ? (reason == 0 ? T.s("已冻结") : Guard.blockReasonText(reason))
-                : (!rules.containsKey(app.pkg) || FreezeSlotStore.unassigned(rules.get(app.pkg))) ? T.s("待安排") : T.s("可使用"));
+        app.detail.setText(!app.installed ? T.s("未安装") : frozen ? (reason == 0 ? T.s("已冻结") : reasonLabel(reason))
+                : reason<0?T.s("正在检查状态"): (!rules.containsKey(app.pkg) || FreezeSlotStore.unassigned(rules.get(app.pkg))) ? T.s("待安排") : T.s("可使用"));
         app.detail.setTextColor(muted ? look.text3() : look.text2());
     }
     /** 切换应用库的分页：只换每块瓦片上的说明，不重建列表，所以拖拽中切页也不会中断。 */
@@ -713,7 +749,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         FreezeSlotStore.Slot target = null;
         for (FreezeSlotStore.Slot slot : FreezeSlotStore.all(this)) if (slot.id.equals(targetId)) target = slot;
         if (target == null) { toast(T.s("这个时段已不存在")); rebuild(); return; }
-        try{RuleStore.put(this, pkg, target.rule);}catch(RuntimeException error){toast(error.getMessage());return;} landed = pkg; rebuild(); landed = null; applyRules();
+        try{RuleStore.put(this, pkg, target.rule);}catch(RuntimeException error){toast(error.getMessage());return;} landed = pkg; refreshAssignments(); landed = null; applyRules();
         toast(T.s("已放入 ") + timeTitle(target.rule).replace('\n', ' '));
     }
     private void moveToLibrary(String pkg){
@@ -724,7 +760,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         // 移出冻结时段=解冻，只进不出：收束时段才放行；刚加入的十分钟内仍可纠错
         if(!windowOpen()&&!Guard.canRemove(this,pkg)){toast(T.f("移出冻结要等收束时段 %s",TimeWindow.label(this)));return;}
         try{
-            RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());rebuild();applyRules();
+            RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());refreshAssignments();applyRules();
             toast(AppUsageQuota.minutes(this,pkg)>0||DailyQuotaStore.snapshot(this).group(pkg)!=null?T.s("已返回应用库，使用限额改为全天累计"):T.s("已返回应用库"));
         }catch(RuntimeException error){toast(error.getMessage());}
     }
@@ -805,47 +841,11 @@ public class FreezeBoardActivity extends ThemedActivity {
         if(parent instanceof LinearLayout)((LinearLayout)parent).setOrientation(LinearLayout.VERTICAL);
         parent.setPadding(dp(16),dp(8),dp(16),dp(12));parent.addView(slider,new ViewGroup.LayoutParams(-1,dp(56)));
     }
-    private void chooseDestination(String pkg) {
-        Rule current = RuleStore.get(this, pkg);
-        int reason = Guard.blockReasonNow(this, pkg);
-        ScrollView scroll = new ScrollView(this);
-        scroll.setClipToPadding(false);
-        LinearLayout sheet = new LinearLayout(this);
-        sheet.setOrientation(LinearLayout.VERTICAL);
-        sheet.setPadding(dp(20), dp(3), dp(20), dp(8));
-        scroll.addView(sheet);
-        sheet.addView(appDetailHeader(pkg, reason));
-        panelGap(sheet, panelNote(current == null
-                ? T.s("还没安排冻结时段。选一个时段，应用会按这个时间自动冻结。")
-                : T.s("当前安排") + "\n" + timeTitle(current)));
-
-        final AlertDialog dialog = ThemeStore.dialog(this).setView(scroll)
-                .setNegativeButton(T.s("取消"), null).create();
-        sheet.addView(panelSection(T.s("移动到冻结时段")));
-        if (slots.isEmpty()) {
-            panelGap(sheet, panelNote(T.s("还没有冻结时段。先在冻结页设置里新建一个时间格。")));
-        } else {
-            for (int i = 0; i < slots.size(); i++) {
-                final FreezeSlotStore.Slot slot = slots.get(i);
-                String when = timeTitle(slot.rule);
-                String detail = Rule.daysText(slot.rule.days) + " · " + T.f("%d 个应用", FreezeSlotStore.members(slot, rules).size());
-                panelGap(sheet, panelAction("◷", look.accent(), when, detail, () -> {
-                    dialog.dismiss();
-                    moveApp(pkg, slot.id);
-                }));
-            }
-        }
-        sheet.addView(panelSection(T.s("应用")));
-        panelGap(sheet, panelAction("ⓘ", look.text2(), T.s("查看应用详情"),
-                T.s("当前状态、冻结规则和额度"), () -> {
-                    dialog.dismiss();
-                    appDetails(pkg);
-                }));
-        dialog.show();
-    }
+    private void chooseDestination(String pkg) {appDetails(pkg);}
     /** 使用限额容器：一行 = 一个额度（一个格子）；共享就是同一个格子里放多个应用。 */
     private void usageCell(){
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(16),dp(16),dp(16),dp(16));box.setBackground(look.round(look.surface(),20));
+        usageContainer=box;
         LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=text(T.s("使用限额"),19,look.text());
         head.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
@@ -869,14 +869,14 @@ public class FreezeBoardActivity extends ThemedActivity {
     }
     /** 额度重置时刻：原来在设置页，用额度的地方就在这一页，搬过来少跳一次。 */
     private void pickResetHour(){
-        final int current=DayBoundary.hour(this);
+        final int current=DayBoundary.selectedHour(this);
         String[] labels=new String[24];
         for(int hour=0;hour<24;hour++)labels[hour]=hour==0?T.s("00:00（零点）"):String.format(java.util.Locale.CHINA,"%02d:00",hour);
         ThemeStore.dialog(this).setTitle(T.s("每天几点重置额度")).setSingleChoiceItems(labels,current,(dialog,which)->{
             try{
                 if(!DayBoundary.saveHour(this,which))throw new IllegalStateException(T.s("没能保存"));
                 dialog.dismiss();
-                toast(which==0?T.s("已改回零点重置"):T.s("现在每天 ")+which+T.s(":00 重置"));
+                toast(T.s("重置时间已保存，将在当前额度日结束后生效"));
                 rebuild();
             }catch(RuntimeException error){toast(error.getMessage());}
         }).setNegativeButton(T.s("取消"),null).show();
@@ -887,7 +887,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         if(lockedForMove(pkg)){toast(T.s("当前已冻结，解冻后才能移动"));return;}
         // 摘掉冻结时段=解冻，跟移出应用同一道闸；十分钟纠错期里仍可改
         if(!windowOpen()&&!Guard.canRemove(this,pkg)){toast(T.f("移出冻结时段要等收束时段 %s",TimeWindow.label(this)));return;}
-        try{RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());rebuild();applyRules();toast(T.s("已改为全天累计，额度和已用时间保留"));}catch(RuntimeException error){toast(error.getMessage());}
+        try{RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());refreshAssignments();applyRules();toast(T.s("已改为全天累计，额度和已用时间保留"));}catch(RuntimeException error){toast(error.getMessage());}
 
     }
     /**
@@ -1254,10 +1254,13 @@ public class FreezeBoardActivity extends ThemedActivity {
         AlertDialog dialog=builder.create();
         dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{try{int limit=Integer.parseInt(input.getText().toString());if(limit<0||limit>1440)throw new IllegalArgumentException(T.s("额度须为0–1440分钟"));if(limit>0&&(!rules.containsKey(pkg)||allDay))RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());AppUsageQuota.save(this,pkg,limit);dialog.dismiss();rebuild();applyRules();}catch(RuntimeException error){toast(error.getMessage());}}));dialog.show();
     }
+    private AlertDialog applicationPanel;
+    private void dismissApplicationPanel(){if(applicationPanel!=null){applicationPanel.dismiss();applicationPanel=null;}}
     private void appDetails(String pkg) {
+        dismissApplicationPanel();
         Rule rule = RuleStore.get(this, pkg);
         org.json.JSONObject group = DailyQuotaStore.snapshot(this).group(pkg);
-        int reason = Guard.blockReasonNow(this, pkg);
+        int reason = statusReason(pkg);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setClipToPadding(false);
@@ -1271,12 +1274,12 @@ public class FreezeBoardActivity extends ThemedActivity {
         LinearLayout statusBox = new LinearLayout(this);
         statusBox.setOrientation(LinearLayout.VERTICAL);
         statusBox.setPadding(dp(14), dp(13), dp(14), dp(13));
-        statusBox.setBackground(look.round((((reason == 0 ? look.green() : look.red()) & 0x00ffffff) | 0x14000000), 16f));
-        TextView statusTitle = text(reason == 0 ? T.s("现在可以使用") : Guard.blockReasonText(reason), 16,
-                reason == 0 ? look.green() : look.red());
+        statusBox.setBackground(look.round((((reason<0?look.text3():reason == 0 ? look.green() : look.red()) & 0x00ffffff) | 0x14000000), 16f));
+        TextView statusTitle = text(reason == 0 ? T.s("现在可以使用") : reasonLabel(reason), 16,
+                reason<0?look.text3():reason == 0 ? look.green() : look.red());
         statusTitle.setTypeface(Typeface.DEFAULT_BOLD);
         statusBox.addView(statusTitle);
-        String why = reason == 1 ? T.s("当前正好落在自身设置的冻结时段里，过点会自动放开。")
+        String why = reason<0?T.s("正在后台核验冻结状态，请稍候。") : reason == 1 ? T.s("当前正好落在自身设置的冻结时段里，过点会自动放开。")
                 : reason == 2 ? T.s("20:00 后打卡没完成，学习联动会一直冻到打完；打完还要走完打卡罚时。")
                 : reason == 3 ? T.s("禁忌惩罚的延长冻结还没结束。")
                 : reason == 4 ? AppUsageQuota.status(this, pkg, rule, System.currentTimeMillis())
@@ -1316,13 +1319,11 @@ public class FreezeBoardActivity extends ThemedActivity {
         }
 
         sheet.addView(panelSection(T.s("操作")));
-        if (rule == null) {
-            if (!slots.isEmpty()) panelGap(sheet, panelAction("◷", look.accent(), T.s("选择冻结时段"),
-                    T.s("把它放进已有的时间格"), () -> chooseDestination(pkg)));
-        }
+        sheet.addView(panelSection(T.s("冻结时段")));
+        for(FreezeSlotStore.Slot slot:slots)panelGap(sheet,panelAction("◷",look.accent(),timeTitle(slot.rule),Rule.daysText(slot.rule.days),()->{dismissApplicationPanel();moveApp(pkg,slot.id);}));
         panelGap(sheet, panelAction("◔", look.accent(), T.s("使用额度"),
                 group == null ? T.s("设置每日可用分钟数") : T.s("修改这个额度的成员和分钟数"),
-                () -> usageEditor(pkg, false)));
+                () -> {dismissApplicationPanel();usageEditor(pkg, false);}));
         if (rule != null) {
             panelGap(sheet, panelAction("⌫", look.red(), T.s("移出冻结列表"),
                     T.f("需要收束时段 %s；刚加入的十分钟内可直接纠错", TimeWindow.label(this)), () -> {
@@ -1334,7 +1335,19 @@ public class FreezeBoardActivity extends ThemedActivity {
                     }));
         }
 
-        ThemeStore.dialog(this).setView(scroll).setNegativeButton(T.s("关闭"), null).show();
+        sheet.addView(panelSection(T.s("断网与修复")));
+        boolean netSelected=NetBlockStore.packages(this).contains(pkg);
+        panelGap(sheet,panelNote((netSelected?T.s("此应用已加入断网名单"):T.s("此应用未加入断网名单"))+"\n"+NetBlockStore.status(this)));
+        panelGap(sheet,panelAction("◉",look.accent(),netSelected?T.s("从断网名单移出"):T.s("加入断网名单"),T.f("修改只在调整时段 %s 开放",NetWindow.label(this)),()->{
+            if(!netEditAllowed())return;
+            Set<String> selected=new LinkedHashSet<>(NetBlockStore.packages(this));if(selected.contains(pkg))selected.remove(pkg);else selected.add(pkg);
+            NetBlockStore.setPackages(this,selected);NetBlockService.stop(this);if(selected.isEmpty())NetBlockStore.setOn(this,false);
+            dismissApplicationPanel();updateNetHint();if(NetBlockStore.on(this)&&!vpnGranted())askVpn();else appDetails(pkg);
+        }));
+        panelGap(sheet,panelAction("⚙",look.accent(),T.s("断网设置"),T.s("名单、运行模式及代理规则"),()->{dismissApplicationPanel();netSettings();}));
+        if(!AppUsageQuota.permission(this))panelGap(sheet,panelAction("!",look.red(),T.s("授权使用情况访问"),T.s("缺少权限，无法统计应用使用时长"),()->{dismissApplicationPanel();startActivity(new Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS));}));
+        if(!Guard.isOwner(this))panelGap(sheet,panelAction("!",look.red(),T.s("部署与授权修复"),T.s("尚未取得设备所有者授权，查看部署步骤"),()->{dismissApplicationPanel();SetupGuide.show(this);}));
+        applicationPanel=ThemeStore.dialog(this).setView(scroll).setNegativeButton(T.s("关闭"), null).create();applicationPanel.show();
     }
     private boolean canAdd() {
         if (rules.isEmpty() || Config.inGrace(this)) return true;
@@ -1913,8 +1926,8 @@ public class FreezeBoardActivity extends ThemedActivity {
         id.setPadding(0, dp(3), 0, 0);
         copy.addView(id);
         head.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
-        head.addView(panelPill(reason == 0 ? T.s("当前可用") : Guard.blockReasonText(reason),
-                reason == 0 ? look.green() : look.red()));
+        head.addView(panelPill(reason == 0 ? T.s("当前可用") : reasonLabel(reason),
+                reason<0?look.text3():reason == 0 ? look.green() : look.red()));
         return head;
     }
 
@@ -1985,7 +1998,7 @@ public class FreezeBoardActivity extends ThemedActivity {
             sb.append(" · ").append(apps != null && apps.length() > 1 ? T.s("共享格子 ") : T.s("额度 ")).append(group.optInt("minutes")).append(T.s(" 分钟/日"));
         }
         int reason = statusReason(pkg);
-        if (reason != 0) sb.append(" · ").append(Guard.blockReasonText(reason));
+        if (reason != 0) sb.append(" · ").append(reasonLabel(reason));
         return sb.toString();
     }
     private void addPackage() {

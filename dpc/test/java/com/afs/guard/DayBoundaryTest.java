@@ -66,6 +66,10 @@ public final class DayBoundaryTest {
         // 参数顺序一致性：startMs(now,hour) 与 key(now,hour) 用同一个边界
         eq(day(DayBoundary.startMs(earlyTwo, 4)), DayBoundary.key(earlyTwo, 4), "key derives from same boundary");
 
+        long pending=DayBoundary.changeAt(morning,0,0);
+        eq(DayBoundary.nextResetMs(morning,0),pending,"change starts at next old boundary");
+        eq(pending,DayBoundary.changeAt(morning+60000,0,pending),"editing pending time again never postpones activation");
+        eq(DayBoundary.nextResetMs(morning,4),DayBoundary.changeAt(morning,4,morning-1),"expired pending marker schedules next valid boundary");
         System.out.println("Day boundary: " + checks + " checks passed");
     }
 }

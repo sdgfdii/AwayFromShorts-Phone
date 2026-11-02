@@ -35,4 +35,10 @@
         <item name="android:windowMinWidthMinor">0dp</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
+    <style name="RestReminderTheme" parent="@android:style/Theme.Material.Light.Dialog.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowCloseOnTouchOutside">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

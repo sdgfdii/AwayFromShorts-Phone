@@ -1747,7 +1747,6 @@ yyyy年M月d日	MMM d, yyyy
 没能保存	Couldn't save
 没选应用（屏蔽中的会被跳过）	No apps selected (apps in block windows are skipped)
 浅底大标题 · 圆角白卡	Big titles · soft cards
-浅底白卡	Soft cards
 浅绿	Pale green
 浅色	Light
 浅蓝	Pale blue
@@ -1755,7 +1754,6 @@ yyyy年M月d日	MMM d, yyyy
 涂鸦	Sketch
 涂鸦-	Sketch-
 涂鸦画布	Sketch canvas
-涟漪风格	Ripple
 润色	Polish
 液态玻璃	Liquid glass
 液态玻璃 · 自定义配色	Liquid glass · custom colours
@@ -2521,3 +2519,30 @@ yyyy年M月d日	MMM d, yyyy
 🔒 关键应用名单 · 	🔒 Key apps · 
 🧊 全部冻结	🧊 All frozen
 🧊 冻结中 	🧊 Frozen 
+
+\n\n个人同步可在守卫 → 卡管理 → 打卡设置中配置；离线学习和冻结不需要同步账号。	\n\nSet up optional sync in Guard > Card management > Check-in settings. Offline study and freezing need no sync account.
+\n\n待修复：缺少使用情况访问权限，限额无法统计。点下方授权按钮前往系统设置。	\n\nAction required: usage access is missing, so quotas cannot count usage. Use the authorization button below to open system settings.
+从断网名单移出	Remove from network block list
+修改只在调整时段 %s 开放	Changes are available only during %s
+加入断网名单	Add to network block list
+名单、运行模式及代理规则	Apps, operating mode and proxy rules
+尚未取得设备所有者授权，查看部署步骤	Device owner authorization is missing; view setup steps
+授权使用情况访问	Grant usage access
+断网与修复	Network access and fixes
+断网设置	Network blocking settings
+旧额度清理未能保存	Could not save legacy quota cleanup
+正在后台核验冻结状态，请稍候。	Checking freeze status in the background. Please wait.
+正在检查状态	Checking status
+此应用已加入断网名单	This app is on the network block list
+此应用未加入断网名单	This app is not on the network block list
+系统应用设置	System app settings
+缺少权限，无法统计应用使用时长	Usage access is missing; app usage cannot be counted
+部署与授权修复	Fix setup and authorization
+部署与权限检查	Setup and permissions
+重置时间已保存，将在当前额度日结束后生效	The reset time is saved and will take effect after the current quota day ends.
+
+后台提醒弹窗	Background reminder popup
+请允许后台提醒弹窗	Allow background reminder popups
+请在系统设置中允许悬浮窗	Allow display over other apps in system settings
+到点弹出提醒页面，关闭后返回原界面。灭屏、正在锁机、放行期里都不打扰。	A reminder page appears when due. Dismiss it to return. No interruptions when the screen is off, locked, or during a pass.
+已允许	Allowed

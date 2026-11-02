@@ -10,7 +10,7 @@ import java.util.*;
 public final class AppUsageQuota {
     static final String SP="afs_usage_quota";
     private static long cachedAt;private static List<Span> cached=new ArrayList<>();
-    static final class Span {String pkg;long start,end;Span(String p,long s,long e){pkg=p;start=s;end=e;}}
+    static final class Span {String pkg;long start,end;boolean active;Span(String p,long s,long e){pkg=p;start=s;end=e;}}
     private AppUsageQuota(){}
     static JSONObject config(Context c){try{return new JSONObject(c.getSharedPreferences(SP,0).getString("limits","{}"));}catch(Exception e){throw new IllegalStateException(T.s("使用额度数据无法读取"),e);}}
     /** 只读额度表：原始串没变就不重解析（冻结页每秒几十次 minutes()）。 */
@@ -46,7 +46,7 @@ public final class AppUsageQuota {
         while(events.hasNextEvent()){events.getNextEvent(event);long stamp=event.getTimeStamp();int type=event.getEventType();String pkg=event.getPackageName();
             if(type==1){if(foreground!=null&&!foreground.equals(pkg)&&stamp>begin)out.add(new Span(foreground,Math.max(begin,start),stamp));if(!Objects.equals(pkg,foreground))start=stamp;foreground=pkg;}
             else if((type==2&&Objects.equals(pkg,foreground))||type==16||type==17||type==26){if(foreground!=null&&stamp>begin)out.add(new Span(foreground,Math.max(begin,start),stamp));foreground=null;}
-        }if(foreground!=null)out.add(new Span(foreground,Math.max(begin,start),now));cached=out;cachedAt=now;return out;
+        }if(foreground!=null){Span open=new Span(foreground,Math.max(begin,start),now);open.active=true;out.add(open);}cached=out;cachedAt=now;return out;
     }
     static long overlap(long start,long end,Rule schedule){if(end<=start)return 0;if(schedule==null)return end-start;long total=0;Calendar minute=Calendar.getInstance();for(long t=start;t<end;){minute.setTimeInMillis(t);long next=Math.min(end,t+(60000-t%60000));if(!schedule.inWindow(minute))total+=next-t;t=next;}return total;}
     public static long used(Context c,String pkg,Rule rule,long now){Rule scope=FreezeSlotStore.unassigned(rule)?null:rule;long total=0;for(Span span:spans(c,now))if(pkg.equals(span.pkg))total+=overlap(span.start,span.end,scope);return total;}
@@ -76,5 +76,19 @@ public final class AppUsageQuota {
             return last.end>=now-8000L?last.pkg:null;
         }catch(RuntimeException error){return null;}
     }
+    private static final java.util.concurrent.ExecutorService FOREGROUND=java.util.concurrent.Executors.newSingleThreadExecutor(r->new Thread(r,"afs-foreground-sample"));
+    private static final java.util.concurrent.atomic.AtomicBoolean foregroundBusy=new java.util.concurrent.atomic.AtomicBoolean();
+    private static volatile ForegroundSample foregroundSample=new ForegroundSample(null,0,0);
+    private static final class ForegroundSample {final String pkg;final long since,at;ForegroundSample(String p,long s,long a){pkg=p;since=s;at=a;}}
+    /** UI consumers never perform UsageStats IPC or wait for the usage-cache monitor. */
+    static String foregroundCached(Context c,long now){
+        ForegroundSample sample=foregroundSample;
+        if((now<sample.at||now-sample.at>=4000)&&foregroundBusy.compareAndSet(false,true)){
+            Context app=c.getApplicationContext();
+            FOREGROUND.execute(()->{try{long at=GuardClock.now(app).getTimeInMillis();synchronized(AppUsageQuota.class){List<Span> all=spans(app,at,false);Span last=all.isEmpty()?null:all.get(all.size()-1);foregroundSample=last!=null&&last.active?new ForegroundSample(last.pkg,last.start,cachedAt):new ForegroundSample(null,0,cachedAt);}}catch(RuntimeException error){foregroundSample=new ForegroundSample(null,0,System.currentTimeMillis());}finally{foregroundBusy.set(false);}});
+        }
+        return now>=sample.at&&now-sample.at<=6500?sample.pkg:null;
+    }
+    static long continuousStartCached(String pkg){ForegroundSample sample=foregroundSample;return Objects.equals(pkg,sample.pkg)?sample.since:0;}
     private static Calendar calendar(long now){Calendar value=Calendar.getInstance();value.setTimeInMillis(now);return value;}
 }

@@ -134,7 +134,7 @@ def main() -> None:
                 source[p.relative_to(root).as_posix()] = p.read_bytes()
     for name in ['AndroidManifest.xml','build.sh','deploy.sh','uninstall.sh']:
         source['dpc/'+name] = (root/'dpc'/name).read_bytes()
-    for name in ['LOCAL-DATA-BACKUP.md','CARD-MANAGEMENT.md','MEMO.md','MEMO-REFERENCE.md','MEMORY.md','MEMORY-CARD-SCRIPT.md','MATH-QUIZ.md','QUIZ-IMPORT-SCRIPT.md','THEME.md','AMAP-STYLE.md','SWISS-LAYOUT.md','PERF.md','TOOLBOX.md','VIRTUAL-TESTING.md','RENDERING-OPTIMIZATION.md']:
+    for name in ['DEPLOYMENT-AND-USABILITY.md','USABILITY-1790.md','LOCAL-DATA-BACKUP.md','CARD-MANAGEMENT.md','MEMO.md','MEMO-REFERENCE.md','MEMORY.md','MEMORY-CARD-SCRIPT.md','MATH-QUIZ.md','QUIZ-IMPORT-SCRIPT.md','THEME.md','AMAP-STYLE.md','SWISS-LAYOUT.md','PERF.md','TOOLBOX.md','VIRTUAL-TESTING.md','RENDERING-OPTIMIZATION.md']:
         source['docs/'+name] = (root/'docs'/name).read_bytes()
     source['dpc/README.md'] = b'See the repository README for deployment, recovery, building and verification.\n'
     for p in (root/'scripts').iterdir():

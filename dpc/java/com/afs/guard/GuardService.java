@@ -47,7 +47,7 @@ public class GuardService extends Service {
      * 上偶尔要几百毫秒，以前一天 24 小时 × 5 秒全都在查。
      */
     private final Runnable quotaTick=new Runnable(){public void run(){
-        if(!quotaBusy){quotaBusy=true;quotaWorker.execute(()->{try{if(DailyQuotaStore.enforcementChanged(GuardService.this))Guard.apply(GuardService.this);}catch(Throwable error){Log.e(Guard.TAG,"daily quota tick failed",error);}finally{quotaBusy=false;}Guard.kickQuotaExceeded(GuardService.this);});}
+        if(!quotaBusy&&(DailyQuotaStore.active(GuardService.this)||!AppUsageQuota.limits(GuardService.this).isEmpty())){quotaBusy=true;quotaWorker.execute(()->{try{if(DailyQuotaStore.enforcementChanged(GuardService.this))Guard.apply(GuardService.this);}catch(Throwable error){Log.e(Guard.TAG,"daily quota tick failed",error);}finally{quotaBusy=false;}Guard.kickQuotaExceeded(GuardService.this);});}
         handler.postDelayed(this,TimeWindow.on(GuardService.this)?5000:60000);
     }};
 

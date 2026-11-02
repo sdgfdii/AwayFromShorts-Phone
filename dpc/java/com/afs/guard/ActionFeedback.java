@@ -13,8 +13,6 @@ final class ActionFeedback {
                 new int[]{(normal&0x00ffffff)|0x61000000,normal});
     }
     static void bind(TextView view,Ui ui,int fill,float radius,int text){
-        // 涟漪风格的所有按钮都是胶囊，和参考稿的「回到桌面」一致。
-        if(ui.ripple&&radius>=10)radius=99;
         StateListDrawable states=new StateListDrawable();
         states.addState(new int[]{-android.R.attr.state_enabled},ui.round((fill&0x00ffffff)|0x66000000,radius));
         int lift=ui.dark?24:-18;

@@ -152,6 +152,7 @@ public class CheckinActivity extends ThemedActivity {
     private LinearLayout dots;
     /** 亚克力底：页面最底层的模糊图 + 一层压色调的蒙版。 */
     private ImageView backdropView;
+    private int backdropGeneration;
     private View backdropTint;
     private LinearLayout rootBox;
     private TextView topSub;
@@ -322,6 +323,8 @@ public class CheckinActivity extends ThemedActivity {
 
     @Override
     protected void onDestroy() {
+        backdropGeneration++;
+        if(backdropView!=null)backdropView.setImageDrawable(null);
         cancelCardVisual();
         super.onDestroy();
         stopHover();
@@ -589,6 +592,8 @@ public class CheckinActivity extends ThemedActivity {
      * 在主线程做这一下会让进页面卡住半秒以上。
      */
     private void loadBackdrop() {
+        final int generation=++backdropGeneration;
+        final ImageView target=backdropView;
         if (!Backdrop.has(this) || backdropView == null) {
             return;
         }
@@ -602,9 +607,10 @@ public class CheckinActivity extends ThemedActivity {
                 }
                 runOnUiThread(new Runnable() {
                     public void run() {
-                        if (backdropView != null) {
-                            backdropView.setImageBitmap(bmp);
-                        }
+                        if (generation==backdropGeneration&&!isDestroyed()&&target==backdropView) {
+                            target.setImageBitmap(bmp);
+                            if(target.getDrawable() instanceof android.graphics.drawable.BitmapDrawable)((android.graphics.drawable.BitmapDrawable)target.getDrawable()).setFilterBitmap(true);
+                        }else bmp.recycle();
                     }
                 });
             }

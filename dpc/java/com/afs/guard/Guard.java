@@ -328,8 +328,9 @@ public final class Guard {
      */
     private static final java.util.concurrent.ExecutorService POLICY =
             java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "afs-guard-policy"));
-    private static volatile boolean applying;
-    private static volatile boolean pending;
+    private static final Object REQUEST_LOCK=new Object(), APPLY_LOCK=new Object();
+    private static boolean applying;
+    private static boolean pending;
 
     public static void applyAsync(final Context context) {
         final Context app;
@@ -338,21 +339,13 @@ public final class Guard {
         } catch (RuntimeException error) {
             return;
         }
-        if (applying) {
-            pending = true;
-            return;
+        synchronized(REQUEST_LOCK){
+            pending=true;if(applying)return;applying=true;
         }
-        applying = true;
-        POLICY.execute(() -> {
-            try {
-                do {
-                    pending = false;
-                    apply(app);
-                } while (pending);
-            } catch (Throwable error) {
-                Log.e(TAG, "async apply failed", error);
-            } finally {
-                applying = false;
+        POLICY.execute(()->{
+            for(;;){
+                synchronized(REQUEST_LOCK){if(!pending){applying=false;return;}pending=false;}
+                try{apply(app);}catch(Throwable error){Log.e(TAG,"async apply failed",error);}
             }
         });
     }
@@ -362,6 +355,9 @@ public final class Guard {
      * 幂等：反复调用没有副作用。
      */
     public static String apply(Context ctx) {
+        synchronized(APPLY_LOCK){return applySerial(ctx);}
+    }
+    private static String applySerial(Context ctx) {
         try{DailyQuotaStore.refresh(ctx);}catch(IllegalStateException error){Log.e(TAG,"daily quota state unavailable",error);}
         DailyCardCompletion.capture(ctx);
         DevicePolicyManager d = dpm(ctx);

@@ -135,7 +135,7 @@ public final class FloatingNav extends FrameLayout {
             icon.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
             tab.addView(icon,new LinearLayout.LayoutParams(ui.dp(28),ui.dp(28)));
             TextView label=new TextView(activity);labels[index]=label;
-            label.setText(texts[index]);label.setTextSize(ui.amap||ui.ripple?11:10);label.setIncludeFontPadding(false);
+            label.setText(texts[index]);label.setTextSize(ui.amap?11:10);label.setIncludeFontPadding(false);
             SwissTypography.role(label,SwissTypography.Role.NAV);
             label.setGravity(Gravity.CENTER);label.setSingleLine(true);
             label.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));
@@ -241,8 +241,7 @@ public final class FloatingNav extends FrameLayout {
 
     private void updateColors(int page) {
         if(visualPage==page)return;visualPage=page;
-        boolean ripple=ui.ripple;
-        for(int i=0;i<5;i++){int color=i==page?ui.accent():(ui.amap||ripple?ui.text():ui.text2());icons[i].color=color;icons[i].invalidate();labels[i].setTextColor(color);}
+        for(int i=0;i<5;i++){int color=i==page?ui.accent():(ui.amap?ui.text():ui.text2());icons[i].color=color;icons[i].invalidate();labels[i].setTextColor(color);}
     }
     private void kick() {
         if(!motion()) {
@@ -266,22 +265,22 @@ public final class FloatingNav extends FrameLayout {
     }
     private void updateGeometry() {
         if(pitch<=0)return;
-        float raised=ui.amap||ui.ripple?0:clamp(value(lift),0,1), stretch=ui.amap||ui.ripple?0:clamp(value(jelly),-.12f,.18f);
+        float raised=ui.amap?0:clamp(value(lift),0,1), stretch=ui.amap?0:clamp(value(jelly),-.12f,.18f);
         float width=(lensWidth+ui.dp(16)*raised)*(1+stretch);
         float height=appearance.floating?(ui.dp(54)+ui.dp(16)*raised)*(1-stretch*1.4f):ui.dp(30);
-        if((ui.amap||ui.ripple)&&appearance.floating)width=pitch-ui.dp(2);
+        if((ui.amap)&&appearance.floating)width=pitch-ui.dp(2);
         if(!appearance.floating)width=Math.min(ui.dp(64),pitch-ui.dp(8));
         float cx=firstCenter+value(position)*pitch,cy=ui.dp(appearance.floating?31:22);
         lensRect.set(cx-width/2,cy-height/2,cx+width/2,cy+height/2);
-        float scale=appearance.floating&&!ui.amap&&!ui.ripple?1+value(swell)*Math.min(.25f,ui.dp(16)/(float)Math.max(1,panel.getWidth())):1;
-        pullPixels=ui.amap||ui.ripple?0:value(pull)*ui.dp(38);
+        float scale=appearance.floating&&!ui.amap?1+value(swell)*Math.min(.25f,ui.dp(16)/(float)Math.max(1,panel.getWidth())):1;
+        pullPixels=ui.amap?0:value(pull)*ui.dp(38);
         panel.setScaleX(scale*(1+Math.abs(pullPixels)/Math.max(1,panel.getWidth())*.5f));
         panel.setScaleY(scale);panel.setTranslationX(pullPixels);
         material.invalidate();renderGlass();
     }
     boolean gpuGlass() {return renderer!=null&&renderer.active();}
     boolean floating(){return appearance.floating;}
-    boolean hasGlass(){return appearance.floating&&!ui.ripple&&!"none".equals(appearance.glass);}
+    boolean hasGlass(){return appearance.floating&&!"none".equals(appearance.glass);}
     int shadowRoomDp(){return appearance.floating?SHADOW_ROOM_DP:0;}
     void glassVisible(boolean visible) {
         if(glassVisible==visible){if(visible){playTransition();renderGlass();}return;}
@@ -382,14 +381,7 @@ public final class FloatingNav extends FrameLayout {
         Material(){super(activity);setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);}
         @Override protected void onDraw(Canvas c) {
             float raised=clamp(value(lift),0,1),h=getHeight(),w=getWidth();bounds.set(.5f,.5f,w-.5f,h-.5f);
-            if(ui.ripple){
-                // 涟漪风格：不透明白色胶囊 + 一根极淡的边线，选中态是一块浅蓝胶囊。
-                float corner=appearance.floating?h/2:0;
-                p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(ui.surface());c.drawRoundRect(bounds,corner,corner,p);
-                p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(ui.dp(.55f));p.setColor(ui.line());c.drawRoundRect(bounds,corner,corner,p);
-                if(selected>=0||pressing){p.setStyle(Paint.Style.FILL);p.setColor(ui.palette.selection);c.drawRoundRect(lensRect,lensRect.height()/2,lensRect.height()/2,p);}
-                return;
-            }
+
             if(ui.amap){
                 p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(ui.palette.glassTint);p.setAlpha(hasGlass()?("ultra".equals(appearance.glass)?210:235):255);c.drawRoundRect(bounds,appearance.floating?h/2:0,appearance.floating?h/2:0,p);p.setAlpha(255);
                 p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(ui.dp(.55f));p.setColor(ui.line());c.drawRoundRect(bounds,appearance.floating?h/2:0,appearance.floating?h/2:0,p);
@@ -430,7 +422,7 @@ public final class FloatingNav extends FrameLayout {
         @Override protected void onDraw(Canvas canvas) {
             Canvas c=canvas;c.save();c.scale(getWidth()/28f,getHeight()/28f);
             // 导航图标始终用同一套细线轮廓，选中只改变颜色与气泡，不改变填充和线条重量。
-            if(ui.amap||ui.ripple){AmapStyle.glyph(c,p,T.s(LABELS[type]),color,false);c.restore();return;}
+            if(ui.amap){AmapStyle.glyph(c,p,T.s(LABELS[type]),color,false);c.restore();return;}
             int inside=(((color>>16)&255)*.2126+((color>>8)&255)*.7152+(color&255)*.0722)>200?0xE0101318:0xDDF3F4F6;
             p.setColor(color);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.4f);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);
             if(type==0){p.setStyle(Paint.Style.FILL);c.drawRoundRect(7,5,24,24,3,3,p);p.setStyle(Paint.Style.STROKE);c.drawLine(4,19,4,4,p);c.drawLine(4,4,18,4,p);p.setColor(inside);c.drawLine(11,11,20,11,p);c.drawLine(11,16,18,16,p);}

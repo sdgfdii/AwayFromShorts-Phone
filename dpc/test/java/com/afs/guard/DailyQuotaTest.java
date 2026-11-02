@@ -87,6 +87,17 @@ public final class DailyQuotaTest {
         final String empty=config(true);reject(()->new DailyQuotaData(empty,"{}",noon),"enabled empty selection rejected");
         final String invalid=config(true,group("invalid",0,a));reject(()->new DailyQuotaData(invalid,"{}",noon),"zero allowance rejected");
         check(LocalBackup.key("afs_daily_quota","config")&&LocalBackup.key("afs_daily_quota","usage"),"local backup includes config and ledger");
+        JSONObject legacy=new JSONObject().put(a,30).put(b,15);
+        JSONObject remaining=DailyQuotaData.remainingLegacy(legacy,Collections.singleton(a));
+        check(!remaining.has(a)&&remaining.optInt(b)==15,"migration deletes only successful apps and retains failures/conflicts");
+        check(legacy.optInt(a)==30&&legacy.optInt(b)==15,"migration cleanup never mutates the backup source");
+        check(DailyQuotaData.remainingLegacy(legacy,Collections.emptySet()).length()==2,"no successful migration leaves all legacy limits");
+        long change=DayBoundary.changeAt(noon,0,0);
+        check(change==at(30,0,0,0),"reset time change is deferred until current quota day ends");
+        DailyQuotaData resetPreserved=new DailyQuotaData(config(true,ga),"{}",noon);
+        resetPreserved.advance(noon+30000,spans(span(a,noon,noon+30000)),true);
+        resetPreserved.advance(noon+60000,spans(span(a,noon+30000,noon+60000)),true,Collections.emptyMap(),0);
+        check(resetPreserved.used(ga)==60000&&resetPreserved.exceeded(a),"pending reset edit preserves and continues today's spent allowance");
         System.out.println("Daily independent/shared quota: "+checks+" checks passed");
     }
 }

@@ -14,8 +14,10 @@ final class DailyQuotaStore {
     private static SharedPreferences prefs(Context c){return c.getSharedPreferences(SP,0);}
     private static DailyQuotaData load(Context c,long now){SharedPreferences p=prefs(c);return new DailyQuotaData(p.getString("config","{}"),p.getString("usage",p.contains("config")?"{missing":"{}"),now,DayBoundary.hour(c));}
     /** 只读快照的记忆：见 {@link #snapshot(Context)}。 */
+    private static final Object SNAPSHOT_LOCK=new Object();
     private static String cachedConfigRaw,cachedUsageRaw;
     private static DailyQuotaData cachedSnapshot;
+    private static int cachedResetHour=-1;
     /**
      * 只读快照（返回的对象禁止修改；写路径走 {@link #load}）。
      *
@@ -23,15 +25,20 @@ final class DailyQuotaStore {
      * 不记忆就是每秒几十次整份校验 —— 实测是 tick 里仅次于规则解析的开销。
      * 原始串没变就直接复用，变了自然重建。
      */
-    static synchronized DailyQuotaData snapshot(Context c){
-        SharedPreferences p=prefs(c);
-        String config=p.getString("config","{}");
-        String usage=p.getString("usage",p.contains("config")?"{missing":"{}");
-        if(cachedSnapshot==null||!config.equals(cachedConfigRaw)||!usage.equals(cachedUsageRaw)){
-            cachedSnapshot=load(c,GuardClock.now(c).getTimeInMillis());
-            cachedConfigRaw=config;cachedUsageRaw=usage;
+    static DailyQuotaData snapshot(Context c){
+        // getAll supplies one coherent config/ledger pair without waiting for slow
+        // UsageStats IPC under the writer monitor. Published models stay read-only.
+        Map<String,?> values=prefs(c).getAll();
+        String config=(String)(values.containsKey("config")?values.get("config"):"{}");
+        String usage=(String)(values.containsKey("usage")?values.get("usage"):values.containsKey("config")?"{missing":"{}");
+        int resetHour=DayBoundary.hour(c);
+        synchronized(SNAPSHOT_LOCK){
+            if(cachedSnapshot==null||cachedResetHour!=resetHour||!config.equals(cachedConfigRaw)||!usage.equals(cachedUsageRaw)){
+                DailyQuotaData next=new DailyQuotaData(config,usage,GuardClock.now(c).getTimeInMillis(),resetHour);
+                cachedResetHour=resetHour;cachedSnapshot=next;cachedConfigRaw=config;cachedUsageRaw=usage;
+            }
+            return cachedSnapshot;
         }
-        return cachedSnapshot;
     }
     static synchronized void refresh(Context c){refresh(c,false);}
     private static synchronized void refresh(Context c,boolean force){long now=GuardClock.now(c).getTimeInMillis();if(!force&&now>=refreshed&&now-refreshed<4500)return;DailyQuotaData d=load(c,now);if(d.groups().length()==0||!d.enabled()&&!force)return;
@@ -61,7 +68,8 @@ final class DailyQuotaStore {
         if(!AppUsageQuota.permission(c))return 0;
         long now=GuardClock.now(c).getTimeInMillis();
         DailyQuotaData data=load(c,now);
-        JSONObject config=MemoryData.copy(data.config),usage=data.usage;
+        JSONObject config=MemoryData.copy(data.config),usage=MemoryData.copy(data.usage);
+        Set<String> migrated=new LinkedHashSet<>();
         JSONArray groups=config.optJSONArray("groups");
         JSONObject targets=usage.optJSONObject("targets");
         if(groups==null||targets==null)return 0;
@@ -71,10 +79,10 @@ final class DailyQuotaStore {
             String pkg=keys.next();int minutes=limits.optInt(pkg);
             if(minutes<=0||known.contains(pkg))continue;
             try{
-                long used=AppUsageQuota.used(c,pkg,RuleStore.all(c).get(pkg),now);
+                long used=AppUsageQuota.used(c,pkg,RuleStore.all(c).getOrDefault(pkg,FreezeSlotStore.withoutSchedule()),now);
                 groups.put(new JSONObject().put("id",UUID.randomUUID().toString()).put("name",Guard.labelOf(c.getPackageManager(),pkg)).put("minutes",minutes).put("apps",new JSONArray().put(pkg)));
                 targets.put(pkg,Math.max(0,used));
-                known.add(pkg);moved++;
+                known.add(pkg);migrated.add(pkg);moved++;
             }catch(RuntimeException|JSONException error){/* 这一只搬不动就留着，下次再试 */}
         }
         if(moved==0)return 0;
@@ -83,7 +91,8 @@ final class DailyQuotaStore {
         SharedPreferences legacy=c.getSharedPreferences(AppUsageQuota.SP,0);
         if(!prefs(c).edit().putString("config_before_migration",data.config.toString()).putString("usage_before_migration",data.usage.toString()).commit())throw new IllegalStateException(T.s("额度迁移未能保存备份"));
         if(!prefs(c).edit().putString("config",config.toString()).putString("usage",usage.toString()).commit())throw new IllegalStateException(T.s("额度迁移未能保存"));
-        legacy.edit().putString("limits_before_migration",limits.toString()).putString("limits","{}").commit();
+        JSONObject remaining=DailyQuotaData.remainingLegacy(limits,migrated);
+        if(!legacy.edit().putString("limits_before_migration",limits.toString()).putString("limits",remaining.toString()).commit())throw new IllegalStateException(T.s("旧额度清理未能保存"));
         refreshed=0;signature="";
         return moved;
     }

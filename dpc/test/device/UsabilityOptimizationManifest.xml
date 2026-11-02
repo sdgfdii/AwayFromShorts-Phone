@@ -1,0 +1,3 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.usabilityoptimizationqa"><application android:label="AFS Daily Quota QA"/><instrumentation android:name="com.afs.guard.UsabilityOptimizationDeviceTest" android:targetPackage="com.afs.guard"/></manifest>
+
+

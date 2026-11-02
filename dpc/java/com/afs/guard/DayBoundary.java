@@ -33,13 +33,26 @@ public final class DayBoundary {
         if (c == null) return DEFAULT_HOUR;
         SharedPreferences p = c.getSharedPreferences(SP, Context.MODE_PRIVATE);
         int value = p.getInt(KEY_HOUR, DEFAULT_HOUR);
+        int pending=p.getInt("pending_hour",-1);long at=p.getLong("pending_at",Long.MAX_VALUE);
+        if(pending>=0&&pending<=23&&System.currentTimeMillis()>=at){
+            if(p.edit().putInt(KEY_HOUR,pending).remove("pending_hour").remove("pending_at").commit())value=pending;
+        }
         return value < 0 || value > 23 ? DEFAULT_HOUR : value;
     }
 
     public static boolean saveHour(Context c, int hour) {
         if (hour < 0 || hour > 23) throw new IllegalArgumentException(T.s("重置时刻只能是 0–23 时"));
-        return c.getSharedPreferences(SP, Context.MODE_PRIVATE).edit().putInt(KEY_HOUR, hour).commit();
+        int active=hour(c);SharedPreferences p=c.getSharedPreferences(SP,Context.MODE_PRIVATE);
+        SharedPreferences.Editor edit=p.edit();
+        if(hour==active)return edit.remove("pending_hour").remove("pending_at").commit();
+        long now=System.currentTimeMillis(),at=p.getLong("pending_at",0);
+        at=changeAt(now,active,at);
+        return edit.putInt("pending_hour",hour).putLong("pending_at",at).commit();
     }
+
+    static long changeAt(long now,int active,long existing){return existing>now?existing:nextResetMs(now,active);}
+
+    public static int selectedHour(Context c){SharedPreferences p=c.getSharedPreferences(SP,0);return p.getInt("pending_hour",hour(c));}
 
     /** 此刻所属额度日的起点。hour=0 时与旧的「本地零点」逐毫秒一致。 */
     public static long startMs(long now, int hour) {

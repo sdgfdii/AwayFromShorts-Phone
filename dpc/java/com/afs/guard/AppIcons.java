@@ -23,6 +23,7 @@ final class AppIcons {
             new LruCache<String, Drawable.ConstantState>(8 * 1024) {
                 @Override protected int sizeOf(String key, Drawable.ConstantState state) {
                     Drawable probe = state.newDrawable();
+                    if(probe instanceof android.graphics.drawable.BitmapDrawable)return Math.max(1,((android.graphics.drawable.BitmapDrawable)probe).getBitmap().getAllocationByteCount()/1024);
                     int width = probe == null ? 64 : Math.max(1, probe.getIntrinsicWidth());
                     int height = probe == null ? 64 : Math.max(1, probe.getIntrinsicHeight());
                     return Math.max(4, width * height * 4 / 1024);
@@ -32,16 +33,27 @@ final class AppIcons {
     private AppIcons() {
     }
 
+    private static String key(Context c,String pkg){return pkg+":"+c.getResources().getDisplayMetrics().densityDpi+":"+(c.getResources().getConfiguration().uiMode&48);}
+    private static Drawable sized(Context c,Drawable source){
+        if(source instanceof android.graphics.drawable.Animatable)return source;
+        int side=Math.max(1,Math.round(64*c.getResources().getDisplayMetrics().density));
+        android.graphics.Bitmap bitmap=android.graphics.Bitmap.createBitmap(side,side,android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Rect old=new android.graphics.Rect(source.getBounds());
+        source.setBounds(0,0,side,side);source.draw(new android.graphics.Canvas(bitmap));source.setBounds(old);
+        android.graphics.drawable.BitmapDrawable result=new android.graphics.drawable.BitmapDrawable(c.getResources(),bitmap);result.setFilterBitmap(true);return result;
+    }
+    static void trim(){STATES.evictAll();}
+
     /** 取一份可安全挂滤镜的新图标；拿不到返回 null（调用方用占位图兜底）。 */
     static Drawable drawable(Context c, String pkg) {
         if (pkg == null) return null;
-        Drawable.ConstantState state = STATES.get(pkg);
+        Drawable.ConstantState state = STATES.get(key(c,pkg));
         if (state == null) {
             try {
                 Drawable loaded = c.getPackageManager().getApplicationIcon(pkg);
-                state = loaded.getConstantState();
+                state = sized(c,loaded).getConstantState();
                 if (state == null) return loaded;
-                STATES.put(pkg, state);
+                STATES.put(key(c,pkg), state);
             } catch (PackageManager.NameNotFoundException | RuntimeException missing) {
                 return null;
             }
@@ -53,11 +65,11 @@ final class AppIcons {
     static void prewarm(Context c, Collection<String> packages) {
         if (packages == null) return;
         for (String pkg : packages) {
-            if (pkg == null || STATES.get(pkg) != null) continue;
+            if (pkg == null || STATES.get(key(c,pkg)) != null) continue;
             try {
                 Drawable loaded = c.getPackageManager().getApplicationIcon(pkg);
-                Drawable.ConstantState state = loaded.getConstantState();
-                if (state != null) STATES.put(pkg, state);
+                Drawable.ConstantState state = sized(c,loaded).getConstantState();
+                if (state != null) STATES.put(key(c,pkg), state);
             } catch (PackageManager.NameNotFoundException | RuntimeException ignored) {
             }
         }

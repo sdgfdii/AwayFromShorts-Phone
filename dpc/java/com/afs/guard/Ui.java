@@ -61,8 +61,6 @@ public final class Ui {
     public final boolean dark;
     public final AppearancePalette palette;
     public final boolean amap;
-    /** 涟漪风格：浅底、大标题、圆角白卡、胶囊控件。 */
-    public final boolean ripple;
 
     public Ui(Context c) {
         this.ctx = c;
@@ -70,13 +68,9 @@ public final class Ui {
         this.palette = ThemeStore.palette(c,dark);
         AppearanceConfig config=ThemeStore.load(c);
         this.amap = config.amap();
-        this.ripple = config.ripple();
     }
 
-    /** 给没有 Ui 实例的地方（排版、导航）快速判断是否涟漪风格。 */
-    public static boolean rippleMode(Context c) {
-        return ThemeStore.load(c).ripple();
-    }
+
 
     /* ==================== 主题 ==================== */
 
@@ -178,14 +172,14 @@ public final class Ui {
         v.setBackground(round(color, radiusDp));
     }
 
-    /** 按钮圆角：涟漪风格下，所有按钮统一成胶囊。 */
+    /** 按钮圆角：遵循当前控件设置。 */
     public float button(float baseDp) {
-        return ripple ? 99f : baseDp;
+        return baseDp;
     }
 
-    /** 一张标准卡片：圆角 18、内边距 16、无描边。涟漪风格更圆一点。 */
+    /** 一张标准卡片：圆角 18、内边距 16、无描边。 */
     public LinearLayout card() {
-        return card(ripple?22f:18f, ripple?18f:16f);
+        return card(18f, 16f);
     }
 
     public LinearLayout card(float radiusDp, float padDp) {
@@ -194,7 +188,7 @@ public final class Ui {
         box.setBackground(round(surface(), radiusDp));
         int p = dp(padDp);
         box.setPadding(p, p, p, p);
-        if(amap||ripple){box.setElevation(dp(1));box.setClipToOutline(true);}
+        if(amap){box.setElevation(dp(1));box.setClipToOutline(true);}
         return box;
     }
 
@@ -237,7 +231,7 @@ public final class Ui {
         row.setGravity(Gravity.CENTER_VERTICAL);
 
         if(amap){row.addView(new AmapStyle.Icon(ctx,name,text()),new LinearLayout.LayoutParams(dp(24),dp(24)));}
-        else if(!ripple) {
+        else {
         TextView icon = new TextView(ctx);
         icon.setText(glyph);
         icon.setTextSize(11);
@@ -249,13 +243,13 @@ public final class Ui {
 
         TextView t = new TextView(ctx);
         t.setText(name);
-        t.setTextSize(ripple?14:18);
-        t.setTextColor(ripple?text3():text());
-        t.setTypeface(ripple?Typeface.DEFAULT:Typeface.DEFAULT_BOLD);
-        SwissTypography.role(t,ripple?SwissTypography.Role.KEEP:SwissTypography.Role.SECTION);
+        t.setTextSize(18);
+        t.setTextColor(text());
+        t.setTypeface(Typeface.DEFAULT_BOLD);
+        SwissTypography.role(t,SwissTypography.Role.SECTION);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        tlp.leftMargin = ripple ? 0 : dp(12);
+        tlp.leftMargin = dp(12);
         row.addView(t, tlp);
 
         if (action != null) {
@@ -303,13 +297,7 @@ public final class Ui {
         LinearLayout iconWrap = new LinearLayout(ctx);
         iconWrap.setGravity(Gravity.CENTER);
         if(amap)iconWrap.addView(new AmapStyle.Icon(ctx,label,text()),new LinearLayout.LayoutParams(dp(32),dp(32)));
-        else if(ripple){
-            TextView badge = new TextView(ctx);
-            badge.setText(glyph);badge.setTextSize(17);badge.setTextColor(circleColor);
-            badge.setGravity(Gravity.CENTER);
-            badge.setBackground(round(soft(circleColor,.86f),14f));
-            iconWrap.addView(badge,new LinearLayout.LayoutParams(dp(44),dp(44)));
-        }
+
         else iconWrap.addView(circle(glyph, circleColor, 44f, 17));
         box.addView(iconWrap);
 
@@ -344,11 +332,11 @@ public final class Ui {
     public TextView chip(String s, int fg, int fill) {
         TextView tv = new TextView(ctx);
         tv.setText(s);
-        tv.setTextSize(ripple?12:11);
+        tv.setTextSize(11);
         tv.setTextColor(fg);
         tv.setGravity(Gravity.CENTER);
         tv.setBackground(round(fill, 99f));
-        tv.setPadding(dp(ripple?12:10), dp(ripple?6:5), dp(ripple?12:10), dp(ripple?6:5));
+        tv.setPadding(dp(10), dp(5), dp(10), dp(5));
         return tv;
     }
 

@@ -185,11 +185,9 @@ final class Backdrop {
         if (blurred != small) {
             small.recycle();
         }
-        Bitmap full = Bitmap.createScaledBitmap(blurred, w, h, true);
-        if (full != blurred) {
-            blurred.recycle();
-        }
-        return full;
+        // The ImageView/GPU performs the same filtered enlargement at draw time.
+        // Keep only the quarter-size blurred texture, not a full-screen CPU bitmap.
+        return blurred;
     }
 
     /** 内置底：一束从左上透出来的冷光。程序画，xml 的 gradient 解不成位图。 */

@@ -126,7 +126,7 @@ public class MainActivity extends ThemedActivity {
         root.addView(bar);
 
         /* ---------- 问候 + 日期 ---------- */
-        greet = ui.title(ui.amap||ui.ripple?T.s("守卫"):T.s("设置"));
+        greet = ui.title(ui.amap?T.s("守卫"):T.s("设置"));
         LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         glp.topMargin = ui.dp(24);
@@ -266,6 +266,7 @@ public class MainActivity extends ThemedActivity {
         foot.setPadding(0, ui.dp(20), 0, 0);
         if(ui.amap)foot.setVisibility(View.GONE);
         root.addView(foot);
+        TextView health=new TextView(this);health.setText(T.s("部署与权限检查"));health.setTextColor(ui.accent());health.setPadding(0,ui.dp(14),0,ui.dp(14));health.setOnClickListener(v->SetupGuide.show(this));root.addView(health);
 
         // 薄霜层盖在内容上面：全屏蔽时有"被冻住"的体感，平时不画
         final android.widget.FrameLayout shell = new android.widget.FrameLayout(this);

@@ -15,6 +15,7 @@ final class DailyQuotaData {
         try{usage=new JSONObject(ledger);if(usage.length()==0)usage=fresh(now,resetHour);validateUsage(usage);}
         catch(RuntimeException|JSONException e){usage=fresh(now,resetHour);put(usage,"error",T.s("用量记录损坏，限额保护性冻结至次日"));}
     }
+    static JSONObject remainingLegacy(JSONObject original,Set<String> migrated){JSONObject remaining=MemoryData.copy(original);for(String pkg:migrated)remaining.remove(pkg);return remaining;}
     static void validate(JSONObject config){
         if(!(config.opt("enabled") instanceof Boolean)||config.optJSONArray("groups")==null)throw new IllegalArgumentException(T.s("每日限额配置无效"));
         Set<String> ids=new HashSet<>(),apps=new HashSet<>();JSONArray groups=config.optJSONArray("groups");

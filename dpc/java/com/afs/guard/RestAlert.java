@@ -11,7 +11,7 @@ import android.os.PowerManager;
 import android.util.Log;
 
 /**
- * 定时提醒的执行者：跟 {@link GuardService} 的 5 秒节拍走，到点发一条通知，不拦人。
+ * 定时提醒的执行者：跟 {@link GuardService} 的 5 秒节拍走，到点弹出可关闭的提醒页面，并保留通知入口。
  *
  * 不发的情况见 {@link RestReminder#shouldFire}：灭屏、锁机中、放行期里都不打扰。
  *
@@ -60,7 +60,10 @@ public final class RestAlert {
         }
     }
 
-    private static void show(Context c, int every) {
+    static void show(Context c, int every) {
+        // 页面和通知相互独立：拒绝通知权限也不能把页面提醒一起短路。
+        try { c.startActivity(RestReminderActivity.intent(c, every)); }
+        catch (RuntimeException error) { Log.w(Guard.TAG, "rest popup launch failed", error); }
         NotificationManager manager = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null || !manager.areNotificationsEnabled()) return;
         if (Build.VERSION.SDK_INT >= 26) {
@@ -71,8 +74,7 @@ public final class RestAlert {
             channel.setShowBadge(true);
             manager.createNotificationChannel(channel);
         }
-        Intent open = new Intent(c, MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        Intent open = RestReminderActivity.intent(c, every);
         PendingIntent pending = PendingIntent.getActivity(c, 0, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
@@ -96,6 +98,7 @@ public final class RestAlert {
 
     /** 关掉提醒时顺手撤掉还挂在通知栏的那条。 */
     public static void clear(Context c) {
+        RestReminderActivity.dismissCurrent();
         NotificationManager manager = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) manager.cancel(ID);
     }

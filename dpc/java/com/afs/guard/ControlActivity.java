@@ -292,18 +292,27 @@ public final class ControlActivity extends ThemedActivity {
             boolean next = !ReminderStore.on(this);
             ReminderStore.setOn(this, next);
             if (!next) RestAlert.clear(this);
-            if (next && !MemoReminder.allowed(this)) {
-                toast(T.s("通知没开，提醒发不出来"));
+            if (next && !RestReminderActivity.backgroundAllowed(this)) {
+                toast(T.s("请允许后台提醒弹窗"));
+                openReminderPermission();
             }
             render();
         });
         row(card, T.s("每隔多久提醒"), RestReminder.minutes(ReminderStore.every(this)), this::pickEvery);
         row(card, T.s("时间段"), ReminderStore.window(this), this::pickRestWindow);
-        note(card, T.s("只发一条通知，不拦人。灭屏、正在锁机、放行期里都不打扰。"));
+        row(card, T.s("后台提醒弹窗"), RestReminderActivity.backgroundAllowed(this) ? T.s("已允许") : T.s("去授权"), this::openReminderPermission);
+        note(card, T.s("到点弹出提醒页面，关闭后返回原界面。灭屏、正在锁机、放行期里都不打扰。"));
         note(card, T.s("和上面的定时锁机是两回事：锁机是硬拦，这个是轻提醒，可以只开一个。"));
         note(card, Lang.t(this,
                 "把守卫从最近任务里划掉会让系统直接杀掉进程，提醒会停到系统下一次把它叫起来（最长约 5 分钟，到点的那条会补发）。建议在最近任务里锁定守卫，别划掉它。",
                 "Swiping the guard away from recents makes the system kill its process; reminders pause until it is woken again (up to about 5 minutes, missed ones are then delivered). Lock the guard in recents instead of swiping it away."));
+    }
+
+    private void openReminderPermission() {
+        if (RestReminderActivity.backgroundAllowed(this)) { toast(T.s("已允许")); return; }
+        try { startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:" + getPackageName()))); }
+        catch (RuntimeException error) { toast(T.s("请在系统设置中允许悬浮窗")); }
     }
 
     private void pickEvery() {

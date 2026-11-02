@@ -11,6 +11,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -39,14 +42,24 @@ final class LanQuota {
     static final long POLL_MS = 3000L;
     /** 同一时刻只允许一个在飞，避免弱网下排队堆积。 */
     private static final long MIN_GAP_MS = 2200L;
-    /** 超过这个年龄的缓存不再参与判定。 */
+    /** 超过这个年龄的缓存不再参与判定（局域网：一次往返就够新了）。 */
     static final long STALE_MS = 30_000L;
+    /**
+     * Gist 兜底数据的老化窗口。
+     *
+     * PC 每 15 分钟推一次，所以 90 分钟等于「连着 6 次没推上来」才当作无效；
+     * 再长就会出现「电脑那边已经加了额度、手机还死按旧数字锁着」的坑。
+     */
+    static final long GIST_STALE_MS = 90 * 60_000L;
+    /** Gist 拉取间隔：比局域网宽松得多，raw 本身就有 CDN 缓存。 */
+    private static final long GIST_RETRY_MS = 90_000L;
 
     private static final int CONNECT_MS = 2500;
     private static final int READ_MS = 3500;
 
     private static final Object LOCK = new Object();
     private static long lastStart;
+    private static long lastGistTry;
     private static final ExecutorService EXEC = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "afs-lan-quota");
         t.setDaemon(true);
@@ -200,7 +213,14 @@ final class LanQuota {
 
     static boolean fresh(Context c) {
         long stamp = at(c);
-        return stamp > 0 && System.currentTimeMillis() - stamp <= STALE_MS;
+        if (stamp <= 0) return false;
+        long age = System.currentTimeMillis() - stamp;
+        return age <= ("gist".equals(source(c)) ? GIST_STALE_MS : STALE_MS);
+    }
+
+    /** 这份数据从哪来：lan（局域网，准）/ gist（兜底，分钟级延迟）。 */
+    static String source(Context c) {
+        return sp(c).getString("source", "lan");
     }
 
     /**
@@ -220,7 +240,8 @@ final class LanQuota {
 
     static void clearCache(Context c) {
         sp(c).edit().remove("minutes").remove("pcUsed").remove("phoneUsed")
-                .remove("total").remove("exhausted").remove("at").remove("lastError").apply();
+                .remove("total").remove("exhausted").remove("at").remove("lastError")
+                .remove("source").apply();
     }
 
     /* ---------------- 轮询 ---------------- */
@@ -249,6 +270,9 @@ final class LanQuota {
                 //「配置全对但就是不同步」会变成一个查不出原因的悬案。
                 String detail = error.getMessage() == null ? error.toString() : error.getMessage();
                 sp(app).edit().putString("lastError", detail).apply();
+                // 主通道断了 → Gist 兜底。在家外也能看到电脑那边用了多少，
+                // 虽然只能分钟级，总比两边各记各的强。
+                try { pullGist(app, phoneUsedMs); } catch (Throwable ignored) { }
             } finally {
                 if (onResult != null) {
                     try { onResult.run(); } catch (Throwable ignored) { }
@@ -321,6 +345,55 @@ final class LanQuota {
                 .putLong("total", total)
                 .putBoolean("exhausted", o.optBoolean("exhausted", false))
                 .putLong("at", System.currentTimeMillis())
+                .putString("source", "lan")
+                .apply();
+    }
+
+    /**
+     * 兜底：从同步 Gist 拉 PC 推上来的 quota-pool.json。
+     *
+     * 这里只用它当「电脑那一半」的估计值，手机自己的用量照旧本地算，
+     * 不把 Gist 上的 phoneUsed 拿回来用 —— 那是上一次连通时上报的旧值，
+     * 比当前真实值小，用它会多给用户几分钟。
+     */
+    private static void pullGist(Context c, long phoneUsedMs) {
+        long now = System.currentTimeMillis();
+        synchronized (LOCK) {
+            if (now - lastGistTry < GIST_RETRY_MS) return;
+            lastGistTry = now;
+        }
+        SyncTarget target = SyncConfig.target(c);
+        if (target == null) return;
+        String raw;
+        try {
+            raw = StudyGate.fetchRaw(target.rawUrl("quota-pool.json") + "?t=" + now);
+        } catch (Exception error) {
+            Log.w(TAG, "quota-pool gist fetch failed: " + error);
+            return;
+        }
+        if (raw == null || !raw.trim().startsWith("{")) return;
+        JSONObject o;
+        try {
+            o = new JSONObject(raw);
+        } catch (Exception error) {
+            return;
+        }
+        String today = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+        // 隔天的账不能往今天扣：Gist 上躺着的可能是昨晚推的。
+        if (!today.equals(o.optString("date", ""))) return;
+        int minutes = o.optInt("minutes", 0);
+        if (minutes <= 0) return;
+        long pcUsed = (long) (o.optDouble("pcUsed", 0) * 1000);
+        long phoneUsed = Math.max(0L, phoneUsedMs);
+        long total = pcUsed + phoneUsed;
+        sp(c).edit()
+                .putInt("minutes", minutes)
+                .putLong("pcUsed", pcUsed)
+                .putLong("phoneUsed", phoneUsed)
+                .putLong("total", total)
+                .putBoolean("exhausted", total >= minutes * 60_000L)
+                .putLong("at", System.currentTimeMillis())
+                .putString("source", "gist")
                 .apply();
     }
 
@@ -332,12 +405,13 @@ final class LanQuota {
         return out.toString("UTF-8");
     }
 
-    /** 给额度页显示用：「与电脑共享 · 剩 12 分钟」。 */
+    /** 给额度页显示用：「与电脑共享 · 剩 12 分钟」；Gist 兜底时标「离线估算」。 */
     static String summary(Context c) {
         if (!active(c)) return "";
         if (!fresh(c)) return T.s("未连接电脑");
         int minutes = minutes(c);
         long remainSec = Math.max(0L, minutes * 60L - total(c) / 1000L);
+        if ("gist".equals(source(c))) return T.f("离线估算 · 剩 %d 分钟", remainSec / 60);
         return T.f("与电脑共享 · 剩 %d 分钟", remainSec / 60);
     }
 }

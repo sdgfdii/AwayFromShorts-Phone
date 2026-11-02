@@ -140,7 +140,9 @@ final class DailyQuotaStore {
             // 共享组不能只报本机用量 —— 用户看到的“剩 30 分钟”必须和两台设备都能用的一致。
             if(!LanQuota.fresh(c))return T.s("跨设备额度 · 未连上电脑，暂按本机计");
             long total=LanQuota.total(c),limit=LanQuota.minutes(c)*60000L;
-            return String.format(Locale.CHINA,T.s("跨设备 · 已用 %.1f / %d 分钟（电脑 %.1f + 手机 %.1f）"),total/60000.0,LanQuota.minutes(c),LanQuota.pcUsed(c)/60000.0,LanQuota.phoneUsed(c)/60000.0);
+            // 局域网断了、数字来自 Gist 时说清楚：这是分钟级的旧数据，偏乐观。
+            String head="gist".equals(LanQuota.source(c))?T.s("离线估算 · "):T.s("跨设备 · ");
+            return head+String.format(Locale.CHINA,T.s("已用 %.1f / %d 分钟（电脑 %.1f + 手机 %.1f）"),total/60000.0,LanQuota.minutes(c),LanQuota.pcUsed(c)/60000.0,LanQuota.phoneUsed(c)/60000.0);
         }
         long used=d.used(g),limit=g.optInt("minutes")*60000L;return String.format(Locale.CHINA,T.s("已用 %.1f / %d 分钟 · 剩余 %.1f 分钟"),used/60000.0,g.optInt("minutes"),Math.max(0,limit-used)/60000.0);}
 }

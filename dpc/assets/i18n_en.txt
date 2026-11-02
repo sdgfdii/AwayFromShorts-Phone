@@ -56,6 +56,7 @@
  · 周期末必须完成	 · required at cycle end
  · 完成后解除	 · clears when done
  · 尚未允许通知	 · notifications not allowed
+ · 局域网不通，用的是 Gist 上的旧账，回到家里 WiFi 会自动恢复准确	 · LAN unreachable, using the last snapshot from Gist; it corrects itself back on the home wifi
  · 已完成	 · finished
  · 已自定义	 · customised
  · 已重新检测	 · re-checked
@@ -734,6 +735,7 @@ yyyy年M月d日	MMM d, yyyy
 刷题目标	Quiz goal
 前台服务状态与提醒	Foreground status and reminders
 前往守卫的卡管理添加卡片 →	Go to Guard → Cards to add cards →
+剩 %d 分钟	%d min left
 剩余	Left
 副标题	Subheading
 功能	Features
@@ -808,6 +810,7 @@ yyyy年M月d日	MMM d, yyyy
 只监控选中的应用；一个都不选就是全部	Only the apps you pick are watched; none means all
 只算屏幕亮着的时间：灭屏、正在锁着的那几分钟都不累计。累计满一轮就锁一次，锁完从零开始算。	Only counts time with the screen on: screen-off and the locked minutes are not counted. Each full round triggers one lock, then the count restarts.
 只练未做题	Unseen only
+只能填局域网地址，比如 192.168.1.5	Only a LAN address works here, for example 192.168.1.5
 只能撤回当天的打卡记录	Only today's check-ins can be undone
 只能计时和提醒。冻结、锁屏、拦截都需要更高权限。	Timing and reminders only. Freezing, locking and blocking need more access.
 只能计时提醒	Timers only
@@ -1168,6 +1171,7 @@ yyyy年M月d日	MMM d, yyyy
 已生成新密钥	New secret generated
 已用 %.0f%%，剩余 %.1f 分钟	%.0f%% used, %.1f min left
 已用 %.1f / %d 分钟 · 剩余 %.1f 分钟	Used %.1f / %d min · %.1f min left
+已用 %.1f / %d 分钟（电脑 %.1f + 手机 %.1f）	%.1f of %d min used (PC %.1f + phone %.1f)
 已移入回收站 · 撤回	Moved to trash · undo
 已移到最近删除，可在下方撤回	Moved to Recently deleted; restore it below
 已累计够一轮	One round reached
@@ -1927,6 +1931,8 @@ yyyy年M月d日	MMM d, yyyy
 禁改时间	No clock change
 离开专注页时计时停住了，现在接着走	The timer stopped while you were away; it is running again now
 离开卡片编辑？	Leave card editing?
+离线估算 · 	Offline estimate · 
+离线估算 · 剩 %d 分钟	Offline estimate · %d min left
 科目	Subject
 科目名称请填写 1 至 40 个字，不能包含换行	Subject name must be 1 to 40 characters with no line breaks
 移入	Move
@@ -2228,6 +2234,7 @@ yyyy年M月d日	MMM d, yyyy
 跟随主题	Follow theme
 跟随系统	Follow system
 跨设备	Across devices
+跨设备 · 	Shared · 
 跨设备 · 已用 %.1f / %d 分钟（电脑 %.1f + 手机 %.1f）	Shared · %.1f of %d min used (PC %.1f + phone %.1f)
 跨设备共享额度	Shared quota across devices
 跨设备额度 · 未连上电脑，暂按本机计	Shared quota · PC unreachable, counting locally for now
@@ -2329,6 +2336,7 @@ yyyy年M月d日	MMM d, yyyy
 进度怎样计算\n今日闪卡进度表示已复习的卡片数，包含选了“忘了”的卡，不代表全部记牢。学习联动以对应学科的学习目标为准：遗忘不计为有效完成；达到复习阶段的有效评分才可能增加完成量，同一计划内不重复计数。	How progress is counted\nToday's progress is the number of cards reviewed, including ones rated “forgot”; it does not mean they are all memorised. The study gate follows the subject's study goals: forgetting does not count, only valid ratings in the review stage can add progress, and one plan is never counted twice.
 连三	Three in a row
 连上了 · 池子 %d 分钟，电脑已用 %.1f，手机已用 %.1f	Connected · pool %d min, PC used %.1f, phone used %.1f
+连不上电脑：%s	Cannot reach the PC: %s
 连不上：%s	Cannot reach it: %s
 连接令牌	Access token
 连接方式	Connection

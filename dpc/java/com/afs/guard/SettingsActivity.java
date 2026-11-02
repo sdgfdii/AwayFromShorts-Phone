@@ -124,8 +124,8 @@ public final class SettingsActivity extends ThemedActivity {
         body.addView(cross, ui.gap(10));
         row(cross, Lang.t(this, "共享额度", "Shared quota"), lanSummary(), this::lanQuotaEditor);
         addNote(cross, Lang.t(this,
-                "把手机上某一个额度格子接到电脑上：两边各记各的用量，合起来算一个池子，任一边用完另一边也停。只在家里 WiFi 下生效；连不上时退回各自记账，不会把人锁在外面。",
-                "Binds one phone bucket to the PC: both sides report their own usage into one pool, and either side running dry stops both. Home wifi only; when the PC is unreachable each side falls back to its own ledger."));
+                "把手机上某一个额度格子接到电脑上：两边各记各的用量，合起来算一个池子，任一边用完另一边也停。优先走家里 WiFi（3 秒级）；出门连不上时退回到 Gist 上最近一次的账，分钟级延迟、数字偏乐观。",
+                "Binds one phone bucket to the PC: both sides report their own usage into one pool, and either side running dry stops both. Home wifi first (3-second sync); away from home it falls back to the last snapshot on Gist, which lags by minutes and reads optimistically."));
 
         /* ---------- 权限 ---------- */
         body.addView(groupTitle(Lang.t(this, "权限体检", "Permissions")));
@@ -636,6 +636,8 @@ public final class SettingsActivity extends ThemedActivity {
                 state.setText(err.isEmpty()
                         ? T.s("还没有连上过电脑。手机和电脑要在同一个 WiFi 下。")
                         : T.f("连不上电脑：%s", err));
+            } else if ("gist".equals(LanQuota.source(this))) {
+                state.setText(LanQuota.summary(this) + T.s(" · 局域网不通，用的是 Gist 上的旧账，回到家里 WiFi 会自动恢复准确"));
             } else {
                 state.setText(LanQuota.summary(this) + T.s(" · 电脑端可查看详细用量"));
             }

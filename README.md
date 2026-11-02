@@ -13,7 +13,7 @@ Windows解压完整部署包后双击“开始安装.cmd”打开图形向导：
 手机采用打卡、记忆、守卫、刷题、冻结五个底栏页面。冻结页以时段和额度管理应用，点任意应用进入统一详情，可查看冻结原因、安排时段、调整额度、查看断网状态和修复缺失权限。设置与同步入口在守卫 → 卡管理。旧版本截图和性能记录仅代表对应历史版本。
 
 
-**最新正式版：[v1.70.0](https://github.com/sdgfdii/AwayFromShorts-Phone/releases/tag/v1.70.0)**。提供正式签名 APK、含 ADB 与维护包的 Windows 部署 ZIP，以及对应源码。这一版把设置齿轮、备忘录有序列表续号、正念空间节律、首启卡顿、打卡日历合并、成就提级、能力等级切换、应用选择界面重构、朋友圈页面拦截一并做完；打卡未完成会延长冻结 30 分钟。见 [数据与备份](docs/LOCAL-DATA-BACKUP.md) 和 [发行验证](dpc/release/VERIFICATION.md)。
+**最新正式版：[v1.79.2](https://github.com/sdgfdii/AwayFromShorts-Phone/releases/tag/v1.79.2)**。提供正式签名APK、图形向导Windows部署包及源码包。包含提醒页面弹窗、涟漪风格移除、冻结页局部刷新与资源优化。详见[发行说明](dpc/release/notes/1.79.2.md)和[部署与使用](docs/DEPLOYMENT-AND-USABILITY.md)。
 
 > 到点把短视频 App **真的锁住** —— 不是弹个提醒,是点不开。
 

@@ -213,9 +213,9 @@
 %d 个应用待断网（没连上隧道）	%d apps to cut off (tunnel not connected)
 %d 个应用断网中	%d apps cut off
 %d 个应用断网中 · %s	%d apps cut off · %s
-%d 个应用要等收束时段 %s 才能移出	%d apps can leave only inside the focus window %s
+%d 个应用要等调整时段 %s 才能移出	%d apps can leave only inside the adjustment window %s
 %d 个应用连不上服务器	%d apps cannot reach any server
-%d 个新应用要等收束时段 %s 才能加入	%d new apps can join only inside the focus window %s
+%d 个新应用要等调整时段 %s 才能加入	%d new apps can join only inside the adjustment window %s
 %d 个时段	%d windows
 %d 个词 · %d 个应用 · 已拦 %d 次	%d words · %d apps · %d blocked
 %d 分钟	%d min
@@ -373,7 +373,7 @@ yyyy年M月d日	MMM d, yyyy
 」认领一次？\n\n冻结程序将延长 	” claim once?\n\nFrozen apps extend by 
 」？	”?
 一个格子放一个应用，就是它单独的一份额度；放多个应用，就是它们共用同一份额度。应用放进冻结时段后，只累计所绑时段内的用量，额度用完才冻结；未绑定时段则全天累计。	One app in a quota means its own allowance; several apps share it. Apps inside a freeze window only count usage within their bound hours and freeze when the quota runs out; unbound quotas count all day.
-一个格子放一个应用，就是它单独的一份额度；放多个应用，就是它们共用同一份额度。应用放进冻结时段后，只累计所绑时段内的用量，额度用完才冻结；未绑定时段则全天累计。%s重置，改格子不清空已用时间。加到格子里的操作随时都能做（加应用、加分钟数）；移出应用、调小分钟数、删格子只在收束时段 %s 内开放。学习联动与禁忌惩罚继续生效。	One app in a cell gets its own allowance; several apps share one. Once tied to a freeze window, only in-window usage counts; untied cells count all day. Resets at %s; edits never reset used time. Adding (apps or minutes) works any time; removing apps, lowering minutes and deleting cells open only inside the focus window %s. Study links and taboo penalties keep working.
+一个格子放一个应用，就是它单独的一份额度；放多个应用，就是它们共用同一份额度。应用放进冻结时段后，只累计所绑时段内的用量，额度用完才冻结；未绑定时段则全天累计。%s重置，改格子不清空已用时间。加到格子里的操作随时都能做（加应用、加分钟数）；移出应用、调小分钟数、删格子只在调整时段 %s 内开放。学习联动与禁忌惩罚继续生效。	One app in a cell gets its own allowance; several apps share one. Once tied to a freeze window, only in-window usage counts; untied cells count all day. Resets at %s; edits never reset used time. Adding (apps or minutes) works any time; removing apps, lowering minutes and deleting cells open only inside the adjustment window %s. Study links and taboo penalties keep working.
 一周不断	A full week
 一天都没选	No days selected
 一次最多选择 20 个文件	At most 20 files at a time
@@ -627,14 +627,14 @@ yyyy年M月d日	MMM d, yyyy
 关键应用　	Key apps    
 关键应用不受学习闸门延长；自身冻结时段和每日额度仍然生效。	Key apps skip the study-gate extension, but their own windows and daily quotas still apply.
 关键应用名单	Key apps
-关键应用名单要等收束时段 %s 才能改	The key-app list can be changed only inside the focus window %s
+关键应用名单要等调整时段 %s 才能改	The key-app list can be changed only inside the adjustment window %s
 关键应用已更新 · %d 个	Key apps updated · %d
 关键应用白名单	Always allowed
 关键词	Keywords
 关键词与视频号拦截要用，本版本还没内置	Needed for keyword blocking; not built in yet
 关闭	Close
 关闭选色器	Close the colour picker
-关闭限额要等收束时段 %s	Turning quotas off waits for the focus window %s
+关闭限额要等调整时段 %s	Turning quotas off waits for the adjustment window %s
 关闭限额要等每天 22:00–23:00	Turning the quota off waits for 22:00–23:00
 其他云端目标（占位）：WebDAV / GitHub 私有仓库 / Git 仓库 只保存配置，尚未实现传输，不影响上面的个人同步。	Other cloud targets (placeholder): WebDAV / private GitHub repo / Git repo. Config is saved only; transfer is not implemented and does not affect personal sync above.
 内容包含控制字符	Content contains control characters
@@ -765,7 +765,7 @@ yyyy年M月d日	MMM d, yyyy
 单次最多导入 10000 张	At most 10000 cards per import
 单独	Single
 单独额度只放一只应用	A solo allowance holds one app
-单独额度只有一只应用，换应用要等收束时段 %s	A solo allowance holds one app; swapping waits for the focus window %s
+单独额度只有一只应用，换应用要等调整时段 %s	A solo allowance holds one app; swapping waits for the adjustment window %s
 单独额度只有一只应用，换应用要等每天 22:00–23:00	A single allowance holds one app; swapping waits for 22:00–23:00
 单独额度只能放一只应用	A single quota holds only one app
 单独额度：只锁一只应用，额度用完就冻结。	Single quota: one app only, frozen when the allowance runs out.
@@ -1421,9 +1421,9 @@ yyyy年M月d日	MMM d, yyyy
 操作未完成	Action not completed
 支持格式与模板	Formats and templates
 收下	Take it
-收束时段	Focus window
-收束时段 · %s	Focus window · %s
-收束时段未能保存	Could not save the focus window
+调整时段	Adjustment window
+调整时段 · %s	Adjustment window · %s
+调整时段未能保存	Could not save the adjustment window
 收藏夹	Starred
 收藏夹 · 	Saved · 
 收起说明 ›	Hide details ›
@@ -1464,14 +1464,14 @@ yyyy年M月d日	MMM d, yyyy
 文本缩放	Text size
 斜体	Italic
 断网与修复	Network access and fixes
-断网只在全局收束时段 %s 内生效，到点自动断、过点自动放。	Network cut only takes effect inside the global focus window %s; it switches on and off automatically.
-断网只在全局收束时段 %s 内生效，到点自动断、过点自动放；开关和名单也只能在此时段内修改。	Network blocking works only inside the global focus window %s, starting and stopping automatically. Its switch and app list can also be changed only inside this window.
+断网只在全局调整时段 %s 内生效，到点自动断、过点自动放。	Network cut only takes effect inside the global adjustment window %s; it switches on and off automatically.
+断网只在全局调整时段 %s 内生效，到点自动断、过点自动放；开关和名单也只能在此时段内修改。	Network blocking works only inside the global adjustment window %s, starting and stopping automatically. Its switch and app list can also be changed only inside this window.
 断网应用	Network blocking
 断网应用设置	Network cut settings
 断网方式	Cut-off mode
 断网的应用	Cut-off apps
 断网设置	Network blocking settings
-断网设置只能在收束时段 %s 内修改	Network blocking can be changed only inside the focus window %s
+断网设置只能在调整时段 %s 内修改	Network blocking can be changed only inside the adjustment window %s
 断网设置只能在调整时段 %s 内修改	Network blocking can be changed only inside the adjustment window %s
 断网调整时段未能保存	Could not save the network-cut adjustment window
 断网默认常开：除了调整时段 %s 内自动放开，其余时间一直断网；开关、名单和调整时段本身都只能在此时段内修改。	Network blocking stays on by default: it is released only inside the adjustment window %s, and the switch, the app list and this window itself can be changed only inside it.
@@ -1845,11 +1845,11 @@ yyyy年M月d日	MMM d, yyyy
 现在 	now 
 现在只有「	Right now you only have 
 现在只能加 · 移除或减少要等 	Adding only · removing or lowering waits for 
-现在只能加分钟数，调小要等收束时段 %s	Minutes can only go up right now; lowering waits for the focus window %s
+现在只能加分钟数，调小要等调整时段 %s	Minutes can only go up right now; lowering waits for the adjustment window %s
 现在只能加分钟数，调小要等每天 22:00–23:00	You can only add minutes now; lowering waits for 22:00–23:00
-现在只能加：勾上就进这个格子。想把应用拿出去，等收束时段 %s。	Add-only right now: tick apps to bring them in. Taking apps out waits for the focus window %s.
+现在只能加：勾上就进这个格子。想把应用拿出去，等调整时段 %s。	Add-only right now: tick apps to bring them in. Taking apps out waits for the adjustment window %s.
 现在只能加：勾上就进这个格子。想把应用拿出去，等每天 22:00–23:00。	Adding only: tick an app to put it in. To take one out, come back at 22:00–23:00.
-现在只能加：把成员减到一只要等收束时段 %s	Add-only right now: shrinking to a single app waits for the focus window %s
+现在只能加：把成员减到一只要等调整时段 %s	Add-only right now: shrinking to a single app waits for the adjustment window %s
 现在只能加：把成员减到一只要等每天 22:00–23:00	Adding only: trimming members down to one waits for 22:00–23:00
 现在只能查看。名单、开关、时段和连接方式只在调整时段 %s 内开放。	View only right now. The list, switch, window and connection mode open only inside the adjustment window %s.
 现在可以使用	Available now
@@ -1939,15 +1939,15 @@ yyyy年M月d日	MMM d, yyyy
 移入回收站	Move to trash
 移入回收站？	Move to trash?
 移出冻结列表	Remove from the freeze list
-移出冻结列表要等收束时段 %s	Leaving the freeze list waits for the focus window %s
+移出冻结列表要等调整时段 %s	Leaving the freeze list waits for the adjustment window %s
 移出冻结应用	Remove from frozen apps
-移出冻结时段要等收束时段 %s	Leaving the freeze window waits for the focus window %s
-移出冻结要等收束时段 %s	Unfreezing waits for the focus window %s
+移出冻结时段要等调整时段 %s	Leaving the freeze window waits for the adjustment window %s
+移出冻结要等调整时段 %s	Unfreezing waits for the adjustment window %s
 移动到冻结时段	Move to a freeze window
 移动到笔记本	Move to notebook
 移除	Remove
 移除勾选框	Remove checkbox
-移除或减少要等收束时段 %s	Removals or reductions wait for the focus window %s
+移除或减少要等调整时段 %s	Removals or reductions wait for the adjustment window %s
 移除或减少要等每天 22:00–23:00	Removing or lowering waits for 22:00–23:00
 移除格子	Remove quota
 移除这个限额格子？	Remove this quota?
@@ -2293,7 +2293,7 @@ yyyy年M月d日	MMM d, yyyy
 还没配规则	No rules yet
 还要去系统设置里打开无障碍服务	Also turn on the accessibility service in system settings
 这一屏被拦下了	This screen was blocked
-这一步会减少额度，只在收束时段 %s 内开放	This lowers an allowance and opens only inside the focus window %s
+这一步会减少额度，只在调整时段 %s 内开放	This lowers an allowance and opens only inside the adjustment window %s
 这一步会减少额度，只在每天 22:00–23:00 开放	This step lowers an allowance; it opens only at 22:00–23:00
 这一轮	This round
 这一轮专注完成，休息一下	Round done. Take a break.
@@ -2303,8 +2303,8 @@ yyyy年M月d日	MMM d, yyyy
 这个学科的 %d 张卡片、复习记录和今日计划会一起删掉，删完找不回来。	This removes its %d cards, their review history and today's plan for good. There is no way back.
 这个应用	this app
 这个应用用得有点久	You have been here a while
-这个改动要减少额度，只在收束时段 %s 内开放	This change lowers an allowance and opens only inside the focus window %s
-这个改动要减少额度，只在收束时段内开放	This change lowers an allowance and opens only inside the focus window
+这个改动要减少额度，只在调整时段 %s 内开放	This change lowers an allowance and opens only inside the adjustment window %s
+这个改动要减少额度，只在调整时段内开放	This change lowers an allowance and opens only inside the adjustment window
 这个改动要减少额度，只在每天 22:00–23:00 开放	This change lowers an allowance; it opens only at 22:00–23:00
 这个方向没有可换的卡了	No more cards that way
 这个日子已经过去了	This date has passed
@@ -2470,7 +2470,7 @@ yyyy年M月d日	MMM d, yyyy
 需要复习 · 已加入错题本	Needs review · added to mistakes
 需要开启无障碍服务（在系统设置 → 无障碍里打开）	Needs the accessibility service (turn it on in Settings → Accessibility)
 需要待够	Required
-需要收束时段 %s；刚加入的十分钟内可直接纠错	Requires focus window %s; corrections are allowed within ten minutes of adding
+需要调整时段 %s；刚加入的十分钟内可直接纠错	Requires adjustment window %s; corrections are allowed within ten minutes of adding
 需要设备所有者（要装部署包，系统设置里开不了）	Needs device owner (install the provisioning package; Settings has no switch for it)
 需要部署包授权，系统设置里开不了	Needs the provisioning package, not system settings
 非法恢复路径	Illegal restore path
@@ -2614,3 +2614,4 @@ yyyy年M月d日	MMM d, yyyy
 电脑地址、令牌和两端明细	PC address, token and both sides
 和电脑合成一个额度池子	Charge one pool together with the PC
 每天早上 8 点	Every day at 8:00 am
+取消或调小额度要等调整时段 %s	Cancelling or lowering a quota waits for the adjustment window %s

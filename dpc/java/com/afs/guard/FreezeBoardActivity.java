@@ -759,8 +759,8 @@ public class FreezeBoardActivity extends ThemedActivity {
         Rule current=RuleStore.all(this).get(pkg);
         if(current==null||FreezeSlotStore.unassigned(current)){toast(T.s("应用已在应用库中"));return;}
         if(lockedForMove(pkg)){toast(T.s("应用正在冻结，解冻后才能移动"));return;}
-        // 移出冻结时段=解冻，只进不出：收束时段才放行；刚加入的十分钟内仍可纠错
-        if(!windowOpen()&&!Guard.canRemove(this,pkg)){toast(T.f("移出冻结要等收束时段 %s",TimeWindow.label(this)));return;}
+        // 移出冻结时段=解冻，只进不出：调整时段才放行；刚加入的十分钟内仍可纠错
+        if(!windowOpen()&&!Guard.canRemove(this,pkg)){toast(T.f("移出冻结要等调整时段 %s",TimeWindow.label(this)));return;}
         try{
             RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());refreshAssignments();applyRules();
             toast(AppUsageQuota.minutes(this,pkg)>0||DailyQuotaStore.snapshot(this).group(pkg)!=null?T.s("已返回应用库，使用限额改为全天累计"):T.s("已返回应用库"));
@@ -873,7 +873,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         if(DailyQuotaStore.snapshot(this).group(pkg)==null){quotaEditor(null,pkg,false);return;}   // 直接给它建一份新额度
         if(lockedForMove(pkg)){toast(T.s("当前已冻结，解冻后才能移动"));return;}
         // 摘掉冻结时段=解冻，跟移出应用同一道闸；十分钟纠错期里仍可改
-        if(!windowOpen()&&!Guard.canRemove(this,pkg)){toast(T.f("移出冻结时段要等收束时段 %s",TimeWindow.label(this)));return;}
+        if(!windowOpen()&&!Guard.canRemove(this,pkg)){toast(T.f("移出冻结时段要等调整时段 %s",TimeWindow.label(this)));return;}
         try{RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());refreshAssignments();applyRules();toast(T.s("已改为全天累计，额度和已用时间保留"));}catch(RuntimeException error){toast(error.getMessage());}
 
     }
@@ -1016,12 +1016,15 @@ public class FreezeBoardActivity extends ThemedActivity {
         out.append('\n').append(T.s("电脑这一份：")).append(LanQuotaPanel.appsText(LanQuota.pcApps(this)));
         return out.toString();
     }
-    /** 收束时段：限额的「减」、冻结名单的移出都只在这一小时里放开；部署宽限期内不设限。 */
+    /** 调整时段：限额的「减」、冻结名单的移出都只在这一小时里放开；部署宽限期内不设限。 */
     private boolean windowOpen(){return TimeWindow.on(this)||Config.inGrace(this);}    private boolean quotaEditable(){return DailyQuotaData.editable(GuardClock.now(this),TimeWindow.start(this),TimeWindow.end(this));}
     /** 把一只应用迁进目标额度：从原格子里摘掉，加到这一格；被搬空的格子一起删掉。 */
     private void moveIntoGroup(final org.json.JSONObject target,String pkg){
         if(pkg==null||!availableApps.contains(pkg))return;
-        if(!quotaEditable()){toast(T.f("这一步会减少额度，只在收束时段 %s 内开放",TimeWindow.label(this)));return;}
+        // 只进不出：应用本来没有额度时这是一次纯新增，随时放行；
+        // 从别的格子迁过来要先「出」旧格子，才需要等调整时段。
+        boolean pureAdd=DailyQuotaStore.snapshot(this).group(pkg)==null;
+        if(!pureAdd&&!quotaEditable()){toast(T.f("这一步会减少额度，只在调整时段 %s 内开放",TimeWindow.label(this)));return;}
         try{
             org.json.JSONObject next=MemoryData.copy(DailyQuotaStore.snapshot(this).config);
             int moved=DailyQuotaData.moveInto(next,target.optString("id"),pkg);
@@ -1099,7 +1102,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         ThemeStore.dialog(this).setTitle(T.f("把「%s」并到",from.optString("name"))).setItems(labels,(d,which)->confirmMerge(others.get(which),from)).setNegativeButton(T.s("取消"),null).show();
     }
     private void confirmMerge(final org.json.JSONObject into,final org.json.JSONObject from){
-        if(!quotaEditable()){toast(T.f("这一步会减少额度，只在收束时段 %s 内开放",TimeWindow.label(this)));return;}
+        if(!quotaEditable()){toast(T.f("这一步会减少额度，只在调整时段 %s 内开放",TimeWindow.label(this)));return;}
         final int minutes=Math.min(into.optInt("minutes"),from.optInt("minutes"));
         ThemeStore.dialog(this).setTitle(T.s("合并成一个额度？"))
                 .setMessage(T.f("「%s」的成员会并进「%s」，共用每天 %d 分钟（取两者较小值）。今天各自已用的分钟数照常累加进这个格子。",from.optString("name"),into.optString("name"),minutes))
@@ -1114,7 +1117,7 @@ public class FreezeBoardActivity extends ThemedActivity {
                 }).show();
     }
     private void confirmRemove(final org.json.JSONObject group){
-        if(!quotaEditable()){toast(T.f("这一步会减少额度，只在收束时段 %s 内开放",TimeWindow.label(this)));return;}
+        if(!quotaEditable()){toast(T.f("这一步会减少额度，只在调整时段 %s 内开放",TimeWindow.label(this)));return;}
         ThemeStore.dialog(this).setTitle(T.s("删除这个额度？"))
                 .setMessage(T.f("「%s」今天已用的时间会保留；重新添加同一只应用会接着累计。原有冻结规则仍然生效。",group.optString("name")))
                 .setNegativeButton(T.s("取消"),null).setPositiveButton(T.s("删除"),(d,w)->{
@@ -1135,7 +1138,7 @@ public class FreezeBoardActivity extends ThemedActivity {
 
     private void quotaEditor(final org.json.JSONObject group,String preset,boolean initialShared,
                              String draftTitle,String draftMinutes,Set<String> draftChosen){
-        // 收束时段外只能「加」：新应用、新额度、加分钟数随时都行；移出成员、调小要等时段
+        // 调整时段外只能「加」：新应用、新额度、加分钟数随时都行；移出成员、调小要等时段
         final boolean growOnly=!quotaEditable();
         final Set<String> chosen=new java.util.LinkedHashSet<>();
         org.json.JSONArray original=group==null?null:group.optJSONArray("apps");
@@ -1165,11 +1168,11 @@ public class FreezeBoardActivity extends ThemedActivity {
         };
         final Runnable describe=()->picked.setText(chosen.isEmpty()?T.s("尚未选择应用"):memberSummary(chosen));
         paint.run();describe.run();
-        single.setOnClickListener(v->{if(growOnly&&chosen.size()>1){toast(T.f("现在只能加：把成员减到一只要等收束时段 %s",TimeWindow.label(this)));return;}shared[0]=false;if(chosen.size()>1){String first=chosen.iterator().next();chosen.clear();chosen.add(first);}paint.run();describe.run();});
+        single.setOnClickListener(v->{if(growOnly&&chosen.size()>1){toast(T.f("现在只能加：把成员减到一只要等调整时段 %s",TimeWindow.label(this)));return;}shared[0]=false;if(chosen.size()>1){String first=chosen.iterator().next();chosen.clear();chosen.add(first);}paint.run();describe.run();});
         share.setOnClickListener(v->{shared[0]=true;paint.run();describe.run();});
         final AlertDialog[] holder=new AlertDialog[1];
         box.addView(action(T.s("选择应用"),v->{
-            if(growOnly&&!shared[0]&&!chosen.isEmpty()){toast(T.f("单独额度只有一只应用，换应用要等收束时段 %s",TimeWindow.label(this)));return;}
+            if(growOnly&&!shared[0]&&!chosen.isEmpty()){toast(T.f("单独额度只有一只应用，换应用要等调整时段 %s",TimeWindow.label(this)));return;}
             List<String> apps=new ArrayList<>();
             for(String p:availableApps)if(!growOnly||!chosen.contains(p))apps.add(p);
             for(String p:chosen)if(!apps.contains(p))apps.add(p);
@@ -1197,7 +1200,7 @@ public class FreezeBoardActivity extends ThemedActivity {
                 if(!shared[0]&&chosen.size()>1)throw new IllegalArgumentException(T.s("单独额度只能放一只应用"));
                 if(chosen.contains(getPackageName()))throw new IllegalArgumentException(T.s("不能限制守卫自身"));
                 int limit=Integer.parseInt(minutes.getText().toString().trim());
-                if(growOnly&&group!=null&&limit<group.optInt("minutes"))throw new IllegalArgumentException(T.f("现在只能加分钟数，调小要等收束时段 %s",TimeWindow.label(this)));
+                if(growOnly&&group!=null&&limit<group.optInt("minutes"))throw new IllegalArgumentException(T.f("现在只能加分钟数，调小要等调整时段 %s",TimeWindow.label(this)));
                 String label=title.getText().toString().trim();
                 if(label.isEmpty())label=chosen.size()==1?appLabel(chosen.iterator().next()):T.s("共用额度");
                 org.json.JSONObject next=MemoryData.copy(DailyQuotaStore.snapshot(this).config);
@@ -1283,7 +1286,11 @@ public class FreezeBoardActivity extends ThemedActivity {
                 .setPositiveButton(T.s("保存"),null).setNegativeButton(T.s("取消"),null);
         if(!counting)builder.setNeutralButton(T.s("去授权"),(d,w)->startActivity(new Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)));
         AlertDialog dialog=builder.create();
-        dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{try{int limit=Integer.parseInt(input.getText().toString());if(limit<0||limit>1440)throw new IllegalArgumentException(T.s("额度须为0–1440分钟"));if(limit>0&&(!rules.containsKey(pkg)||allDay))RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());AppUsageQuota.save(this,pkg,limit);dialog.dismiss();rebuild();applyRules();}catch(RuntimeException error){toast(error.getMessage());}}));dialog.show();
+        dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{try{int limit=Integer.parseInt(input.getText().toString());if(limit<0||limit>1440)throw new IllegalArgumentException(T.s("额度须为0–1440分钟"));
+            // 只进不出：调小、清零都是「出」，和其他额度改动一样要等调整时段；调大随时可以。
+            int previous=AppUsageQuota.minutes(this,pkg);
+            if(previous>0&&limit<previous&&!quotaEditable())throw new IllegalArgumentException(T.f("取消或调小额度要等调整时段 %s",TimeWindow.label(this)));
+            if(limit>0&&(!rules.containsKey(pkg)||allDay))RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());AppUsageQuota.save(this,pkg,limit);dialog.dismiss();rebuild();applyRules();}catch(RuntimeException error){toast(error.getMessage());}}));dialog.show();
     }
     private AlertDialog applicationPanel;
     private void dismissApplicationPanel(){if(applicationPanel!=null){applicationPanel.dismiss();applicationPanel=null;}}
@@ -1357,9 +1364,9 @@ public class FreezeBoardActivity extends ThemedActivity {
                 () -> {dismissApplicationPanel();usageEditor(pkg, false);}));
         if (rule != null) {
             panelGap(sheet, panelAction("⌫", look.red(), T.s("移出冻结列表"),
-                    T.f("需要收束时段 %s；刚加入的十分钟内可直接纠错", TimeWindow.label(this)), () -> {
+                    T.f("需要调整时段 %s；刚加入的十分钟内可直接纠错", TimeWindow.label(this)), () -> {
                         if (!TimeWindow.on(this) && !Guard.canRemove(this, pkg)) {
-                            toast(T.f("移出冻结列表要等收束时段 %s", TimeWindow.label(this)));
+                            toast(T.f("移出冻结列表要等调整时段 %s", TimeWindow.label(this)));
                             return;
                         }
                         RuleStore.remove(this, pkg); rebuild(); applyRules();
@@ -1461,8 +1468,8 @@ public class FreezeBoardActivity extends ThemedActivity {
         }
         rebuild(); if (added > 0) { toast(T.s("已加入应用库，长按拖入冻结时段")); applyRules(); }
         else applyRules();
-        if (held > 0) toast(T.f("%d 个应用要等收束时段 %s 才能移出", held, TimeWindow.label(this)));
-        if (skipped > 0) toast(T.f("%d 个新应用要等收束时段 %s 才能加入", skipped, TimeWindow.label(this)));
+        if (held > 0) toast(T.f("%d 个应用要等调整时段 %s 才能移出", held, TimeWindow.label(this)));
+        if (skipped > 0) toast(T.f("%d 个新应用要等调整时段 %s 才能加入", skipped, TimeWindow.label(this)));
     }
     private void settings() {
         boolean reduce = getSharedPreferences(Ui.SP, 0).getBoolean("reduce_motion", false);
@@ -2000,7 +2007,7 @@ public class FreezeBoardActivity extends ThemedActivity {
 
     /** 关键应用名单：走统一选择器，只把冻结/额度相关应用作为候选。 */
     private void keyApps() {
-        if (!windowOpen()) { toast(T.f("关键应用名单要等收束时段 %s 才能改", TimeWindow.label(this))); return; }
+        if (!windowOpen()) { toast(T.f("关键应用名单要等调整时段 %s 才能改", TimeWindow.label(this))); return; }
         Set<String> candidates = new LinkedHashSet<>(rules.keySet());
         candidates.addAll(DailyQuotaStore.packages(this));
         candidates.addAll(RuleStore.keyApps(this));

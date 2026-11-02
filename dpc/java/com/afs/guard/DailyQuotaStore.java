@@ -44,7 +44,7 @@ final class DailyQuotaStore {
     private static synchronized void refresh(Context c,boolean force){long now=GuardClock.now(c).getTimeInMillis();if(!force&&now>=refreshed&&now-refreshed<4500)return;DailyQuotaData d=load(c,now);if(d.groups().length()==0||!d.enabled()&&!force)return;
         recountTodayOnce(c,d,now);
         boolean reliable=AppUsageQuota.permission(c);List<AppUsageQuota.Span> spans=Collections.emptyList();if(d.enabled()&&reliable)try{spans=AppUsageQuota.spans(c,now,true);}catch(RuntimeException error){reliable=false;}
-        // 全天推进：收束时段只管「能不能改设置」，不参与统计。
+        // 全天推进：调整时段只管「能不能改设置」，不参与统计。
         d.advance(now,spans,reliable,RuleStore.all(c),DayBoundary.hour(c));if(!prefs(c).edit().putString("usage",d.usage.toString()).commit()){writeFailed=true;throw new IllegalStateException(T.s("每日限额用量未能保存"));}writeFailed=false;refreshed=now;
     }
 
@@ -53,7 +53,7 @@ final class DailyQuotaStore {
     /**
      * 一次性口径迁移。
      *
-     * 1.79.3 之前额度只在收束时段（22:00–23:00）里累计，白天用掉的几个小时全被丢掉，
+     * 1.79.3 之前额度只在调整时段（22:00–23:00）里累计，白天用掉的几个小时全被丢掉，
      * 「今日已用」整天都是 0。升级后第一次跑额度节拍时，把今天的账本清零、水位线拨回零点，
      * 让全天用量重算一遍 —— 只做一次，且必须已授权使用情况，没权限算不出来。
      */
@@ -74,8 +74,8 @@ final class DailyQuotaStore {
     }
     static synchronized void save(Context c,JSONObject candidate){Calendar now=GuardClock.now(c);DailyQuotaData.validate(candidate);if(new DailyQuotaData(candidate.toString(),"{}",now.getTimeInMillis()).packages().contains(c.getPackageName()))throw new IllegalArgumentException(T.s("不能限制守卫自身"));
         refresh(c,true);DailyQuotaData current=load(c,now.getTimeInMillis());
-        // 收束时段外只放「只加不减」的改动：补额度随时可以，把自己放出来得等时段
-        if(!DailyQuotaData.editable(now,TimeWindow.start(c),TimeWindow.end(c))&&!DailyQuotaData.additive(current.config,candidate))throw new IllegalStateException(T.f("这个改动要减少额度，只在收束时段 %s 内开放",TimeWindow.label(c)));
+        // 调整时段外只放「只加不减」的改动：补额度随时可以，把自己放出来得等时段
+        if(!DailyQuotaData.editable(now,TimeWindow.start(c),TimeWindow.end(c))&&!DailyQuotaData.additive(current.config,candidate))throw new IllegalStateException(T.f("这个改动要减少额度，只在调整时段 %s 内开放",TimeWindow.label(c)));
         if(!prefs(c).edit().putString("config",candidate.toString()).putString("usage",current.usage.toString()).commit())throw new IllegalStateException(T.s("每日限额未能保存"));refreshed=0;signature="";
     }
     static synchronized void beforeScheduleChange(Context c){if(active(c))refresh(c,true);}
@@ -128,7 +128,7 @@ final class DailyQuotaStore {
     static boolean active(Context c){DailyQuotaData d=snapshot(c);return d.enabled()&&d.groups().length()>0;}
     static boolean hasAllowance(Context c,String pkg){DailyQuotaData d=snapshot(c);return d.enabled()&&d.group(pkg)!=null;}
     /** 先放开权限：没授权也能配额度，但判不出用量就不冻结；授权后立刻恢复计时与冻结。 */
-    /** 超限判定：只看额度本身和应用自身冻结时段，与全局收束时段无关；额度用完当场就冻。 */
+    /** 超限判定：只看额度本身和应用自身冻结时段，与全局调整时段无关；额度用完当场就冻。 */
     static boolean exceeded(Context c,String pkg){if(!AppUsageQuota.permission(c))return false;DailyQuotaData d=snapshot(c);Rule rule=RuleStore.all(c).get(pkg);JSONObject group=d.group(pkg);boolean shared=group!=null&&LanQuota.isShared(c,group.optString("id"));boolean local=DailyQuotaData.inScope(rule,GuardClock.now(c).getTimeInMillis())&&d.enabled()&&group!=null&&(writeFailed||d.usage.optBoolean("unavailable")||d.exceeded(pkg));
         // 共享池：合计（电脑 + 手机）超了就算超。本机先满也继续冻 —— 合计一定不小与它。
         return local||(shared&&LanQuota.exhausted(c));}

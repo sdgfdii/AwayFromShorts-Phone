@@ -10,11 +10,12 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 全局「收束时段」：一天里只有这段时间内，每日限额和冻结名单才真正收紧。
+ * 限额／冻结的「调整时段」：一天里只有这段时间内，每日限额和冻结名单才真正收紧。
  *
- * 断网不在这个时段里：它「默认常开、只在 {@link NetWindow} 的调整时段内放开」，
+ * 断网不在这个时段里：它「默认常开、只在 {@link NetWindow} 的断网调整时段内放开」，
  * 方向正好相反，硬绑在一个时段上必然一边是错的，所以 1.73 起两套时段彻底解耦：
- * 这一个只管限额和冻结，断网读 {@link NetWindow}。
+ * 这一个只管限额和冻结，断网读 {@link NetWindow}。两个时段都叫「调整时段」，
+ * 但各存各的、各管各的；界面上靠所在页面区分。
  *
  * 语义只有三条，所有判断都必须走 {@link #contains(long, int, int)}：
  * 1. 左闭右开：[22:00, 23:00) 表示 22:00:00 生效、22:59:59 还在、23:00:00 已经放开。
@@ -71,7 +72,7 @@ public final class TimeWindow {
             throw new IllegalArgumentException(T.s("时刻只能是 0:00–23:59"));
         }
         if (!sp(c).edit().putInt(K_START, start).putInt(K_END, end).commit()) {
-            throw new IllegalStateException(T.s("收束时段未能保存"));
+            throw new IllegalStateException(T.s("调整时段未能保存"));
         }
     }
 
@@ -138,12 +139,12 @@ public final class TimeWindow {
 
     /* ==================== 选择时段 ==================== */
 
-    /** 存一对起止分钟。收束时段和断网调整时段共用同一套选择器，各自只管怎么落盘。 */
+    /** 存一对起止分钟。调整时段和断网调整时段共用同一套选择器，各自只管怎么落盘。 */
     interface Saver {
         void save(int start, int end) throws RuntimeException;
     }
 
-    /** 收束时段的选择器：改的是限额/冻结闸，与断网无关，所以不用重翻隧道。 */
+    /** 调整时段的选择器：改的是限额/冻结闸，与断网无关，所以不用重翻隧道。 */
     public static void pick(final Activity host, final Runnable after) {
         pickSlots(host, start(host), end(host), new Saver() {
             @Override

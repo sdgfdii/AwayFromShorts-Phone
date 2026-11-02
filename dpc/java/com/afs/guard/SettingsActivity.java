@@ -91,19 +91,19 @@ public final class SettingsActivity extends ThemedActivity {
         body.addView(control, ui.gap(10));
         row(control, Lang.t(this, "自律规则", "Self-control rules"), ControlActivity.summary(this),
                 () -> startActivity(new Intent(this, ControlActivity.class)));
-        row(control, Lang.t(this, "收束时段", "Focus window"), TimeWindow.label(this),
+        row(control, Lang.t(this, "调整时段", "Adjustment window"), TimeWindow.label(this),
                 () -> TimeWindow.pick(this, this::render));
         addNote(control, Lang.t(this,
-                "收束时段只管「收紧」那一头：冻结名单、移出应用、调小额度这些操作只在时段内能改，时段外只能加不能减。每日限额的计时和判定不管这个时段，全天都算。断网不归它管。",
-                "The focus window only governs tightening: editing the freeze list, removing apps or lowering a quota is allowed inside it; outside you can only add. Daily quotas are counted and enforced all day regardless. Network blocking is not part of it."));
+                "调整时段只管「收紧」那一头：冻结名单、移出应用、调小额度这些操作只在时段内能改，时段外只能加不能减。每日限额的计时和判定不管这个时段，全天都算。断网不归它管。",
+                "The adjustment window only governs tightening: editing the freeze list, removing apps or lowering a quota is allowed inside it; outside you can only add. Daily quotas are counted and enforced all day regardless. Network blocking is not part of it."));
         row(control, Lang.t(this, "断网调整时段", "Cut-off adjustment window"), NetWindow.label(this),
                 () -> {
                     // 时段本身也是设置：能随便改时段就等于绕过了断网的锁。
                     if (NetWindow.canEdit(this)) NetWindow.pick(this, this::render);
                 });
         addNote(control, Lang.t(this,
-                "断网名单里的应用默认全天断网，只有这个时段内自动放开；开关、名单和时段本身也只能在此时段内修改。默认每晚 22:00–23:00，和收束时段各自独立。",
-                "Apps in the cut-off list have no network by default and are released only inside this window. The switch, the list and this window itself can be changed only inside it. Default 22:00-23:00 nightly, independent of the focus window."));
+                "断网名单里的应用默认全天断网，只有这个时段内自动放开；开关、名单和时段本身也只能在此时段内修改。默认每晚 22:00–23:00，与限额／冻结的调整时段各自独立、互不相干。",
+                "Apps in the cut-off list have no network by default and are released only inside this window. The switch, the list and this window itself can be changed only inside it. Default 22:00-23:00 nightly, independent of the quota/freeze adjustment window."));
 
         /* ---------- 应用 ---------- */
         body.addView(groupTitle(Lang.t(this, "应用", "App")));

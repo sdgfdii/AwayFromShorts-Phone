@@ -22,7 +22,9 @@ public class CardManagementActivity extends ThemedActivity {
         ScrollView scroll=new ScrollView(this);ui.page(scroll);scroll.setFillViewport(true);
         body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(ui.dp(20),ui.dp(24),ui.dp(20),ui.dp(32));scroll.addView(body);
         TextView back=ui.sub(category.isEmpty()?T.s("‹  守卫"):T.s("‹  卡管理"));back.setTextColor(ui.accent());back.setPadding(0,ui.dp(8),0,ui.dp(20));back.setOnClickListener(v->onBackPressed());body.addView(back);body.addView(ui.title(title));
-        setContentView(FloatingNav.wrap(this,scroll,4));FloatingNav.fullscreen(this);
+        // 卡管理是守卫下的设置中转页，不是五个主标签之一：不套底栏，
+        // 否则这里亮着「守卫」却整页都是别的卡片的入口，逻辑上是错的。
+        setContentView(scroll);FloatingNav.fullscreen(this);
     }
     private void hint(LinearLayout box,String text){TextView t=ui.sub(text);t.setPadding(0,ui.dp(8),0,ui.dp(10));box.addView(t);}
     private LinearLayout card(){LinearLayout c=ui.card();body.addView(c,ui.gap(12));return c;}

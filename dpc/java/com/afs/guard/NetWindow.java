@@ -7,7 +7,7 @@ import android.content.SharedPreferences;
 /**
  * 断网「调整时段」：一天里唯一能改断网设置的一段时间，也是断网唯一放开的时间。
  *
- * 和 {@link TimeWindow}（收束时段）是两件事，故意不共用：收束时段管每日限额和冻结名单，
+ * 和 {@link TimeWindow}（限额／冻结的调整时段）是两件事，故意不共用：那一个管每日限额和冻结名单，
  * 断网是「默认常开、只在这段时间放开」，方向正好相反，绑在一起必然有一边是错的。
  *
  * 语义只有三条：
@@ -81,7 +81,7 @@ public final class NetWindow {
         return false;
     }
 
-    /** 两段式选择，和收束时段共用同一套半小时一档的选择器。 */
+    /** 两段式选择，和调整时段共用同一套半小时一档的选择器。 */
     public static void pick(final Activity host, final Runnable after) {
         TimeWindow.pickSlots(host, start(host), end(host), new TimeWindow.Saver() {
             @Override

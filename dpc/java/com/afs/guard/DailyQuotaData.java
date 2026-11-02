@@ -27,17 +27,17 @@ final class DailyQuotaData {
         if(config.optBoolean("enabled")&&groups.length()==0)throw new IllegalArgumentException(T.s("请至少添加一个应用限额格子"));
     }
     /**
-     * 额度的「收紧」权限只在全局收束时段内开放（{@link TimeWindow}）。
+     * 额度的「收紧」权限只在全局调整时段内开放（{@link TimeWindow}）。
      *
      * 其余时间走 {@link #additive} 那条路 —— 能加（新格子、加应用、加分钟数、把总开关打开），
      * 不能减（移出应用、调小分钟数、删格子、关总开关）。理由很直白：
-     * 白天额度不够就该补得上，但想把自己放出来这件事，只能等到收束时段。
+     * 白天额度不够就该补得上，但想把自己放出来这件事，只能等到调整时段。
      * 想彻底放开，把 EDIT_WINDOW 设成 false 即可。
      */
     static final boolean EDIT_WINDOW = true;
     static boolean editable(Calendar now){return editable(now,TimeWindow.DEFAULT_START,TimeWindow.DEFAULT_END);}
     static boolean editable(Calendar now,int winStart,int winEnd){return !EDIT_WINDOW||TimeWindow.contains(now.getTimeInMillis(),winStart,winEnd);}
-    static void requireEdit(Calendar now){if(!editable(now))throw new IllegalStateException(T.s("这个改动要减少额度，只在收束时段内开放"));}
+    static void requireEdit(Calendar now){if(!editable(now))throw new IllegalStateException(T.s("这个改动要减少额度，只在调整时段内开放"));}
     /**
      * 候选配置相对当前是不是「只加不减」：新开格子、给格子加成员、加分钟数、把总开关打开。
      * 只要出现移除成员、调小分钟数、删格子、关总开关，就不算 —— 那些得等编辑窗口。
@@ -65,7 +65,7 @@ final class DailyQuotaData {
         }
         return true;
     }
-    /** 下一次收束时段开门的时间；时段为全天（start==end）时随时可改，返回当前时刻。 */
+    /** 下一次调整时段开门的时间；时段为全天（start==end）时随时可改，返回当前时刻。 */
     static long nextEdit(Calendar now){return nextEdit(now,TimeWindow.DEFAULT_START,TimeWindow.DEFAULT_END);}
     static long nextEdit(Calendar now,int winStart,int winEnd){
         if(winStart==winEnd)return now.getTimeInMillis();
@@ -88,9 +88,9 @@ final class DailyQuotaData {
     void advance(long now,List<AppUsageQuota.Span> spans,boolean reliable){advance(now,spans,reliable,Collections.emptyMap(),DayBoundary.DEFAULT_HOUR);}
     void advance(long now,List<AppUsageQuota.Span> spans,boolean reliable,Map<String,Rule> rules){advance(now,spans,reliable,rules,DayBoundary.DEFAULT_HOUR);}
     /**
-     * 账本推进：按「应用自身冻结时段」裁剪，不看全局收束时段。
+     * 账本推进：按「应用自身冻结时段」裁剪，不看全局调整时段。
      *
-     * 收束时段（默认 22:00–23:00）只决定「什么时候能改设置」，跟统计和判超无关。
+     * 调整时段（默认 22:00–23:00）只决定「什么时候能改设置」，跟统计和判超无关。
      * 之前拿它过滤账本，结果白天用了几小时全都不记，额度永远停在 0 —— 那是个错误的口径。
      */
     void advance(long now,List<AppUsageQuota.Span> spans,boolean reliable,Map<String,Rule> rules,int resetHour){

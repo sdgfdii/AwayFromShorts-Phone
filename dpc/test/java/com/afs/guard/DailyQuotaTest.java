@@ -20,6 +20,12 @@ public final class DailyQuotaTest {
         DailyQuotaData merged=new DailyQuotaData(config(true,shared),d.usage.toString(),noon+60000);check(merged.used(shared)==60000,"merge sums retained per-app usage");merged.advance(noon+90000,spans(span(a,noon+60000,noon+90000)),true);check(merged.used(shared)==90000,"shared budget combines both apps");
         DailyQuotaData split=new DailyQuotaData(config(true,ga,gb),merged.usage.toString(),noon+90000);check(split.used(ga)==60000&&split.used(gb)==30000,"split restores each exact app usage");check(split.exceeded(a)&&!split.exceeded(b),"one exhausted independent app does not block another");
         DailyQuotaData removed=new DailyQuotaData(config(true,gb),split.usage.toString(),noon+90000);removed.advance(noon+120000,spans(span(a,noon+90000,noon+120000)),true);DailyQuotaData added=new DailyQuotaData(config(true,ga,gb),removed.usage.toString(),noon+120000);check(added.used(ga)==60000&&added.exceeded(a),"remove and re-add preserves used time without charging removed intervals");
+        // 额度全天累计：收束时段（默认 22:00–23:00）之外用掉的时间也必须记账，
+        // 否则白天玩了几个小时，「今日已用」还是 0。
+        JSONObject allDayGroup=group("allday",120,a);
+        DailyQuotaData allDay=new DailyQuotaData(config(true,allDayGroup),"{}",at(29,0,1,0));
+        allDay.advance(at(29,15,0,0),spans(span(a,at(29,14,0,0),at(29,15,0,0))),true);
+        check(allDay.used(allDayGroup)==3600000L,"usage outside the focus window is still counted");
         // 额度行合并/删除：纯数据层，界面上“长按并到另一个额度”靠这两个函数
         JSONObject mergeConfig=new JSONObject(config(true,group("a",30,a),group("b",20,b)));
         check(DailyQuotaData.mergeInto(mergeConfig,"a","b",20),"mergeInto moves members into the target group");

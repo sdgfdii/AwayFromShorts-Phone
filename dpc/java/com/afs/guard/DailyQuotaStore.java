@@ -42,8 +42,35 @@ final class DailyQuotaStore {
     }
     static synchronized void refresh(Context c){refresh(c,false);}
     private static synchronized void refresh(Context c,boolean force){long now=GuardClock.now(c).getTimeInMillis();if(!force&&now>=refreshed&&now-refreshed<4500)return;DailyQuotaData d=load(c,now);if(d.groups().length()==0||!d.enabled()&&!force)return;
+        recountTodayOnce(c,d,now);
         boolean reliable=AppUsageQuota.permission(c);List<AppUsageQuota.Span> spans=Collections.emptyList();if(d.enabled()&&reliable)try{spans=AppUsageQuota.spans(c,now,true);}catch(RuntimeException error){reliable=false;}
-        d.advance(now,spans,reliable,RuleStore.all(c),DayBoundary.hour(c),TimeWindow.start(c),TimeWindow.end(c));if(!prefs(c).edit().putString("usage",d.usage.toString()).commit()){writeFailed=true;throw new IllegalStateException(T.s("每日限额用量未能保存"));}writeFailed=false;refreshed=now;
+        // 全天推进：收束时段只管「能不能改设置」，不参与统计。
+        d.advance(now,spans,reliable,RuleStore.all(c),DayBoundary.hour(c));if(!prefs(c).edit().putString("usage",d.usage.toString()).commit()){writeFailed=true;throw new IllegalStateException(T.s("每日限额用量未能保存"));}writeFailed=false;refreshed=now;
+    }
+
+    private static final String K_RECOUNT="recount_full_day_v1";
+
+    /**
+     * 一次性口径迁移。
+     *
+     * 1.79.3 之前额度只在收束时段（22:00–23:00）里累计，白天用掉的几个小时全被丢掉，
+     * 「今日已用」整天都是 0。升级后第一次跑额度节拍时，把今天的账本清零、水位线拨回零点，
+     * 让全天用量重算一遍 —— 只做一次，且必须已授权使用情况，没权限算不出来。
+     */
+    private static void recountTodayOnce(Context c,DailyQuotaData d,long now){
+        SharedPreferences p=prefs(c);
+        if(p.getBoolean(K_RECOUNT,false)||!AppUsageQuota.permission(c))return;
+        int hour=DayBoundary.hour(c);
+        if(!DayBoundary.key(now,hour).equals(d.usage.optString("date")))return;   // 账本还没切到今天，下次再说
+        try{
+            DailyQuotaData.put(d.usage,"targets",new JSONObject());
+            DailyQuotaData.put(d.usage,"lastAt",DayBoundary.startMs(now,hour));
+            d.usage.remove("error");
+            d.usage.remove("unavailable");
+        }catch(RuntimeException ignored){return;}
+        // 先落盘再写标记：万一第二步失败，下一轮会拿着已清零的账本再算一遍，结果一样，不会算重。
+        if(!p.edit().putString("usage",d.usage.toString()).commit())return;
+        p.edit().putBoolean(K_RECOUNT,true).apply();
     }
     static synchronized void save(Context c,JSONObject candidate){Calendar now=GuardClock.now(c);DailyQuotaData.validate(candidate);if(new DailyQuotaData(candidate.toString(),"{}",now.getTimeInMillis()).packages().contains(c.getPackageName()))throw new IllegalArgumentException(T.s("不能限制守卫自身"));
         refresh(c,true);DailyQuotaData current=load(c,now.getTimeInMillis());
@@ -101,9 +128,10 @@ final class DailyQuotaStore {
     static boolean active(Context c){DailyQuotaData d=snapshot(c);return d.enabled()&&d.groups().length()>0;}
     static boolean hasAllowance(Context c,String pkg){DailyQuotaData d=snapshot(c);return d.enabled()&&d.group(pkg)!=null;}
     /** 先放开权限：没授权也能配额度，但判不出用量就不冻结；授权后立刻恢复计时与冻结。 */
-    static boolean exceeded(Context c,String pkg){if(!AppUsageQuota.permission(c))return false;DailyQuotaData d=snapshot(c);Rule rule=RuleStore.all(c).get(pkg);return DailyQuotaData.inScope(rule,GuardClock.now(c).getTimeInMillis(),TimeWindow.start(c),TimeWindow.end(c))&&d.enabled()&&d.group(pkg)!=null&&(writeFailed||d.usage.optBoolean("unavailable")||d.exceeded(pkg));}
+    /** 超限判定：只看额度本身和应用自身冻结时段，与全局收束时段无关；额度用完当场就冻。 */
+    static boolean exceeded(Context c,String pkg){if(!AppUsageQuota.permission(c))return false;DailyQuotaData d=snapshot(c);Rule rule=RuleStore.all(c).get(pkg);return DailyQuotaData.inScope(rule,GuardClock.now(c).getTimeInMillis())&&d.enabled()&&d.group(pkg)!=null&&(writeFailed||d.usage.optBoolean("unavailable")||d.exceeded(pkg));}
     static boolean enforcementChanged(Context c){try{refresh(c);}catch(IllegalStateException error){if(!writeFailed)throw error;}StringBuilder out=new StringBuilder();for(String pkg:packages(c))if(exceeded(c,pkg))out.append(pkg).append(';');synchronized(DailyQuotaStore.class){String next=out.toString();boolean changed=!next.equals(signature);signature=next;return changed;}}
-    static String status(Context c,String pkg){DailyQuotaData d=snapshot(c);JSONObject g=d.group(pkg);Rule rule=RuleStore.all(c).get(pkg);if(g==null)return "";String base=(rule==null||FreezeSlotStore.unassigned(rule)?T.s("全天限额 · "):T.s("所绑时段限额 · "))+description(c,d,g);return TimeWindow.on(c)?base:T.s("时段外不计 · ")+base;}
+    static String status(Context c,String pkg){DailyQuotaData d=snapshot(c);JSONObject g=d.group(pkg);Rule rule=RuleStore.all(c).get(pkg);if(g==null)return "";return (rule==null||FreezeSlotStore.unassigned(rule)?T.s("全天限额 · "):T.s("所绑时段限额 · "))+description(c,d,g);}
     static boolean readable(Context c,DailyQuotaData d){return !writeFailed&&AppUsageQuota.permission(c)&&!d.usage.optBoolean("unavailable")&&d.usage.optString("error").isEmpty();}
     static String description(Context c,DailyQuotaData d,JSONObject g){if(!d.enabled())return T.s("每日限额已暂停");if(!AppUsageQuota.permission(c))return T.s("未授予使用情况权限，暂不计时");if(writeFailed||d.usage.optBoolean("unavailable")||!d.usage.optString("error").isEmpty())return T.s("用量暂不可读，保护性冻结");long used=d.used(g),limit=g.optInt("minutes")*60000L;return String.format(Locale.CHINA,T.s("已用 %.1f / %d 分钟 · 剩余 %.1f 分钟"),used/60000.0,g.optInt("minutes"),Math.max(0,limit-used)/60000.0);}
 }

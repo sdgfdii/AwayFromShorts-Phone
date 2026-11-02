@@ -40,15 +40,15 @@ public class GuardService extends Service {
     private final java.util.concurrent.ExecutorService quotaWorker=java.util.concurrent.Executors.newSingleThreadExecutor();
     private volatile boolean quotaBusy;
     /**
-     * 额度节拍：收束时段内 5 秒一问，时段外 60 秒。
+     * 额度节拍：亮屏 20 秒一问，灭屏 60 秒。
      *
-     * 时段外根本不计时、不判超（TimeWindow 统一关了门），查使用记录纯属白烧 CPU ——
-     * 这一项从 5s 放到 60s，是本轮耗电优化里最大的一块：使用记录查询在 ColorOS
-     * 上偶尔要几百毫秒，以前一天 24 小时 × 5 秒全都在查。
+     * 额度全天生效，所以不能像以前那样「时段外 60 秒」；但也没必要 5 秒一次 ——
+     * 使用记录查询在 ColorOS 上偶尔要几百毫秒，20 秒一次既能保证超额后很快被请出去，
+     * 又不会像 5 秒那样从早到晚一直查。
      */
     private final Runnable quotaTick=new Runnable(){public void run(){
         if(!quotaBusy&&(DailyQuotaStore.active(GuardService.this)||!AppUsageQuota.limits(GuardService.this).isEmpty())){quotaBusy=true;quotaWorker.execute(()->{try{if(DailyQuotaStore.enforcementChanged(GuardService.this))Guard.apply(GuardService.this);}catch(Throwable error){Log.e(Guard.TAG,"daily quota tick failed",error);}finally{quotaBusy=false;}Guard.kickQuotaExceeded(GuardService.this);});}
-        handler.postDelayed(this,TimeWindow.on(GuardService.this)?5000:60000);
+        handler.postDelayed(this,interactive()?20000:60000);
     }};
 
     /**

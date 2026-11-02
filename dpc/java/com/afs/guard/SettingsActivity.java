@@ -93,8 +93,8 @@ public final class SettingsActivity extends ThemedActivity {
         row(control, Lang.t(this, "收束时段", "Focus window"), TimeWindow.label(this),
                 () -> TimeWindow.pick(this, this::render));
         addNote(control, Lang.t(this,
-                "收束时段管「收紧」那一头：每日限额只在时段内计时、冻结名单和移出应用也只在时段内能改，时段外照常放行。断网不归它管。",
-                "The focus window governs tightening: daily quotas tick only inside it, and the freeze list can be changed only inside it. Network blocking is not part of it."));
+                "收束时段只管「收紧」那一头：冻结名单、移出应用、调小额度这些操作只在时段内能改，时段外只能加不能减。每日限额的计时和判定不管这个时段，全天都算。断网不归它管。",
+                "The focus window only governs tightening: editing the freeze list, removing apps or lowering a quota is allowed inside it; outside you can only add. Daily quotas are counted and enforced all day regardless. Network blocking is not part of it."));
         row(control, Lang.t(this, "断网调整时段", "Cut-off adjustment window"), NetWindow.label(this),
                 () -> {
                     // 时段本身也是设置：能随便改时段就等于绕过了断网的锁。

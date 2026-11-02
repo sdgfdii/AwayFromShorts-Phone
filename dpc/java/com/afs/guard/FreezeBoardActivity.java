@@ -41,6 +41,12 @@ public class FreezeBoardActivity extends ThemedActivity {
     private static final int PICK = 71;
     private static final int REQ_NET = 72;
     private static final int REQ_VPN = 73;
+    private static final int REQ_KEY = 74;
+    private static final int REQ_QUOTA = 75;
+    private org.json.JSONObject quotaDraftGroup;
+    private Set<String> quotaDraftChosen;
+    private boolean quotaDraftShared, quotaDraftGrowOnly;
+    private String quotaDraftTitle, quotaDraftMinutes;
     private Ui look;
     private LinearLayout screen, slotsView, library;
     private ScrollView scroll;
@@ -861,7 +867,6 @@ public class FreezeBoardActivity extends ThemedActivity {
         final AlertDialog dialog=ThemeStore.dialog(this).setView(sheet).setNegativeButton(T.s("取消"),null).create();
         sheet.addView(menuRow(dialog,"▣",look.accent(),T.s("新建单独额度"),T.s("只放一个应用，单独计时，用完就冻"),()->quotaEditor(null,null,false)));
         sheet.addView(menuRow(dialog,"⧉",look.green(),T.s("新建共享额度"),T.s("多个应用共用同一份分钟数"),()->quotaEditor(null,null,true)));
-        sheet.addView(menuRow(dialog,"⚙",look.text3(),T.s("管理额度"),T.s("启用开关、使用情况权限、删除额度"),()->startActivity(new Intent(this,DailyQuotaActivity.class))));
         dialog.show();
     }
     private View menuRow(final AlertDialog dialog,String glyph,int color,String title,String subtitle,final Runnable run){
@@ -992,17 +997,45 @@ public class FreezeBoardActivity extends ThemedActivity {
         DailyQuotaData data=DailyQuotaStore.snapshot(this);
         final List<org.json.JSONObject> others=new ArrayList<>();
         for(int i=0;i<data.groups().length();i++){org.json.JSONObject g=data.groups().optJSONObject(i);if(!group.optString("id").equals(g.optString("id")))others.add(g);}
-        List<String> actions=new ArrayList<>();actions.add(T.s("修改成员和分钟数"));
-        if(!others.isEmpty())actions.add(T.s("并到另一个额度…"));
-        actions.add(T.s("删除这个额度"));
         org.json.JSONArray members=group.optJSONArray("apps");
-        String title=(members!=null&&members.length()>1?T.s("共享额度"):group.optString("name"))+(members!=null&&members.length()>1?" · "+memberSummary(group):"");
-        ThemeStore.dialog(this).setTitle(title).setItems(actions.toArray(new String[0]),(d,which)->{
-            if(which==0){quotaEditor(group,null,false);return;}
-            if(!others.isEmpty()&&which==1){pickMergeTarget(group,others);return;}
-            confirmRemove(group);
-        }).setNegativeButton(T.s("取消"),null).show();
+        int count=members==null?0:members.length();
+        String title=count>1?T.s("共享额度"):group.optString("name");
+        String subtitle=count>1?memberSummary(group):T.f("每天 %d 分钟 · 单独计时",group.optInt("minutes"));
+
+        ScrollView scroll=new ScrollView(this);
+        scroll.setClipToPadding(false);
+        LinearLayout sheet=new LinearLayout(this);sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setPadding(dp(20),dp(3),dp(20),dp(8));scroll.addView(sheet);
+        sheet.addView(panelHeader("▣",look.accent(),title,subtitle));
+        if(count>0){
+            LinearLayout identity=new LinearLayout(this);identity.setGravity(Gravity.CENTER_VERTICAL);
+            identity.addView(memberStrip(group,34),new LinearLayout.LayoutParams(0,-2,1f));
+            identity.addView(panelPill(T.f("%d 个应用",count),look.accent()));
+            panelGap(sheet,identity);
+        }
+
+        long used=data.used(group),limit=Math.max(1,group.optInt("minutes")*60000L);
+        int remain=(int)Math.max(0,Math.ceil((limit-used)/60000.0));
+        LinearLayout metrics=panelMetricRow();
+        metrics.addView(panelMetric(T.s("每天额度"),String.valueOf(group.optInt("minutes")),look.text()),new LinearLayout.LayoutParams(0,-2,1f));
+        LinearLayout.LayoutParams mid=new LinearLayout.LayoutParams(0,-2,1f);
+        mid.leftMargin=dp(8);mid.rightMargin=dp(8);
+        metrics.addView(panelMetric(T.s("今日已用"),String.format(java.util.Locale.CHINA,"%.0f",used/60000.0),look.accent()),mid);
+        metrics.addView(panelMetric(T.s("剩余"),String.valueOf(remain),remain>0?look.green():look.red()),new LinearLayout.LayoutParams(0,-2,1f));
+        sheet.addView(metrics);
+
+        TextView state=text(DailyQuotaStore.description(this,data,group),12,look.text2());
+        state.setPadding(dp(4),dp(10),dp(4),dp(2));sheet.addView(state);
+
+        sheet.addView(panelSection(T.s("调整额度")));
+        panelGap(sheet,panelAction("✎",look.accent(),T.s("修改成员和分钟数"),T.s("调整应用组合、名称和每日上限"),()->quotaEditor(group,null,false)));
+        if(!others.isEmpty())panelGap(sheet,panelAction("⇄",look.green(),T.s("并到另一个额度"),T.s("成员合并，共用较小的一份分钟数"),()->pickMergeTarget(group,others)));
+        sheet.addView(panelSection(T.s("删除")));
+        panelGap(sheet,panelAction("⌫",look.red(),T.s("删除这个额度"),T.s("今天已用时间保留，冻结规则仍会生效"),()->confirmRemove(group)));
+
+        ThemeStore.dialog(this).setView(scroll).setNegativeButton(T.s("关闭"),null).show();
     }
+
     private void pickMergeTarget(final org.json.JSONObject from,final List<org.json.JSONObject> others){
         String[] labels=new String[others.size()];
         for(int i=0;i<labels.length;i++){org.json.JSONObject g=others.get(i);labels[i]=g.optString("name")+" · "+memberSummary(g)+T.f(" · 每天 %d 分钟",g.optInt("minutes"));}
@@ -1040,13 +1073,19 @@ public class FreezeBoardActivity extends ThemedActivity {
     }
     /** 新建／修改额度：先选「单独」还是「共享」，再挑应用；勾多个应用就是共用一份。 */
     private void quotaEditor(final org.json.JSONObject group,String preset,boolean initialShared){
+        quotaEditor(group,preset,initialShared,null,null,null);
+    }
+
+    private void quotaEditor(final org.json.JSONObject group,String preset,boolean initialShared,
+                             String draftTitle,String draftMinutes,Set<String> draftChosen){
         // 收束时段外只能「加」：新应用、新额度、加分钟数随时都行；移出成员、调小要等时段
         final boolean growOnly=!quotaEditable();
         final Set<String> chosen=new java.util.LinkedHashSet<>();
         org.json.JSONArray original=group==null?null:group.optJSONArray("apps");
         if(original!=null)for(int i=0;i<original.length();i++)chosen.add(original.optString(i));
+        if(draftChosen!=null)chosen.addAll(draftChosen);
         if(preset!=null)chosen.add(preset);
-        final boolean[] shared={original!=null?original.length()>1:initialShared};
+        final boolean[] shared={draftChosen!=null?initialShared:original!=null?original.length()>1:initialShared};
         if(!shared[0]&&chosen.size()>1){String first=chosen.iterator().next();chosen.clear();chosen.add(first);}
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(22),dp(6),dp(22),0);
         final TextView single=text(T.s("单独"),13,look.text2()),share=text(T.s("共享"),13,look.text2());
@@ -1057,8 +1096,8 @@ public class FreezeBoardActivity extends ThemedActivity {
         modes.addView(single,singleLp);modes.addView(share,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         box.addView(modes);
         final TextView modeHint=text("",11,look.text3());box.addView(modeHint);
-        final android.widget.EditText title=new android.widget.EditText(this);title.setSingleLine(true);title.setHint(T.s("额度名称（可选）"));title.setText(group==null?"":group.optString("name"));box.addView(title);
-        final android.widget.EditText minutes=new android.widget.EditText(this);minutes.setInputType(2);minutes.setHint(T.s("每天 1–1440 分钟"));minutes.setText(""+(group==null?120:group.optInt("minutes")));box.addView(minutes);
+        final android.widget.EditText title=new android.widget.EditText(this);title.setSingleLine(true);title.setHint(T.s("额度名称（可选）"));title.setText(draftTitle!=null?draftTitle:group==null?"":group.optString("name"));box.addView(title);
+        final android.widget.EditText minutes=new android.widget.EditText(this);minutes.setInputType(2);minutes.setHint(T.s("每天 1–1440 分钟"));minutes.setText(draftMinutes!=null?draftMinutes:""+(group==null?120:group.optInt("minutes")));box.addView(minutes);
         final TextView picked=text("",13,look.text2());box.addView(picked);
         final Runnable paint=()->{
             single.setTextColor(shared[0]?look.text2():look.onAccent());
@@ -1071,30 +1110,30 @@ public class FreezeBoardActivity extends ThemedActivity {
         paint.run();describe.run();
         single.setOnClickListener(v->{if(growOnly&&chosen.size()>1){toast(T.f("现在只能加：把成员减到一只要等收束时段 %s",TimeWindow.label(this)));return;}shared[0]=false;if(chosen.size()>1){String first=chosen.iterator().next();chosen.clear();chosen.add(first);}paint.run();describe.run();});
         share.setOnClickListener(v->{shared[0]=true;paint.run();describe.run();});
+        final AlertDialog[] holder=new AlertDialog[1];
         box.addView(action(T.s("选择应用"),v->{
-            List<String> apps=new ArrayList<>(availableApps);
+            if(growOnly&&!shared[0]&&!chosen.isEmpty()){toast(T.f("单独额度只有一只应用，换应用要等收束时段 %s",TimeWindow.label(this)));return;}
+            List<String> apps=new ArrayList<>();
+            for(String p:availableApps)if(!growOnly||!chosen.contains(p))apps.add(p);
             for(String p:chosen)if(!apps.contains(p))apps.add(p);
-            // 只能加的时段里，已进额度的应用不再列出来 —— 列表里只出现「还没进来」的
-            if(growOnly)for(String p:chosen)apps.remove(p);
+            apps.remove(getPackageName());
             if(apps.isEmpty()){toast(growOnly?T.s("所有应用都已经在这个额度里了"):T.s("应用列表正在加载，请稍后重试"));return;}
-            String[] labels=new String[apps.size()];
-            for(int i=0;i<apps.size();i++)labels[i]=appLabel(apps.get(i));
-            if(!shared[0]){
-                if(growOnly){
-                    if(!chosen.isEmpty()){toast(T.f("单独额度只有一只应用，换应用要等收束时段 %s",TimeWindow.label(this)));return;}
-                    ThemeStore.dialog(this).setTitle(T.s("选一只应用")).setItems(labels,(d2,w)->{chosen.add(apps.get(w));describe.run();}).setNegativeButton(T.s("取消"),null).show();
-                    return;
-                }
-                int index=0;for(int i=0;i<apps.size();i++)if(chosen.contains(apps.get(i))){index=i;break;}
-                ThemeStore.dialog(this).setTitle(T.s("选一只应用")).setSingleChoiceItems(labels,index,(d2,w)->{chosen.clear();chosen.add(apps.get(w));describe.run();d2.dismiss();}).setNegativeButton(T.s("取消"),null).show();
-                return;
-            }
-            boolean[] on=new boolean[apps.size()];
-            for(int i=0;i<apps.size();i++)on[i]=!growOnly&&chosen.contains(apps.get(i));
-            ThemeStore.dialog(this).setTitle(T.s("选择额度成员")).setMultiChoiceItems(labels,on,(d2,w,checked)->on[w]=checked)
-                    .setNegativeButton(T.s("取消"),null).setPositiveButton(T.s("确定"),(d2,w)->{if(!growOnly)chosen.clear();for(int i=0;i<on.length;i++)if(on[i])chosen.add(apps.get(i));describe.run();}).show();
+            quotaDraftGroup=group;quotaDraftChosen=new LinkedHashSet<>(chosen);quotaDraftShared=shared[0];quotaDraftGrowOnly=growOnly;
+            quotaDraftTitle=title.getText().toString();quotaDraftMinutes=minutes.getText().toString();
+            if(holder[0]!=null)holder[0].dismiss();
+            Intent intent=new Intent(this,AppPickerActivity.class)
+                    .putStringArrayListExtra(AppPickerActivity.EXTRA_CANDIDATES,new ArrayList<>(apps))
+                    .putStringArrayListExtra(AppPickerActivity.EXTRA_PRESELECT,
+                            growOnly?new ArrayList<String>():new ArrayList<String>(chosen))
+                    .putExtra(AppPickerActivity.EXTRA_SINGLE,!shared[0])
+                    .putExtra(AppPickerActivity.EXTRA_TITLE,shared[0]?T.s("选择共享成员"):T.s("选择一只应用"))
+                    .putExtra(AppPickerActivity.EXTRA_HINT,shared[0]
+                            ? T.s("选中的应用共用这一份额度，可多选")
+                            : T.s("单独额度只放一只应用"));
+            startActivityForResult(intent,REQ_QUOTA);
         }));
         final AlertDialog dialog=ThemeStore.dialog(this).setTitle(group==null?T.s("新建额度"):T.s("修改额度")).setView(box).setNegativeButton(T.s("取消"),null).setPositiveButton(T.s("保存"),null).create();
+        holder[0]=dialog;
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             try{
                 if(chosen.isEmpty())throw new IllegalArgumentException(T.s("先选应用"));
@@ -1171,7 +1210,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         touch.setContentDescription((name==null||name.isEmpty()?T.s("使用限额"):name)+" · "+detail);
     }
     private void usageEditor(String pkg,boolean allDay){
-        if(DailyQuotaStore.snapshot(this).group(pkg)!=null){startActivity(new Intent(this,DailyQuotaActivity.class));return;}
+        if(DailyQuotaStore.snapshot(this).group(pkg)!=null){quotaEditor(DailyQuotaStore.snapshot(this).group(pkg),null,false);return;}
         if(lockedForMove(pkg)){toast(T.s("当前已冻结，解冻后再调整额度"));return;}
         // 先放开权限：没授权也能把额度存下来，只是不计时、不冻结；授权后自动开始累计。
         boolean counting=AppUsageQuota.permission(this);
@@ -1185,25 +1224,84 @@ public class FreezeBoardActivity extends ThemedActivity {
         dialog.setOnShowListener(d->dialog.getButton(-1).setOnClickListener(v->{try{int limit=Integer.parseInt(input.getText().toString());if(limit<0||limit>1440)throw new IllegalArgumentException(T.s("额度须为0–1440分钟"));if(limit>0&&(!rules.containsKey(pkg)||allDay))RuleStore.put(this,pkg,FreezeSlotStore.withoutSchedule());AppUsageQuota.save(this,pkg,limit);dialog.dismiss();rebuild();applyRules();}catch(RuntimeException error){toast(error.getMessage());}}));dialog.show();
     }
     private void appDetails(String pkg) {
-        if (!rules.containsKey(pkg)) {
-            if(DailyQuotaStore.snapshot(this).group(pkg)!=null){ThemeStore.dialog(this).setTitle(Guard.labelOf(getPackageManager(),pkg)).setMessage(T.s("当前状态：")+Guard.blockReasonText(Guard.blockReasonNow(this,pkg))+"\n"+DailyQuotaStore.status(this,pkg)).setPositiveButton(T.s("关闭"),null).setNegativeButton(T.s("使用限额"),(d,w)->startActivity(new Intent(this,DailyQuotaActivity.class))).show();return;}
-            ThemeStore.dialog(this).setTitle(Guard.labelOf(getPackageManager(), pkg))
-                    .setMessage(T.s("尚未设置冻结时段。长按应用，拖入上方时段即可安排冻结。"))
-                    .setPositiveButton(T.s("关闭"), null).show();
-            return;
-        }
+        Rule rule = RuleStore.get(this, pkg);
+        org.json.JSONObject group = DailyQuotaStore.snapshot(this).group(pkg);
         int reason = Guard.blockReasonNow(this, pkg);
-        String explanation = reason == 2 ? T.s("\n20:00 后打卡没完成，学习联动会一直冻到打完；打完还要走完那 30 分钟的打卡罚时。")
-                : reason == 3 ? T.s("\n罚时延长冻结还没结束（禁忌卡认领或 20:00 打卡没完成）。") : reason==4?"\n"+AppUsageQuota.status(this,pkg,RuleStore.get(this,pkg),System.currentTimeMillis()):reason==5?"\n"+DailyQuotaStore.status(this,pkg):"";
-        AlertDialog dialog=ThemeStore.dialog(this).setTitle(Guard.labelOf(getPackageManager(), pkg))
-                .setMessage(T.s("当前状态：") + Guard.blockReasonText(reason) + T.s("\n自身时段：")
-                        + RuleStore.get(this, pkg).freezeSummary() + explanation +(reason!=5&&!DailyQuotaStore.status(this,pkg).isEmpty()?"\n"+DailyQuotaStore.status(this,pkg):"")+"\n"+StudyGate.extensionStatus(this,pkg)+(AppUsageQuota.minutes(this,pkg)>0&&reason!=4?"\n"+AppUsageQuota.status(this,pkg,RuleStore.get(this,pkg),System.currentTimeMillis()):"")+ T.s("\n\n长按应用可拖到其他冻结时段。"))
-                .setNegativeButton(T.s("使用额度"),(d,w)->usageEditor(pkg,false)).setPositiveButton(T.s("关闭"), null)                .setNeutralButton(" ", (d,w) -> {
-                    // 移出冻结列表：收束时段才放开；刚加入的十分钟内仍可纠错
-                    if (!TimeWindow.on(this) && !Guard.canRemove(this, pkg)) { toast(T.f("移出冻结列表要等收束时段 %s", TimeWindow.label(this))); return; }
-                    RuleStore.remove(this, pkg); rebuild(); applyRules();
-                }).create();
-        dialog.setOnShowListener(d->detailActionSlider(dialog));dialog.show();
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setClipToPadding(false);
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setPadding(dp(20), dp(3), dp(20), dp(8));
+        scroll.addView(sheet);
+        sheet.addView(appDetailHeader(pkg, reason));
+
+        // 状态优先：一句结论 + 一句原因，不再把所有模块状态拼成一大段。
+        LinearLayout statusBox = new LinearLayout(this);
+        statusBox.setOrientation(LinearLayout.VERTICAL);
+        statusBox.setPadding(dp(14), dp(13), dp(14), dp(13));
+        statusBox.setBackground(look.round((((reason == 0 ? look.green() : look.red()) & 0x00ffffff) | 0x14000000), 16f));
+        TextView statusTitle = text(reason == 0 ? T.s("现在可以使用") : Guard.blockReasonText(reason), 16,
+                reason == 0 ? look.green() : look.red());
+        statusTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        statusBox.addView(statusTitle);
+        String why = reason == 2 ? T.s("20:00 后打卡没完成，学习联动会一直冻到打完；打完还要走完打卡罚时。")
+                : reason == 3 ? T.s("禁忌惩罚的延长冻结还没结束。")
+                : reason == 4 ? AppUsageQuota.status(this, pkg, rule, System.currentTimeMillis())
+                : reason == 5 ? DailyQuotaStore.status(this, pkg)
+                : rule == null ? T.s("这只应用还没加入冻结时段。") : T.s("当前不在任何冻结时段内。");
+        TextView statusWhy = text(why, 12, look.text2());
+        statusWhy.setLineSpacing(dp(3), 1f);
+        statusWhy.setPadding(0, dp(5), 0, 0);
+        statusBox.addView(statusWhy);
+        panelGap(sheet, statusBox);
+
+        if (rule != null) {
+            LinearLayout metrics = panelMetricRow();
+            metrics.addView(panelMetric(T.s("冻结安排"), rule.freeze ? T.f("%d 个时段", rule.windowCount()) : T.s("无定时"), look.text()),
+                    new LinearLayout.LayoutParams(0, -2, 1f));
+            LinearLayout.LayoutParams mid = new LinearLayout.LayoutParams(0, -2, 1f);
+            mid.leftMargin = dp(8); mid.rightMargin = dp(8);
+            metrics.addView(panelMetric(T.s("生效星期"), Rule.daysText(rule.days), look.text2()), mid);
+            metrics.addView(panelMetric(T.s("每日额度"), group == null ? T.s("未设") : T.f("%d 分钟", group.optInt("minutes")),
+                    group == null ? look.text3() : look.accent()), new LinearLayout.LayoutParams(0, -2, 1f));
+            sheet.addView(metrics);
+
+            sheet.addView(panelSection(T.s("规则详情")));
+            panelGap(sheet, panelNote(T.s("自身时段") + "\n" + timeTitle(rule).replace('\n', ' ')
+                    + (group != null ? "\n" + DailyQuotaStore.status(this, pkg) : "")));
+            String extension = StudyGate.extensionStatus(this, pkg);
+            if (extension != null && !extension.trim().isEmpty()) panelGap(sheet, panelNote(extension));
+            if (AppUsageQuota.minutes(this, pkg) > 0 && reason != 4)
+                panelGap(sheet, panelNote(AppUsageQuota.status(this, pkg, rule, System.currentTimeMillis())));
+            panelGap(sheet, panelNote(T.s("长按应用可拖到其他冻结时段；从应用库拖入即可加入新的时段。")));
+        } else if (group != null) {
+            sheet.addView(panelSection(T.s("额度")));
+            panelGap(sheet, panelNote(DailyQuotaStore.status(this, pkg)));
+        } else {
+            panelGap(sheet, panelNote(T.s("还没有安排。先选择一个冻结时段，再从应用库把它拖进去；只想限制时长可以直接设使用额度。")));
+        }
+
+        sheet.addView(panelSection(T.s("操作")));
+        if (rule == null) {
+            if (!slots.isEmpty()) panelGap(sheet, panelAction("◷", look.accent(), T.s("选择冻结时段"),
+                    T.s("把它放进已有的时间格"), () -> chooseDestination(pkg)));
+        }
+        panelGap(sheet, panelAction("◔", look.accent(), T.s("使用额度"),
+                group == null ? T.s("设置每日可用分钟数") : T.s("修改这个额度的成员和分钟数"),
+                () -> usageEditor(pkg, false)));
+        if (rule != null) {
+            panelGap(sheet, panelAction("⌫", look.red(), T.s("移出冻结列表"),
+                    T.f("需要收束时段 %s；刚加入的十分钟内可直接纠错", TimeWindow.label(this)), () -> {
+                        if (!TimeWindow.on(this) && !Guard.canRemove(this, pkg)) {
+                            toast(T.f("移出冻结列表要等收束时段 %s", TimeWindow.label(this)));
+                            return;
+                        }
+                        RuleStore.remove(this, pkg); rebuild(); applyRules();
+                    }));
+        }
+
+        ThemeStore.dialog(this).setView(scroll).setNegativeButton(T.s("关闭"), null).show();
     }
     private boolean canAdd() {
         if (rules.isEmpty() || Config.inGrace(this)) return true;
@@ -1241,6 +1339,33 @@ public class FreezeBoardActivity extends ThemedActivity {
             rebuild();
             // 授权窗自己会带着结果回来，这时别先弹一个再弹第二个
             if (!pending && screen != null) screen.post(this::netSettings);
+            return;
+        }
+        if (request == REQ_QUOTA) {
+            if (quotaDraftChosen != null) {
+                ArrayList<String> picked = result == RESULT_OK && data != null
+                        ? data.getStringArrayListExtra("picked") : null;
+                LinkedHashSet<String> chosen = picked == null
+                        ? new LinkedHashSet<>(quotaDraftChosen) : new LinkedHashSet<>(picked);
+                // 跨出可编辑时段后，已进格子的应用不能被这次返回偷偷拿掉。
+                if (picked != null && !quotaEditable()) chosen.addAll(quotaDraftChosen);
+                quotaEditor(quotaDraftGroup, null, quotaDraftShared,
+                        quotaDraftTitle, quotaDraftMinutes, chosen);
+            }
+            quotaDraftGroup = null; quotaDraftChosen = null;
+            return;
+        }
+        if (request == REQ_KEY) {
+            if (result == RESULT_OK && data != null) {
+                ArrayList<String> picked = data.getStringArrayListExtra("picked");
+                if (picked != null) {
+                    Set<String> selected = new LinkedHashSet<>(picked);
+                    for (String pkg : selected) if (!rules.containsKey(pkg)) RuleStore.put(this, pkg, FreezeSlotStore.withoutSchedule());
+                    RuleStore.setKeyApps(this, selected);
+                    rebuild(); applyRules();
+                    toast(T.f("关键应用已更新 · %d 个", selected.size()));
+                }
+            }
             return;
         }
         if (request != PICK || result != RESULT_OK || data == null) return;
@@ -1372,38 +1497,55 @@ public class FreezeBoardActivity extends ThemedActivity {
         return NetWindow.canEdit(this);
     }
 
-    /** 断网设置：开关、挑应用、调整时段、隧道真状态；时段外仅可查看。 */
+    /** 断网设置：开关、名单、时段、连接方式；时段外仅可查看。 */
     private void netSettings() {
         if (isFinishing() || isDestroyed()) return;
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(18), dp(2), dp(18), dp(4));
+        final boolean editable = netEditAllowed();
+        final java.util.Set<String> selected = NetBlockStore.packages(this);
 
-        final AlertDialog dialog = ThemeStore.dialog(this).setTitle(T.s("断网应用设置"))
-                .setView(box).setNegativeButton(T.s("关闭"), null).create();
+        ScrollView scroll = new ScrollView(this);
+        scroll.setClipToPadding(false);
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setPadding(dp(20), dp(3), dp(20), dp(8));
+        scroll.addView(sheet);
 
-        final TextView toggleValue = text("", 13, look.accent());
-        final TextView appsValue = text("", 13, look.text2());
-        final TextView windowValue = text(NetWindow.label(this), 13, look.accent());
-        final TextView modeValue = text(modeLabel(), 13, look.accent());
-        final TextView statusValue = text("", 12, look.text2());
+        sheet.addView(panelHeader("⊘", NetBlockStore.on(this) ? look.red() : look.text3(),
+                T.s("断网应用"), NetBlockStore.status(this)));
+        if (!editable) {
+            panelGap(sheet, panelNote(T.f("现在只能查看。名单、开关、时段和连接方式只在调整时段 %s 内开放。", NetWindow.label(this))));
+        }
+
+        LinearLayout master = new LinearLayout(this);
+        master.setGravity(Gravity.CENTER_VERTICAL);
+        master.setPadding(dp(14), dp(14), dp(12), dp(14));
+        master.setBackground(look.round(look.surface2(), 17f));
+        LinearLayout masterCopy = new LinearLayout(this);
+        masterCopy.setOrientation(LinearLayout.VERTICAL);
+        TextView masterTitle = text(T.s("开启断网"), 16, look.text());
+        masterTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        masterCopy.addView(masterTitle);
+        final TextView masterState = text("", 12, look.text2());
+        masterState.setPadding(0, dp(3), 0, 0);
+        masterCopy.addView(masterState);
+        master.addView(masterCopy, new LinearLayout.LayoutParams(0, -2, 1f));
+        final TextView toggleValue = panelPill("", look.text3());
+        master.addView(toggleValue);
+        panelGap(sheet, master);
 
         final Runnable paint = () -> {
             boolean on = NetBlockStore.on(this);
-            toggleValue.setText(on ? T.s("开") : T.s("关"));
-            toggleValue.setTextColor(on ? look.accent() : look.text3());
-            appsValue.setText(T.f("%d 个", NetBlockStore.packages(this).size()));
-            modeValue.setText(modeLabel());
-            statusValue.setText(NetBlockStore.status(this));
-            statusValue.setTextColor(NetBlockStore.running(this) ? look.green() : look.text2());
+            toggleValue.setText(on ? T.s("已开启") : T.s("已关闭"));
+            toggleValue.setTextColor(on ? look.green() : look.text3());
+            toggleValue.setBackground(look.round((((on ? look.green() : look.text3()) & 0x00ffffff) | 0x18000000), 99f));
+            masterState.setText(on ? T.s("到点自动断网") : T.s("不会拦截任何应用"));
+            masterState.setTextColor(on ? look.green() : look.text3());
         };
 
-        LinearLayout toggleRow = dialogRow(T.s("开启断网"));
-        toggleRow.addView(toggleValue);
-        toggleRow.setOnClickListener(v -> {
+        final AlertDialog dialog = ThemeStore.dialog(this).setView(scroll)
+                .setNegativeButton(T.s("关闭"), null).create();
+        master.setOnClickListener(v -> {
             if (!netEditAllowed()) return;
-            // 注意：调整时段内隧道本来就该停着，所以「开着但没在跑」是正常状态，
-            // 这里点一下就是关掉 —— 断网的延续不靠人点，靠 reconcile 在时段结束时自己拉起来。
             if (NetBlockStore.on(this)) {
                 NetBlockStore.setOn(this, false);
                 NetBlockService.stop(this);
@@ -1416,47 +1558,47 @@ public class FreezeBoardActivity extends ThemedActivity {
                 return;
             }
             NetBlockStore.setOn(this, true);
-            if (!vpnGranted()) {                 // 第一次要系统授权，回来再把这一页弹出来
+            if (!vpnGranted()) {
                 dialog.dismiss();
                 askVpn();
                 return;
             }
             NetBlockService.reconcile(this);
-            if (NetWindow.inside(this))          // 调整时段内本来就放开，说清楚什么时候才断
+            if (NetWindow.inside(this))
                 toast(T.f("已开启，%s 结束后开始断网", NetWindow.label(this)));
             paint.run();
-            // 隧道是异步建立的，这一刻还在「待断网」，过一秒再刷一次状态
             handler.postDelayed(paint, 900);
             updateNetHint();
             handler.postDelayed(this::updateNetHint, 900);
         });
-        box.addView(toggleRow);
 
-        LinearLayout appsRow = dialogRow(T.s("断网的应用"));
-        appsRow.addView(appsValue);
-        appsRow.setOnClickListener(v -> {
-            if (!netEditAllowed()) return;
-            dialog.dismiss();
-            pickNetApps();
-        });
-        box.addView(appsRow);
-
-        LinearLayout windowRow = dialogRow(T.s("调整时段"), windowValue);
-        windowRow.setOnClickListener(v -> {
-            // 时段本身也是设置：否则把时段改成「现在」就等于给自己开了后门。
+        sheet.addView(panelSection(T.s("拦截名单")));
+        if (!selected.isEmpty()) {
+            LinearLayout identity = new LinearLayout(this);
+            identity.setGravity(Gravity.CENTER_VERTICAL);
+            identity.addView(packageStrip(selected, 34), new LinearLayout.LayoutParams(0, -2, 1f));
+            identity.addView(panelPill(T.f("%d 个应用", selected.size()), look.red()));
+            panelGap(sheet, identity);
+        }
+        panelGap(sheet, panelAction("▤", look.red(), T.s("断网的应用"),
+                selected.isEmpty() ? T.s("还没有选择应用") : T.f("%d 个应用连不上服务器", selected.size()),
+                () -> {
+                    if (!netEditAllowed()) return;
+                    dialog.dismiss();
+                    pickNetApps();
+                }));
+        panelGap(sheet, panelAction("◷", look.accent(), T.s("调整时段"), NetWindow.label(this), () -> {
             if (!netEditAllowed()) return;
             NetWindow.pick(this, () -> {
-                windowValue.setText(NetWindow.label(this));
-                paint.run();
                 updateNetHint();
+                dialog.dismiss();
+                screen.post(this::netSettings);
             });
-        });
-        box.addView(windowRow);
+        }));
 
+        sheet.addView(panelSection(T.s("连接方式")));
         // 断网方式：自动（占 VPN）或「我常开代理」（不占 VPN，交给代理规则）。
-        // 后者是给「代理必须一直开着」的人用的：选了以后本 App 一步都不碰 VPN 通道。
-        LinearLayout modeRow = dialogRow(T.s("断网方式"), modeValue);
-        modeRow.setOnClickListener(v -> {
+        panelGap(sheet, panelAction("⇄", look.accent(), T.s("断网方式"), modeLabel(), () -> {
             if (!netEditAllowed()) return;
             String[] labels = {T.s("自动（本 App 用系统 VPN）"), T.s("我常开代理（不占 VPN）")};
             int checked = NetBlockStore.proxyMode(this) ? 1 : 0;
@@ -1464,18 +1606,15 @@ public class FreezeBoardActivity extends ThemedActivity {
                     .setSingleChoiceItems(labels, checked, (d, which) -> {
                         NetBlockStore.setProxyMode(this, which == 1);
                         d.dismiss();
-                        paint.run();
                         updateNetHint();
                         NetBlockService.reconcile(this);
+                        dialog.dismiss();
+                        screen.post(this::netSettings);
                     })
                     .setNegativeButton(T.s("取消"), null).show();
-        });
-        box.addView(modeRow);
-
+        }));
         // 系统只允许一个 VPN：代理占着时隧道建不起来，这里决定「断网」怎么退而求其次。
-        final TextView fallbackValue = text(fallbackLabel(), 13, look.accent());
-        LinearLayout fallbackRow = dialogRow(T.s("代理占着 VPN 时"), fallbackValue);
-        fallbackRow.setOnClickListener(v -> {
+        panelGap(sheet, panelAction("◇", look.text2(), T.s("代理占着 VPN 时"), fallbackLabel(), () -> {
             if (!netEditAllowed()) return;
             final int[] modes = {NetBlockStore.FALLBACK_FREEZE, NetBlockStore.FALLBACK_NOTIFY};
             String[] labels = {T.s("改用冻结这些应用"), T.s("只提示不处理")};
@@ -1484,16 +1623,15 @@ public class FreezeBoardActivity extends ThemedActivity {
                     .setSingleChoiceItems(labels, checked, (d, which) -> {
                         NetBlockStore.setFallbackMode(this, modes[which]);
                         d.dismiss();
-                        fallbackValue.setText(fallbackLabel());
-                        paint.run();
                         updateNetHint();
                         NetFallback.reconcile(this);
+                        dialog.dismiss();
+                        screen.post(this::netSettings);
                     })
                     .setNegativeButton(T.s("取消"), null).show();
-        });
-        box.addView(fallbackRow);
+        }));
 
-        // 代理常开时想让这些应用没网，只能在代理里拦（系统只有一个 VPN）。给个直达入口。
+        sheet.addView(panelSection(T.s("工具")));
         final String proxyPkg = "com.follow.clash";
         boolean proxyInstalled = true;
         try {
@@ -1502,47 +1640,37 @@ public class FreezeBoardActivity extends ThemedActivity {
             proxyInstalled = false;
         }
         if (proxyInstalled) {
-            LinearLayout proxyRow = dialogRow(T.s("打开代理 App"), text("›", 15, look.text3()));
-            proxyRow.setOnClickListener(v -> {
+            panelGap(sheet, panelAction("↗", look.text2(), T.s("打开代理 App"), T.s("FlClash"), () -> {
                 try {
                     Intent launch = getPackageManager().getLaunchIntentForPackage(proxyPkg);
                     if (launch != null) startActivity(launch);
                 } catch (RuntimeException ignored) {
                 }
-            });
-            box.addView(proxyRow);
+            }));
         }
-        LinearLayout rulesRow = dialogRow(T.s("复制代理拦截规则"), text("›", 15, look.text3()));
-        rulesRow.setOnClickListener(v -> {
-            String snippet = ProxyRules.snippet(NetBlockStore.packages(this));
-            copyText(snippet);
-            toast(T.s("已复制。粘到代理 App 的覆写/配置 rules: 里（放在 MATCH 之前），断网就由代理完成；本 App 仍显示「被占用」是正常的。"));
+        panelGap(sheet, panelAction("⧉", look.text2(), T.s("复制代理拦截规则"),
+                T.s("交给代理完成拦截，本 App 不占 VPN"), () -> {
+                    String snippet = ProxyRules.snippet(NetBlockStore.packages(this));
+                    copyText(snippet);
+                    toast(T.s("已复制。粘到代理 App 的覆写/配置 rules: 里（放在 MATCH 之前），断网就由代理完成；本 App 仍显示「被占用」是正常的。"));
+                }));
+
+        final View notes = panelNote(T.s("只接管选中的应用，别的应用照常上网。用系统 VPN 通道实现，所以和代理、公司内网、加速器互斥。")
+                + "\n\n" + T.s("应用会表现为转圈、超时，而不是弹「已断网」；视频类通常还会显示缓存过的内容。")
+                + "\n\n" + T.f("断网默认常开：除了调整时段 %s 内自动放开，其余时间一直断网；开关、名单和调整时段本身都只能在此时段内修改。", NetWindow.label(this))
+                + "\n\n" + T.s("系统同一时间只允许一个 VPN：代理（FlClash 等）占着时隧道建不起来。选「改用冻结这些应用」后，时段外名单里的应用会被直接冻结（打不开，也就等于没网），时段内自动解冻；名单里别放必须用的应用。")
+                + "\n\n" + T.s("常开代理的人，断网交给代理做：点「复制代理拦截规则」，把内容放进代理 App 的覆写/配置 rules:（MATCH 之前）。"));
+        notes.setVisibility(View.GONE);
+        final TextView toggleNotes = text(T.s("查看使用限制 ›"), 12, look.accent());
+        toggleNotes.setPadding(dp(4), dp(12), dp(4), dp(6));
+        final boolean[] open = {false};
+        toggleNotes.setOnClickListener(v -> {
+            open[0] = !open[0];
+            notes.setVisibility(open[0] ? View.VISIBLE : View.GONE);
+            toggleNotes.setText(open[0] ? T.s("收起说明 ›") : T.s("查看使用限制 ›"));
         });
-        box.addView(rulesRow);
-
-        box.addView(dialogRow(T.s("状态"), statusValue));
-
-        LinearLayout notes = new LinearLayout(this);
-        notes.setOrientation(LinearLayout.VERTICAL);
-        notes.setPadding(dp(10), dp(10), dp(10), dp(0));
-        notes.addView(text(T.s("只接管选中的应用，别的应用照常上网。用系统 VPN 通道实现，所以和代理、公司内网、加速器互斥。")
-                + T.s("系统同一时间只允许一个 VPN：开了它就要关掉代理，否则两边都用不了。"), 12, look.text2()));
-        TextView second = text(T.s("应用会表现为转圈、超时，而不是弹「已断网」；视频类通常还会显示缓存过的内容。"), 12, look.text2());
-        second.setPadding(0, dp(6), 0, 0);
-        notes.addView(second);
-        TextView third = text(T.f("断网默认常开：除了调整时段 %s 内自动放开，其余时间一直断网；开关、名单和调整时段本身都只能在此时段内修改。", NetWindow.label(this)), 12, look.text2());
-        third.setPadding(0, dp(6), 0, 0);
-        notes.addView(third);
-        TextView fourth = text(T.s("系统同一时间只允许一个 VPN：代理（FlClash 等）占着时隧道建不起来。选「改用冻结这些应用」后，时段外名单里的应用会被直接冻结（打不开，也就等于没网），时段内自动解冻；名单里别放必须用的应用。"), 12, look.text2());
-        fourth.setPadding(0, dp(6), 0, 0);
-        notes.addView(fourth);
-        TextView fifth = text(T.s("两种用法：不开代理的人什么都不用做 —— 本 App 用系统 VPN 断网；常开代理的人，断网交给代理做 —— 点上面「复制代理拦截规则」，把内容放进代理 App 的覆写/配置 rules:（MATCH 之前），代理照常用、这些应用没网。"), 12, look.text2());
-        fifth.setPadding(0, dp(6), 0, 0);
-        notes.addView(fifth);
-        TextView sixth = text(T.s("默认「自动」：本 App 用系统 VPN 断网。代理常开的人把「断网方式」改成「我常开代理（不占 VPN）」后，本 App 一步都不碰 VPN 通道、绝不会顶掉你的代理，拦网交给代理里的拒绝规则（用上面「复制代理拦截规则」）。"), 12, look.text2());
-        sixth.setPadding(0, dp(6), 0, 0);
-        notes.addView(sixth);
-        box.addView(notes);
+        sheet.addView(toggleNotes);
+        panelGap(sheet, notes);
 
         paint.run();
         dialog.show();
@@ -1564,6 +1692,195 @@ public class FreezeBoardActivity extends ThemedActivity {
         LinearLayout row = dialogRow(title);
         row.addView(value);
         return row;
+    }
+
+    /* ---------- 统一详情面板：身份区、状态指标、成组操作 ---------- */
+
+    private LinearLayout panelHeader(String glyph, int color, String title, String subtitle) {
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(2), dp(4), dp(2), dp(14));
+        TextView icon = text(glyph, 20, 0xFFFFFFFF);
+        icon.setGravity(Gravity.CENTER);
+        icon.setBackground(look.round(color, 16f));
+        head.addView(icon, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setPadding(dp(14), 0, 0, 0);
+        TextView name = text(title, 21, look.text());
+        name.setTypeface(Typeface.DEFAULT_BOLD);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        copy.addView(name);
+        TextView sub = text(subtitle, 12, look.text2());
+        sub.setMaxLines(3);
+        sub.setLineSpacing(dp(2), 1f);
+        sub.setPadding(0, dp(4), 0, 0);
+        copy.addView(sub);
+        head.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
+        return head;
+    }
+
+    private TextView panelSection(String title) {
+        TextView section = text(title, 11, look.text3());
+        section.setTypeface(Typeface.DEFAULT_BOLD);
+        section.setLetterSpacing(0.08f);
+        section.setPadding(dp(4), dp(14), dp(4), dp(7));
+        return section;
+    }
+
+    private LinearLayout panelMetricRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setClipToPadding(false);
+        return row;
+    }
+
+    private View panelMetric(String label, String value, int color) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(12), dp(11), dp(12), dp(12));
+        box.setBackground(look.round(look.surface2(), 14f));
+        TextView number = text(value, 16, color);
+        number.setTypeface(Typeface.DEFAULT_BOLD);
+        number.setSingleLine(true);
+        number.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        box.addView(number);
+        TextView caption = text(label, 10, look.text3());
+        caption.setPadding(0, dp(3), 0, 0);
+        box.addView(caption);
+        return box;
+    }
+
+    private View panelAction(String glyph, int color, String title, String subtitle, Runnable run) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(12), dp(10), dp(12));
+        row.setBackground(new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf((look.accent() & 0x00ffffff) | 0x1F000000),
+                look.round(look.surface2(), 16f), look.round(0xffffffff, 16f)));
+        TextView icon = text(glyph, 15, color);
+        icon.setGravity(Gravity.CENTER);
+        icon.setBackground(look.round((color & 0x00ffffff) | 0x18000000, 12f));
+        row.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setPadding(dp(12), 0, dp(8), 0);
+        copy.addView(text(title, 15, color == look.red() ? look.red() : look.text()));
+        if (subtitle != null && !subtitle.isEmpty()) {
+            TextView sub = text(subtitle, 11, look.text3());
+            sub.setPadding(0, dp(2), 0, 0);
+            sub.setMaxLines(2);
+            copy.addView(sub);
+        }
+        row.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
+        row.addView(text("›", 18, look.text3()));
+        row.setOnClickListener(v -> run.run());
+        return row;
+    }
+
+    private TextView panelPill(String value, int color) {
+        TextView pill = text(value, 11, color);
+        pill.setGravity(Gravity.CENTER);
+        pill.setPadding(dp(9), dp(4), dp(9), dp(4));
+        pill.setBackground(look.round((color & 0x00ffffff) | 0x18000000, 99f));
+        return pill;
+    }
+
+    private View panelNote(String value) {
+        TextView note = text(value, 12, look.text2());
+        note.setLineSpacing(dp(3), 1f);
+        note.setPadding(dp(12), dp(11), dp(12), dp(11));
+        note.setBackground(look.round(look.surface2(), 13f));
+        return note;
+    }
+
+    private void panelGap(LinearLayout box, View view) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = dp(8);
+        box.addView(view, lp);
+    }
+
+    private View packageStrip(java.util.Collection<String> packages, int size) {
+        LinearLayout strip = new LinearLayout(this);
+        strip.setGravity(Gravity.CENTER_VERTICAL);
+        int count = 0;
+        for (String pkg : packages) {
+            if (count >= 6) break;
+            ImageView icon = new ImageView(this);
+            icon.setImageResource(android.R.drawable.sym_def_app_icon);
+            try { icon.setImageDrawable(getPackageManager().getApplicationIcon(pkg)); } catch (Exception ignored) { }
+            icon.setBackground(look.round(0xFFFFFFFF, 9f));
+            icon.setClipToOutline(true);
+            icon.setContentDescription(appLabel(pkg));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(size), dp(size));
+            if (count > 0) lp.leftMargin = dp(6);
+            strip.addView(icon, lp);
+            count++;
+        }
+        if (packages.size() > 6) {
+            TextView more = text("+" + (packages.size() - 6), 11, look.text2());
+            more.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(size), dp(size));
+            lp.leftMargin = dp(6);
+            strip.addView(more, lp);
+        }
+        return strip;
+    }
+
+    private LinearLayout memberStrip(org.json.JSONObject group, int size) {
+        LinearLayout strip = new LinearLayout(this);
+        strip.setGravity(Gravity.CENTER_VERTICAL);
+        org.json.JSONArray apps = group.optJSONArray("apps");
+        int count = apps == null ? 0 : apps.length();
+        for (int i = 0; i < Math.min(6, count); i++) {
+            String pkg = apps.optString(i);
+            ImageView icon = new ImageView(this);
+            icon.setImageResource(android.R.drawable.sym_def_app_icon);
+            try { icon.setImageDrawable(getPackageManager().getApplicationIcon(pkg)); } catch (Exception ignored) { }
+            icon.setBackground(look.round(0xFFFFFFFF, 9f));
+            icon.setClipToOutline(true);
+            icon.setContentDescription(appLabel(pkg));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(size), dp(size));
+            if (i > 0) lp.leftMargin = dp(6);
+            strip.addView(icon, lp);
+        }
+        if (count > 6) {
+            TextView more = text("+" + (count - 6), 11, look.text2());
+            more.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(size), dp(size));
+            lp.leftMargin = dp(6);
+            strip.addView(more, lp);
+        }
+        return strip;
+    }
+
+    private View appDetailHeader(String pkg, int reason) {
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.setPadding(dp(2), dp(4), dp(2), dp(14));
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(android.R.drawable.sym_def_app_icon);
+        try { icon.setImageDrawable(getPackageManager().getApplicationIcon(pkg)); } catch (Exception ignored) { }
+        icon.setBackground(look.round(0xFFFFFFFF, 14f));
+        icon.setClipToOutline(true);
+        head.addView(icon, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setPadding(dp(14), 0, dp(8), 0);
+        TextView name = text(appLabel(pkg), 21, look.text());
+        name.setTypeface(Typeface.DEFAULT_BOLD);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        copy.addView(name);
+        TextView id = text(pkg, 10, look.text3());
+        id.setSingleLine(true);
+        id.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+        id.setPadding(0, dp(3), 0, 0);
+        copy.addView(id);
+        head.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
+        head.addView(panelPill(reason == 0 ? T.s("当前可用") : Guard.blockReasonText(reason),
+                reason == 0 ? look.green() : look.red()));
+        return head;
     }
 
     /** 系统给的 VPN 授权还在不在（第一次开要弹系统窗）。 */
@@ -1602,86 +1919,19 @@ public class FreezeBoardActivity extends ThemedActivity {
         startActivityForResult(intent, REQ_NET);
     }
 
-    /** 关键应用名单：图标 + 名字 + 当前状态 + 搜索 + 计数，不再是干巴巴一列勾选框。 */
+    /** 关键应用名单：走统一选择器，只把冻结/额度相关应用作为候选。 */
     private void keyApps() {
-        // 关键应用名单=豁免冻结，也是「松」的那一头：收束时段才开放修改
         if (!windowOpen()) { toast(T.f("关键应用名单要等收束时段 %s 才能改", TimeWindow.label(this))); return; }
-        final Set<String> selected = new LinkedHashSet<>(RuleStore.keyApps(this));
-        final Set<String> candidates = new LinkedHashSet<>(rules.keySet());
+        Set<String> candidates = new LinkedHashSet<>(rules.keySet());
         candidates.addAll(DailyQuotaStore.packages(this));
-        final List<String> ordered = new ArrayList<>(candidates);
-        final java.text.Collator collator = java.text.Collator.getInstance(java.util.Locale.CHINA);
-        java.util.Collections.sort(ordered, (a, b) -> collator.compare(appLabel(a), appLabel(b)));
-
-        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(18), dp(4), dp(18), dp(0));
-        content.addView(text(T.s("关键应用不受学习闸门延长；自身冻结时段和每日额度仍然生效。"), 12, look.text2()));
-
-        final TextView count = text("", 12, look.accent());
-        final android.widget.EditText search = new android.widget.EditText(this);
-        search.setSingleLine(true); search.setHint(T.s("搜索应用"));
-        LinearLayout head = new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
-        head.addView(search, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        head.addView(count);
-        content.addView(head);
-
-        final Map<String, CheckBox> checks = new java.util.LinkedHashMap<>();
-        final List<View> rows = new ArrayList<>();
-        final LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL);
-        for (final String pkg : ordered) {
-            LinearLayout row = new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL); row.setPadding(0, dp(5), 0, dp(5));
-            row.setTag(pkg);
-            ImageView icon = new ImageView(this); icon.setImageResource(android.R.drawable.sym_def_app_icon);
-            try { icon.setImageDrawable(getPackageManager().getApplicationIcon(pkg)); } catch (Exception ignored) { }
-            row.addView(icon, new LinearLayout.LayoutParams(dp(30), dp(30)));
-            LinearLayout labels = new LinearLayout(this); labels.setOrientation(LinearLayout.VERTICAL);
-            labels.addView(text(appLabel(pkg), 14, look.text()));
-            labels.addView(text(stateLine(pkg), 10, look.text3()));
-            LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            labelLp.leftMargin = dp(10); row.addView(labels, labelLp);
-            final CheckBox check = new CheckBox(this);
-            check.setChecked(selected.contains(pkg));
-            check.setOnCheckedChangeListener((b, on) -> { if (on) selected.add(pkg); else selected.remove(pkg); paintCount(count, selected, ordered); });
-            row.addView(check);
-            checks.put(pkg, check);
-            rows.add(row);
-            list.addView(row);
-        }
-        ScrollView scroll = new ScrollView(this); scroll.addView(list);
-        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(-1, dp(340)); scrollLp.topMargin = dp(4);
-        content.addView(scroll, scrollLp);
-
-        LinearLayout tools = new LinearLayout(this); tools.setGravity(Gravity.CENTER_VERTICAL);
-        tools.addView(action(T.s("全选当前"), v -> {
-            for (View row : rows) if (row.getVisibility() == View.VISIBLE) { selected.add((String) row.getTag()); CheckBox c = checks.get(row.getTag()); if (c != null) c.setChecked(true); }
-            paintCount(count, selected, ordered);
-        }));
-        tools.addView(action(T.s("清空"), v -> {
-            selected.clear();
-            for (CheckBox c : checks.values()) c.setChecked(false);
-            paintCount(count, selected, ordered);
-        }));
-        content.addView(tools);
-        paintCount(count, selected, ordered);
-
-        search.addTextChangedListener(new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
-            @Override public void afterTextChanged(android.text.Editable e) {
-                String q = e == null ? "" : e.toString().trim().toLowerCase(java.util.Locale.CHINA);
-                for (View row : rows) {
-                    String pkg = (String) row.getTag();
-                    boolean hit = q.isEmpty() || appLabel(pkg).toLowerCase(java.util.Locale.CHINA).contains(q) || pkg.contains(q);
-                    row.setVisibility(hit ? View.VISIBLE : View.GONE);
-                }
-            }
-        });
-
-        ThemeStore.dialog(this).setTitle(T.s("关键应用名单")).setView(content).setNegativeButton(T.s("取消"), null)
-                .setPositiveButton(T.s("保存"), (d, w) -> {
-                    for (String pkg : selected) if (!rules.containsKey(pkg)) RuleStore.put(this, pkg, FreezeSlotStore.withoutSchedule());
-                    RuleStore.setKeyApps(this, selected); rebuild(); applyRules();
-                }).show();
+        candidates.addAll(RuleStore.keyApps(this));
+        Intent intent = new Intent(this, AppPickerActivity.class)
+                .putStringArrayListExtra(AppPickerActivity.EXTRA_PRESELECT,
+                        new ArrayList<String>(RuleStore.keyApps(this)))
+                .putStringArrayListExtra(AppPickerActivity.EXTRA_CANDIDATES, new ArrayList<String>(candidates))
+                .putExtra(AppPickerActivity.EXTRA_TITLE, T.s("关键应用名单"))
+                .putExtra(AppPickerActivity.EXTRA_HINT, T.s("不受学习闸门延长；自身时段和额度仍然生效"));
+        startActivityForResult(intent, REQ_KEY);
     }
     private void paintCount(TextView view, Set<String> selected, List<String> all) {
         if (view == null) return;

@@ -49,16 +49,35 @@ public final class AchievementActivity extends ThemedActivity {
         int open = Achievement.unlocked(items);
         body.addView(hero(open, items.size()), ui.gap(14));
 
-        LinearLayout list = ui.card();
-        body.addView(list, ui.gap(12));
-        for (int i = 0; i < items.size(); i++) {
-            if (i > 0) list.addView(ui.divider());
-            list.addView(row(items.get(i)));
+        String[][] groups = {
+                {"checkin.", Lang.t(this, "打卡", "Check-in")},
+                {"memory.", Lang.t(this, "记忆卡", "Memory")},
+                {"quiz.", Lang.t(this, "刷题", "Quizzes")},
+                {"memo.", Lang.t(this, "记录与复盘", "Notes & reviews")},
+        };
+        for (String[] group : groups) {
+            java.util.List<Achievement.Item> rows = new java.util.ArrayList<>();
+            for (Achievement.Item item : items) {
+                if (item.id.startsWith(group[0])) rows.add(item);
+                else if (group[0].equals("memo.") && (item.id.startsWith("journal.") || item.id.startsWith("love.")
+                        || item.id.startsWith("summary."))) rows.add(item);
+            }
+            if (rows.isEmpty()) continue;
+            TextView heading = ui.sub(group[1]);
+            heading.setTypeface(Typeface.DEFAULT_BOLD);
+            heading.setPadding(ui.dp(4), 0, ui.dp(4), ui.dp(7));
+            body.addView(heading);
+            LinearLayout list = ui.card();
+            body.addView(list, ui.gap(12));
+            for (int i = 0; i < rows.size(); i++) {
+                if (i > 0) list.addView(ui.divider());
+                list.addView(row(rows.get(i)));
+            }
         }
 
         TextView foot = ui.sub(Lang.t(this,
-                "成就从打卡历史里现算：删掉记录，对应的成就也会跟着退回去。没有「领取」这一步。",
-                "Achievements are derived from check-in history, so removing records rolls them back. There is nothing to claim."));
+                "成就从打卡、记忆卡、刷题、备忘录、日记、热爱奖励和周期总结里现算：删掉数据，对应成就也会退回去。没有「领取」这一步。",
+                "Achievements are derived from check-ins, memory, quizzes, notes, journals, rewards and cycle reviews. Removing data rolls them back; there is nothing to claim."));
         foot.setTextSize(11);
         foot.setPadding(ui.dp(4), 0, ui.dp(4), 0);
         body.addView(foot);

@@ -131,6 +131,20 @@ public final class CalendarDataTest {
         eq(43, some.get(2).percent(), "7-day badge at 3/7");
         ok(some.get(9).percent() == 1, "500 records badge nearly empty");
 
+        // 整体成就：覆盖打卡之外的模块，阈值与稳定 ID 都要钉住
+        Achievement.AppStats app = new Achievement.AppStats();
+        app.memoryCards = 25; app.memoryReviews = 300; app.quizAttempts = 200;
+        app.quizCorrect = 149; app.notes = 30; app.journals = 29;
+        app.loveCards = 10; app.summaries = 12;
+        List<Achievement.Item> overall = Achievement.app(app);
+        eq(8, overall.size(), "app achievement count");
+        eq(5, Achievement.unlocked(overall), "app achievements at mixed progress");
+        eq("memory.cards50", overall.get(0).id, "stable achievement id");
+        eq(50, overall.get(0).percent(), "25/50 memory cards");
+        eq(100, overall.get(1).percent(), "300 reviews unlocked");
+        eq(99, overall.get(3).percent(), "149/150 correct");
+        eq(97, overall.get(5).percent(), "29/30 journals");
+
         System.out.println("Calendar data: " + checks + " checks passed");
     }
 

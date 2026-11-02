@@ -48,8 +48,37 @@ final class AchievementCenter {
         return CalendarData.stats(CalendarData.days(spans, goals), StudyStore.today());
     }
 
+    /** 打卡之外的整体数据：每个模块单独兜底，任何一个文件坏了都不能把成就页拖垮。 */
+    private static Achievement.AppStats appStats(Context c) {
+        Achievement.AppStats stats = new Achievement.AppStats();
+        try {
+            MemoryData memory = MemoryStore.snapshot(c);
+            stats.memoryCards = memory.cards() == null ? 0 : memory.cards().length();
+            org.json.JSONArray logs = memory.db.optJSONArray("logs");
+            stats.memoryReviews = logs == null ? 0 : logs.length();
+        } catch (RuntimeException ignored) { }
+        try {
+            int[] quiz = QuizStore.snapshot(c).stats("");
+            stats.quizAttempts = quiz[0];
+            stats.quizCorrect = quiz[1];
+        } catch (RuntimeException ignored) { }
+        try { stats.notes = MemoStore.count(c); } catch (RuntimeException ignored) { }
+        try { stats.journals = JournalStore.total(c); } catch (RuntimeException ignored) { }
+        try {
+            CardData cards = CardStore.snapshot(c);
+            stats.loveCards = cards.earned() == null ? 0 : cards.earned().length();
+            org.json.JSONArray records = cards.summary(System.currentTimeMillis()).records();
+            for (int i = 0; i < records.length(); i++) {
+                if (records.optJSONObject(i) != null && records.optJSONObject(i).optLong("at") > 0) stats.summaries++;
+            }
+        } catch (RuntimeException ignored) { }
+        return stats;
+    }
+
     static List<Achievement.Item> items(Context c) {
-        return Achievement.all(stats(c));
+        List<Achievement.Item> out = new ArrayList<Achievement.Item>(Achievement.all(stats(c)));
+        out.addAll(Achievement.app(appStats(c)));
+        return out;
     }
 
     static int unlocked(Context c) {
@@ -71,14 +100,18 @@ final class AchievementCenter {
         List<Achievement.Item> all = items(c);
         SharedPreferences p = sp(c);
         Set<String> seen = p.getStringSet(K_SEEN, null);
+        // 旧版把翻译后的名字当身份；一旦切语言就会重复提醒。首次升级把这批旧值当基线，
+        // 不把「换了 ID 方案」误报成十几条新解锁。
+        boolean legacy = seen != null;
+        if (seen != null) for (String value : seen) if (value != null && value.indexOf('.') >= 0) legacy = false;
         Set<String> now = new HashSet<String>();
         List<Achievement.Item> fresh = new ArrayList<Achievement.Item>();
         for (Achievement.Item item : all) {
             if (!item.unlocked()) continue;
-            now.add(item.name);
-            if (seen != null && !seen.contains(item.name)) fresh.add(item);
+            now.add(item.id);
+            if (!legacy && seen != null && !seen.contains(item.id)) fresh.add(item);
         }
-        if (seen == null || !seen.equals(now)) {
+        if (seen == null || legacy || !seen.equals(now)) {
             p.edit().putStringSet(K_SEEN, now).apply();
         }
         return fresh;

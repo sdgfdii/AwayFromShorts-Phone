@@ -487,7 +487,7 @@ public final class CalendarActivity extends ThemedActivity {
         } else {
             editor = null;
             TextView off = new TextView(this);
-            off.setText(T.s("打卡日记已关闭。想在设置里打开，就在「打卡」一栏里。"));
+            off.setText(T.s("打卡日记已关闭，可在打卡历史的日历卡片里重新打开。"));
             off.setTextSize(11);
             off.setTextColor(ui.text3());
             off.setPadding(0, ui.dp(14), 0, 0);

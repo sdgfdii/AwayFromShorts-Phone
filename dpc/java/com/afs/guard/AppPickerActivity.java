@@ -46,9 +46,19 @@ public class AppPickerActivity extends ThemedActivity {
     public static final String EXTRA_PRESELECT = "preselect";
     /** 通用模式下的提示语（可选）。 */
     public static final String EXTRA_HINT = "hint";
+    /** 通用模式下的标题（可选）。 */
+    public static final String EXTRA_TITLE = "title";
+    /** 只在这些包名里选；不传则列出全部可启动应用。 */
+    public static final String EXTRA_CANDIDATES = "candidates";
+    /** 单选模式：点新的会自动取消旧的。 */
+    public static final String EXTRA_SINGLE = "single";
 
     private boolean raw;
     private ArrayList<String> preset;
+    private Set<String> candidates;
+    private String customTitle;
+    private boolean single, selectedOnly;
+    private TextView allChip, pickedChip;
 
     private static final class Entry {
         String label;
@@ -64,6 +74,7 @@ public class AppPickerActivity extends ThemedActivity {
     private TextView countLine, emptyLine, saveButton;
     /** 已选但没安装的包（默认三件套里常常缺两个），保存时要原样留住 */
     private int hiddenKept;
+    private final Set<String> hiddenPreset = new HashSet<>();
     private String query = "";
     private Ui look;
 
@@ -79,6 +90,10 @@ public class AppPickerActivity extends ThemedActivity {
         look = new Ui(this);
         raw = getIntent() != null && getIntent().hasExtra(EXTRA_PRESELECT);
         preset = raw ? getIntent().getStringArrayListExtra(EXTRA_PRESELECT) : null;
+        customTitle = getIntent() == null ? null : getIntent().getStringExtra(EXTRA_TITLE);
+        single = getIntent() != null && getIntent().getBooleanExtra(EXTRA_SINGLE, false);
+        ArrayList<String> only = getIntent() == null ? null : getIntent().getStringArrayListExtra(EXTRA_CANDIDATES);
+        candidates = only == null ? null : new HashSet<>(only);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -86,6 +101,7 @@ public class AppPickerActivity extends ThemedActivity {
 
         root.addView(header());
         root.addView(searchBox());
+        root.addView(filterBar());
         root.addView(listView(), new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         root.addView(footer());
@@ -130,7 +146,8 @@ public class AppPickerActivity extends ThemedActivity {
         box.addView(bar);
 
         TextView title = new TextView(this);
-        title.setText(raw ? T.s("选择应用") : T.s("选择要冻结的应用"));
+        title.setText(customTitle != null && !customTitle.trim().isEmpty()
+                ? customTitle : raw ? T.s("选择应用") : T.s("选择要冻结的应用"));
         title.setTextSize(24);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(look.text());
@@ -156,8 +173,8 @@ public class AppPickerActivity extends ThemedActivity {
         input.setTextSize(14);
         input.setTextColor(look.text());
         input.setHintTextColor(look.text3());
-        input.setBackground(look.round(look.surface(), 12f, look.line(), 1f));
-        input.setPadding(look.dp(14), look.dp(10), look.dp(14), look.dp(10));
+        input.setBackground(null);
+        input.setPadding(0, look.dp(10), look.dp(8), look.dp(10));
         input.setImeOptions(EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         input.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b, int c) {
@@ -171,26 +188,80 @@ public class AppPickerActivity extends ThemedActivity {
             public void afterTextChanged(Editable e) {
             }
         });
+        LinearLayout field = new LinearLayout(this);
+        field.setGravity(Gravity.CENTER_VERTICAL);
+        field.setPadding(look.dp(14), 0, look.dp(10), 0);
+        field.setBackground(look.round(look.surface(), 14f, look.line(), 1f));
+        TextView glyph = new TextView(this);
+        glyph.setText("⌕");
+        glyph.setTextSize(17);
+        glyph.setTextColor(look.text3());
+        glyph.setPadding(0, 0, look.dp(8), look.dp(1));
+        field.addView(glyph);
+        field.addView(input, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         LinearLayout wrap = new LinearLayout(this);
-        wrap.setPadding(look.dp(20), look.dp(8), look.dp(20), look.dp(8));
-        wrap.addView(input, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        wrap.setPadding(look.dp(20), look.dp(8), look.dp(20), look.dp(4));
+        wrap.addView(field, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, look.dp(48)));
         return wrap;
+    }
+
+    /** 两个筛选片：全部 / 已选。比再堆一排按钮更清楚，也不占列表高度。 */
+    private View filterBar() {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setPadding(look.dp(20), look.dp(4), look.dp(20), look.dp(10));
+        allChip = textChip(T.s("全部"), true);
+        pickedChip = textChip(T.s("已选"), false);
+        allChip.setOnClickListener(v -> setSelectedOnly(false));
+        pickedChip.setOnClickListener(v -> setSelectedOnly(true));
+        LinearLayout.LayoutParams first = new LinearLayout.LayoutParams(-2, look.dp(34));
+        first.rightMargin = look.dp(8);
+        bar.addView(allChip, first);
+        bar.addView(pickedChip, new LinearLayout.LayoutParams(-2, look.dp(34)));
+        return bar;
+    }
+
+    private TextView textChip(String value, boolean active) {
+        TextView chip = new TextView(this);
+        chip.setText(value);
+        chip.setTextSize(12);
+        chip.setGravity(Gravity.CENTER);
+        chip.setPadding(look.dp(16), 0, look.dp(16), 0);
+        chip.setTextColor(active ? look.onAccent() : look.text2());
+        chip.setBackground(look.round(active ? look.accent() : look.surface2(), 99f));
+        return chip;
+    }
+
+    private void setSelectedOnly(boolean only) {
+        selectedOnly = only;
+        if (allChip != null) {
+            allChip.setTextColor(only ? look.text2() : look.onAccent());
+            allChip.setBackground(look.round(only ? look.surface2() : look.accent(), 99f));
+        }
+        if (pickedChip != null) {
+            pickedChip.setTextColor(only ? look.onAccent() : look.text2());
+            pickedChip.setBackground(look.round(only ? look.accent() : look.surface2(), 99f));
+        }
+        applyFilter();
     }
 
     private View listView() {
         ListView list = new ListView(this);
-        list.setDivider(null);
-        list.setDividerHeight(0);
+        list.setDivider(new android.graphics.drawable.ColorDrawable(0x00000000));
+        list.setDividerHeight(look.dp(2));
         list.setClipToPadding(false);
         list.setBackground(look.round(look.surface(), 16f));
-        list.setPadding(look.dp(12), look.dp(6), look.dp(12), look.dp(6));
+        list.setPadding(look.dp(10), look.dp(6), look.dp(10), look.dp(6));
         list.setVerticalScrollBarEnabled(true);
         adapter = new Adapter();
         list.setAdapter(adapter);
         list.setOnItemClickListener((parent, view, pos, id) -> {
             Entry e = shown.get(pos);
-            e.checked = !e.checked;
+            boolean next = !e.checked;
+            if (single && next) {
+                for (Entry item : items) item.checked = false;
+            }
+            e.checked = next;
             // 勾完把已选的顶上去，选中的东西永远在上半屏
             Collections.sort(items, order());
             applyFilter();
@@ -240,6 +311,7 @@ public class AppPickerActivity extends ThemedActivity {
                     if (ri.activityInfo == null) continue;
                     String pkg = ri.activityInfo.packageName;
                     if (pkg == null || pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
+                    if (candidates != null && !candidates.contains(pkg)) continue;
                     Entry e = new Entry();
                     e.pkg = pkg;
                     e.label = String.valueOf(ri.loadLabel(pm));
@@ -260,10 +332,15 @@ public class AppPickerActivity extends ThemedActivity {
                 Set<String> names = new HashSet<>();
                 for (Entry e : found) names.add(e.pkg);
                 int hidden = 0;
+                hiddenPreset.clear();
                 if (!raw) {
                     for (String p : RuleStore.packages(AppPickerActivity.this)) {
                         if (!names.contains(p)) hidden++;
                     }
+                } else if (preset != null) {
+                    // 通用模式也要保住「已选但当前没装」的包，不能因为列表里看不见就丢掉。
+                    for (String p : preset) if (p != null && !p.isEmpty() && !names.contains(p)) hiddenPreset.add(p);
+                    hidden = hiddenPreset.size();
                 }
                 hiddenKept = hidden;
                 applyFilter();
@@ -283,6 +360,7 @@ public class AppPickerActivity extends ThemedActivity {
     private void applyFilter() {
         shown.clear();
         for (Entry e : items) {
+            if (selectedOnly && !e.checked) continue;
             if (query.isEmpty() || e.lower.contains(query)) shown.add(e);
         }
         if (adapter != null) adapter.notifyDataSetChanged();
@@ -329,6 +407,8 @@ public class AppPickerActivity extends ThemedActivity {
             for (String p : RuleStore.packages(this)) {
                 if (!installable.contains(p)) out.add(p);
             }
+        } else {
+            out.addAll(hiddenPreset);
         }
         for (Entry e : items) if (e.checked) out.add(e.pkg);
         // 由 MainActivity 决定"哪些是新增、哪些是移除"——
@@ -368,11 +448,13 @@ public class AppPickerActivity extends ThemedActivity {
                 row = new LinearLayout(AppPickerActivity.this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setGravity(Gravity.CENTER_VERTICAL);
-                row.setPadding(look.dp(8), look.dp(9), look.dp(8), look.dp(9));
+                row.setPadding(look.dp(12), look.dp(10), look.dp(10), look.dp(10));
 
                 icon = new ImageView(AppPickerActivity.this);
                 icon.setId(101);
-                row.addView(icon, new LinearLayout.LayoutParams(look.dp(42), look.dp(42)));
+                icon.setBackground(look.round(0xFFFFFFFF, 10f));
+                icon.setClipToOutline(true);
+                row.addView(icon, new LinearLayout.LayoutParams(look.dp(44), look.dp(44)));
 
                 LinearLayout middle = new LinearLayout(AppPickerActivity.this);
                 middle.setOrientation(LinearLayout.VERTICAL);
@@ -403,13 +485,19 @@ public class AppPickerActivity extends ThemedActivity {
                 tick.setId(104);
                 tick.setTextSize(13);
                 tick.setGravity(Gravity.CENTER);
-                row.addView(tick, new LinearLayout.LayoutParams(look.dp(26), look.dp(26)));
+                row.addView(tick, new LinearLayout.LayoutParams(look.dp(30), look.dp(30)));
             }
 
             Entry e = shown.get(pos);
             name.setText(e.label);
+            name.setTextColor(look.text());
+            name.setTypeface(e.checked ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
             pkg.setText(e.pkg);
             icon.setImageDrawable(e.icon);
+            row.setBackground(new android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf((look.accent() & 0x00ffffff) | 0x1F000000),
+                    look.round(e.checked ? ((look.accent() & 0x00ffffff) | 0x12000000) : 0x00000000, 14f),
+                    look.round(0xffffffff, 14f)));
             if (e.checked) {
                 tick.setText("✓");
                 tick.setTextColor(look.onAccent());

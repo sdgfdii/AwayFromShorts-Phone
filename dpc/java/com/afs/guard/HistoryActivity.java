@@ -221,6 +221,36 @@ public class HistoryActivity extends ThemedActivity {
         calendarHint.setTextSize(14);
         calendarHint.setPadding(0, dp(6), 0, dp(2));
         calendar.addView(calendarHint);
+
+        // 日记开关跟日历和日记放在一起；子行消费点击，不再触发整张卡片的跳转。
+        LinearLayout journalRow = new LinearLayout(this);
+        journalRow.setGravity(Gravity.CENTER_VERTICAL);
+        journalRow.setPadding(dp(12), dp(10), dp(12), dp(10));
+        journalRow.setBackground(look.round(SURFACE, 12f));
+        LinearLayout.LayoutParams journalLp = new LinearLayout.LayoutParams(-1, -2);
+        journalLp.topMargin = dp(10);
+        TextView journalTitle = new TextView(this);
+        journalTitle.setText(T.s("打卡日记"));
+        journalTitle.setTextSize(14);
+        journalTitle.setTextColor(TEXT);
+        journalRow.addView(journalTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView journalState = new TextView(this);
+        journalState.setTextSize(13);
+        journalRow.addView(journalState);
+        Runnable paintJournal = () -> {
+            boolean enabled = JournalStore.enabled(this);
+            journalState.setText(enabled ? T.s("已开启") : T.s("已关闭"));
+            journalState.setTextColor(enabled ? GREEN : TEXT3);
+            journalRow.setContentDescription(T.s("打卡日记") + " · " + journalState.getText());
+        };
+        journalRow.setOnClickListener(v -> {
+            boolean next = !JournalStore.enabled(this);
+            JournalStore.setEnabled(this, next);
+            paintJournal.run();
+            Toast.makeText(this, next ? T.s("打卡日记已打开") : T.s("打卡日记已关闭，已有的日记不会删"), Toast.LENGTH_SHORT).show();
+        });
+        calendar.addView(journalRow, journalLp);
+        paintJournal.run();
         calendar.setOnClickListener(v -> startActivity(new Intent(this, CalendarActivity.class)));
 
         LinearLayout weekly = card(body);

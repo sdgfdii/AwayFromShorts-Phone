@@ -104,17 +104,18 @@ public final class SettingsActivity extends ThemedActivity {
                 "断网名单里的应用默认全天断网，只有这个时段内自动放开；开关、名单和时段本身也只能在此时段内修改。默认每晚 22:00–23:00，和收束时段各自独立。",
                 "Apps in the cut-off list have no network by default and are released only inside this window. The switch, the list and this window itself can be changed only inside it. Default 22:00-23:00 nightly, independent of the focus window."));
 
-        /* ---------- 打卡 ---------- */
-        body.addView(groupTitle(Lang.t(this, "打卡", "Check-in")));
-        LinearLayout checkin = ui.card();
-        body.addView(checkin, ui.gap(10));
-        row(checkin, Lang.t(this, "打卡日记", "Journal"),
-                JournalStore.enabled(this) ? T.s("开") : T.s("关"), this::toggleJournal);
-        row(checkin, Lang.t(this, "成就", "Achievements"), AchievementCenter.summary(this),
+        /* ---------- 应用 ---------- */
+        body.addView(groupTitle(Lang.t(this, "应用", "App")));
+        LinearLayout app = ui.card();
+        body.addView(app, ui.gap(10));
+        row(app, Lang.t(this, "成就", "Achievements"), AchievementCenter.summary(this),
                 () -> startActivity(new Intent(this, AchievementActivity.class)));
-        addNote(checkin, Lang.t(this,
-                "日记一天一条，写不写都不影响打卡。存在本机，不跟着学习记录上传。打卡日历和打卡历史合并在一页，从打卡页底部的「历史」进去。",
-                "One note per day, optional. Stored locally and never uploaded. The calendar lives inside the history page now."));
+        row(app, Lang.t(this, "数据与备份", "Data & backup"),
+                Lang.t(this, "本地存储 / 云端配置", "Local storage / cloud sync"),
+                () -> startActivity(new Intent(this, DataManagementActivity.class)));
+        addNote(app, Lang.t(this,
+                "成就汇总打卡、记忆、刷题、笔记与日记。打卡日记开关已移到打卡历史的日历卡片。",
+                "Achievements span check-ins, memory, quizzes, notes and journals. The journal switch lives in the calendar card on the history page."));
 
         /* ---------- 权限 ---------- */
         body.addView(groupTitle(Lang.t(this, "权限体检", "Permissions")));
@@ -275,13 +276,6 @@ public final class SettingsActivity extends ThemedActivity {
                 })
                 .setNegativeButton(Lang.t(this, "取消", "Cancel"), null)
                 .show();
-    }
-
-    private void toggleJournal() {
-        boolean next = !JournalStore.enabled(this);
-        JournalStore.setEnabled(this, next);
-        toast(next ? T.s("打卡日记已打开") : T.s("打卡日记已关闭，已有的日记不会删"));
-        render();
     }
 
     private void checkUpdate() {

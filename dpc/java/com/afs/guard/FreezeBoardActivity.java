@@ -806,11 +806,42 @@ public class FreezeBoardActivity extends ThemedActivity {
         parent.setPadding(dp(16),dp(8),dp(16),dp(12));parent.addView(slider,new ViewGroup.LayoutParams(-1,dp(56)));
     }
     private void chooseDestination(String pkg) {
-        String[] labels = new String[slots.size()];
-        for (int i = 0; i < slots.size(); i++) labels[i] = timeTitle(slots.get(i).rule).replace('\n', ' ') + " · " + Rule.daysText(slots.get(i).rule.days);
-        AlertDialog dialog=ThemeStore.dialog(this).setTitle(Guard.labelOf(getPackageManager(), pkg)).setItems(labels, (d, which) -> moveApp(pkg, slots.get(which).id))
-                .setNeutralButton(" ",(d,w)->appDetails(pkg)).setNegativeButton(T.s("取消"), null).create();
-        dialog.setOnShowListener(d->dialogIcon(dialog,AlertDialog.BUTTON_NEUTRAL,T.s("当前状态 / 应用详情"),false));dialog.show();
+        Rule current = RuleStore.get(this, pkg);
+        int reason = Guard.blockReasonNow(this, pkg);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setClipToPadding(false);
+        LinearLayout sheet = new LinearLayout(this);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setPadding(dp(20), dp(3), dp(20), dp(8));
+        scroll.addView(sheet);
+        sheet.addView(appDetailHeader(pkg, reason));
+        panelGap(sheet, panelNote(current == null
+                ? T.s("还没安排冻结时段。选一个时段，应用会按这个时间自动冻结。")
+                : T.s("当前安排") + "\n" + timeTitle(current)));
+
+        final AlertDialog dialog = ThemeStore.dialog(this).setView(scroll)
+                .setNegativeButton(T.s("取消"), null).create();
+        sheet.addView(panelSection(T.s("移动到冻结时段")));
+        if (slots.isEmpty()) {
+            panelGap(sheet, panelNote(T.s("还没有冻结时段。先在冻结页设置里新建一个时间格。")));
+        } else {
+            for (int i = 0; i < slots.size(); i++) {
+                final FreezeSlotStore.Slot slot = slots.get(i);
+                String when = timeTitle(slot.rule);
+                String detail = Rule.daysText(slot.rule.days) + " · " + T.f("%d 个应用", FreezeSlotStore.members(slot, rules).size());
+                panelGap(sheet, panelAction("◷", look.accent(), when, detail, () -> {
+                    dialog.dismiss();
+                    moveApp(pkg, slot.id);
+                }));
+            }
+        }
+        sheet.addView(panelSection(T.s("应用")));
+        panelGap(sheet, panelAction("ⓘ", look.text2(), T.s("查看应用详情"),
+                T.s("当前状态、冻结规则和额度"), () -> {
+                    dialog.dismiss();
+                    appDetails(pkg);
+                }));
+        dialog.show();
     }
     /** 使用限额容器：一行 = 一个额度（一个格子）；共享就是同一个格子里放多个应用。 */
     private void usageCell(){
@@ -1022,7 +1053,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         mid.leftMargin=dp(8);mid.rightMargin=dp(8);
         metrics.addView(panelMetric(T.s("今日已用"),String.format(java.util.Locale.CHINA,"%.0f",used/60000.0),look.accent()),mid);
         metrics.addView(panelMetric(T.s("剩余"),String.valueOf(remain),remain>0?look.green():look.red()),new LinearLayout.LayoutParams(0,-2,1f));
-        sheet.addView(metrics);
+        sheet.addView(metrics, new LinearLayout.LayoutParams(-1, -2));
 
         TextView state=text(DailyQuotaStore.description(this,data,group),12,look.text2());
         state.setPadding(dp(4),dp(10),dp(4),dp(2));sheet.addView(state);
@@ -1245,10 +1276,12 @@ public class FreezeBoardActivity extends ThemedActivity {
                 reason == 0 ? look.green() : look.red());
         statusTitle.setTypeface(Typeface.DEFAULT_BOLD);
         statusBox.addView(statusTitle);
-        String why = reason == 2 ? T.s("20:00 后打卡没完成，学习联动会一直冻到打完；打完还要走完打卡罚时。")
+        String why = reason == 1 ? T.s("当前正好落在自身设置的冻结时段里，过点会自动放开。")
+                : reason == 2 ? T.s("20:00 后打卡没完成，学习联动会一直冻到打完；打完还要走完打卡罚时。")
                 : reason == 3 ? T.s("禁忌惩罚的延长冻结还没结束。")
                 : reason == 4 ? AppUsageQuota.status(this, pkg, rule, System.currentTimeMillis())
                 : reason == 5 ? DailyQuotaStore.status(this, pkg)
+                : reason == 6 ? T.s("钥匙应用的解锁条件还没达标。")
                 : rule == null ? T.s("这只应用还没加入冻结时段。") : T.s("当前不在任何冻结时段内。");
         TextView statusWhy = text(why, 12, look.text2());
         statusWhy.setLineSpacing(dp(3), 1f);
@@ -1258,14 +1291,14 @@ public class FreezeBoardActivity extends ThemedActivity {
 
         if (rule != null) {
             LinearLayout metrics = panelMetricRow();
-            metrics.addView(panelMetric(T.s("冻结安排"), rule.freeze ? T.f("%d 个时段", rule.windowCount()) : T.s("无定时"), look.text()),
+            metrics.addView(panelMetric(T.s("冻结安排"), rule.freeze ? T.f("%d 段", rule.windowCount()) : T.s("无定时"), look.text()),
                     new LinearLayout.LayoutParams(0, -2, 1f));
             LinearLayout.LayoutParams mid = new LinearLayout.LayoutParams(0, -2, 1f);
             mid.leftMargin = dp(8); mid.rightMargin = dp(8);
             metrics.addView(panelMetric(T.s("生效星期"), Rule.daysText(rule.days), look.text2()), mid);
             metrics.addView(panelMetric(T.s("每日额度"), group == null ? T.s("未设") : T.f("%d 分钟", group.optInt("minutes")),
                     group == null ? look.text3() : look.accent()), new LinearLayout.LayoutParams(0, -2, 1f));
-            sheet.addView(metrics);
+            sheet.addView(metrics, new LinearLayout.LayoutParams(-1, -2));
 
             sheet.addView(panelSection(T.s("规则详情")));
             panelGap(sheet, panelNote(T.s("自身时段") + "\n" + timeTitle(rule).replace('\n', ' ')
@@ -1494,7 +1527,9 @@ public class FreezeBoardActivity extends ThemedActivity {
 
     /** 断网名单、开关和调整时段本身都属于设置，只允许在断网调整时段内修改。 */
     private boolean netEditAllowed() {
-        return NetWindow.canEdit(this);
+        if (NetWindow.canEdit(this)) return true;
+        toast(T.f("断网设置只能在调整时段 %s 内修改", NetWindow.label(this)));
+        return false;
     }
 
     /** 断网设置：开关、名单、时段、连接方式；时段外仅可查看。 */

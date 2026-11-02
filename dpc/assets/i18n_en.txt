@@ -216,6 +216,7 @@
 %d 个词 · %d 个应用 · 已拦 %d 次	%d words · %d apps · %d blocked
 %d 分钟	%d min
 %d 条	%d rules
+%d 段	%d
 %d 项生效	%d active
 %s · 已用 %.1f / %d 分钟	%s · used %.1f / %d min
 .　	. 
@@ -1171,6 +1172,7 @@ yyyy年M月d日	MMM d, yyyy
 常规 · 6	Normal · 6
 并到另一个额度	Merge into another allowance
 并到另一个额度…	Merge into another quota…
+应用	App
 应用 	Apps: 
 应用　　　	Apps      
 应用会表现为转圈、超时，而不是弹「已断网」；视频类通常还会显示缓存过的内容。	Apps show spinners and timeouts rather than a "no internet" notice, and video apps still play cached content.
@@ -1214,6 +1216,7 @@ yyyy年M月d日	MMM d, yyyy
 当前卡库最多支持 30000 张卡片	The library holds at most 30000 cards
 当前只抽到期卡片。可在守卫 → 卡管理 → 记忆卡调整抽取设置。	Only due cards are drawn. Change that in Guard → Cards → Memory.
 当前可用	Available
+当前安排	Current schedule
 当前尚未获得设备所有者授权，应用冻结尚未生效。\n\n请在 Windows 电脑解压完整部署包，连接手机并开启 USB 调试，再双击“开始安装.cmd”。部署工具会检查账号、分身、多用户及管理状态。\n\n部分手机需要自行备份后恢复出厂；工具不会自动清机。	Device owner is not granted yet, so app freezing is inactive.\n\nOn a Windows PC, unzip the full deployment package, connect the phone with USB debugging on, and double-click “开始安装.cmd”. The tool checks accounts, clones, multi-user and management state.\n\nSome phones need a manual backup and factory reset; the tool never wipes a device on its own.
 当前已冻结，解冻后再调整额度	Frozen now; adjust the quota after it unfreezes
 当前已冻结，解冻后才能移动	Currently frozen; it can move once unfrozen
@@ -1221,11 +1224,13 @@ yyyy年M月d日	MMM d, yyyy
 当前方案：	Current plan: 
 当前无额外冻结	No extra freeze right now
 当前时间　	Current time  
+当前正好落在自身设置的冻结时段里，过点会自动放开。	It is inside its own freeze window right now; it opens automatically when the window ends.
 当前没有禁忌卡带来的延长冻结	No freeze extension from taboo cards right now
 当前没有设备所有者权限，只能拦住返回键，Home 拦不住。要真正锁住请先完成设备所有者部署。	Without device owner only the back key is blocked; Home still works. Provision device owner to really lock the phone.
 当前版本 	Current version 
 当前版本 %s，可以升到 %s。	Current version %s, you can upgrade to %s.
 当前状态 / 应用详情	Status / app details
+当前状态、冻结规则和额度	Status, freeze rules and allowance
 当前状态：	Current status: 
 当前系统未提供语音识别服务	No speech recognition service on this system
 当前系统版本不需要单独授权	This Android version does not need it
@@ -1609,6 +1614,7 @@ yyyy年M月d日	MMM d, yyyy
 查找标题和正文	Search titles and bodies
 查看与完成总结  ›	View and finish summaries  ›
 查看使用限制 ›	View limitations ›
+查看应用详情	View app details
 查看总结	View summary
 查看本轮结果	See session results
 查看答案与解析	Show answer and analysis
@@ -1887,6 +1893,7 @@ yyyy年M月d日	MMM d, yyyy
 移出冻结应用	Remove from frozen apps
 移出冻结时段要等收束时段 %s	Leaving the freeze window waits for the focus window %s
 移出冻结要等收束时段 %s	Unfreezing waits for the focus window %s
+移动到冻结时段	Move to a freeze window
 移动到笔记本	Move to notebook
 移除	Remove
 移除勾选框	Remove checkbox
@@ -2187,10 +2194,12 @@ yyyy年M月d日	MMM d, yyyy
 还有 	In 
 还没上传过	Never uploaded
 还没填	Empty
+还没安排冻结时段。选一个时段，应用会按这个时间自动冻结。	No freeze window yet. Pick one and the app will freeze automatically on that schedule.
 还没拉到电脑数据。电脑开着面板时每 15 分钟推一次，晚点再进来看。	No desktop data yet. It is pushed every 15 minutes while the panel is open on the PC; check back later.
 还没有「使用情况访问」权限\n\n	No usage access permission yet\n\n
 还没有上传过	Never uploaded
 还没有冻结时段\n在设置里新建时间格，再拖入应用	No freeze windows yet\nCreate a window in settings, then drag apps in
+还没有冻结时段。先在冻结页设置里新建一个时间格。	No freeze windows yet. Create a time slot in the freeze page settings first.
 还没有卡片。可手动添加，或导入每行一张的问答文本。	No cards yet. Add them by hand, or import one Q&A per line.
 还没有备忘录	No notes yet
 还没有学习目标	No study goals yet
@@ -2339,6 +2348,7 @@ yyyy年M月d日	MMM d, yyyy
 重置，改格子不清空已用时间。学习联动与禁忌惩罚继续生效。	 resets. Editing a quota does not clear time already used. Study-gate and taboo penalties still apply.
 钥匙应用	Key app
 钥匙应用未达标	Key app not enough yet
+钥匙应用的解锁条件还没达标。	The unlock condition for this key app has not been met.
 锁多久	Rest for
 锁屏	Lock screen
 锁机时这些应用照常可用	These apps stay usable during a lock

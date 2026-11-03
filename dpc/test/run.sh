@@ -49,9 +49,13 @@ if ! "$JAVAC" -encoding UTF-8 -nowarn --release 8 \
 fi
 
 # android.jar 里的 org.json 是编译桩（运行到就是 RuntimeException: Stub!）。
-# 运行时挂 gradle 缓存里的真实现 jar（只含 org.json 包，不影响其它桩类）；
-# 找不到时跳过 —— 依赖 JSON 的纯函数测试会失败，原因自明。
-JSON_JAR="$(ls "$HOME"/.gradle/caches/modules-2/files-2.1/org.json/json/*/e*/json-*.jar 2>/dev/null | head -1 || true)"
+# 运行时挂真实现 jar（只含 org.json 包，不影响其它桩类）；
+# 优先用仓库自带副本（test/libs），没有再找 gradle 缓存；
+# 都找不到时跳过 —— 依赖 JSON 的纯函数测试会失败，原因自明。
+JSON_JAR="$(ls test/libs/json-*.jar 2>/dev/null | head -1 || true)"
+if [ -z "$JSON_JAR" ]; then
+  JSON_JAR="$(ls "$HOME"/.gradle/caches/modules-2/files-2.1/org.json/json/*/e*/json-*.jar 2>/dev/null | head -1 || true)"
+fi
 if [ -n "$JSON_JAR" ] && command -v cygpath >/dev/null 2>&1; then
   JSON_JAR="$(cygpath -w "$JSON_JAR")"   # java.exe 吃不下 /c/... 形式的路径
 fi

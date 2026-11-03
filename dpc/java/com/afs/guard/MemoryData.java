@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -242,6 +243,68 @@ public final class MemoryData {
         }
         v.target = Math.min(p.optInt("target"), v.total);
         v.remaining = Math.max(0, v.target - v.done); return v;
+    }
+
+    /* ==================== 手动挑选今日队列 ==================== */
+
+    /** 今天结束前到期的已学卡：复习候选。分钟级重学卡也算，只要在今天内到期。 */
+    public List<JSONObject> dueCandidates(String deck, long now) {
+        List<JSONObject> out = new ArrayList<>();
+        Calendar end = Calendar.getInstance(); end.setTimeInMillis(now);
+        end.set(Calendar.HOUR_OF_DAY, 23); end.set(Calendar.MINUTE, 59);
+        end.set(Calendar.SECOND, 59); end.set(Calendar.MILLISECOND, 999);
+        long endOfDay = end.getTimeInMillis();
+        for (int i = 0; i < cards().length(); i++) {
+            JSONObject c = cards().optJSONObject(i);
+            if (c == null || !deck.equals(c.optString("deck")) || c.optInt("reps") == 0) continue;
+            long due = c.optLong("due");
+            if (due <= now || (c.optInt("state") != MemoryScheduler.REVIEW && due <= endOfDay)) out.add(c);
+        }
+        Collections.sort(out, new Comparator<JSONObject>() {
+            public int compare(JSONObject a, JSONObject b) { return Long.compare(a.optLong("due"), b.optLong("due")); }
+        });
+        return out;
+    }
+
+    /** 从未学过的新卡：新学候选，按入库顺序。 */
+    public List<JSONObject> newCandidates(String deck) {
+        List<JSONObject> out = new ArrayList<>();
+        for (int i = 0; i < cards().length(); i++) {
+            JSONObject c = cards().optJSONObject(i);
+            if (c != null && deck.equals(c.optString("deck")) && c.optInt("reps") == 0) out.add(c);
+        }
+        return out;
+    }
+
+    /**
+     * 手动挑选今日队列：复习 + 新学一起定，完全以勾选为准（不受 newLimit/reviewLimit 约束）。
+     * 开始答题前可反复重挑；一旦开了第一题，当日计划固定，只能明天再挑 —— 这是「目标不挪门柱」的另一半。
+     * 目标仍是学科的每日有效复习目标，但不超过挑出来的张数。
+     */
+    public void pickPlan(String deck, JSONArray chosen, long now) {
+        JSONObject d = deck(deck);
+        if (d == null || deleted(deck)) throw new IllegalArgumentException(T.s("学科不存在或已删除"));
+        JSONObject p = plan(deck, now);
+        if (p.optBoolean("started")) throw new IllegalArgumentException(T.s("今日队列已开始答题，挑选对下一次生效"));
+        Set<String> picked = new LinkedHashSet<>();
+        for (int i = 0; i < chosen.length(); i++) {
+            String id = chosen.optString(i);
+            JSONObject c = card(id);
+            if (c == null || !deck.equals(c.optString("deck")))
+                throw new IllegalArgumentException(T.s("有卡片不属于这个学科，请重试"));
+            picked.add(id);
+        }
+        int fresh = 0, review = 0;
+        JSONArray ids = new JSONArray();
+        for (String id : picked) {
+            if (card(id).optInt("reps") == 0) fresh++; else review++;
+            ids.put(id);
+        }
+        put(p, "ids", ids);
+        put(p, "target", Math.min(d.optInt("target", 20), ids.length()));
+        put(p, "newCount", fresh); put(p, "reviewCount", review);
+        put(p, "passed", new JSONArray());
+        p.remove("started");
     }
     public int pending(long now) {
         int n = 0;

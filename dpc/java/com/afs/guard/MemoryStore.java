@@ -24,6 +24,8 @@ import java.util.zip.ZipOutputStream;
 /** Private atomic JSON store; no network, no external storage permission. */
 public final class MemoryStore {
     private static MemoryData cache;
+    private static volatile long revision;
+    static long revision(){return revision;}
     private static String cachePath;
     private static String error = "";
     private static AtomicFile file(Context c) { return new AtomicFile(new File(c.getFilesDir(), "memory-v1.json")); }
@@ -44,6 +46,7 @@ public final class MemoryStore {
         return cache;
     }
     private static void save(Context c) {
+        revision++;
         FileOutputStream out = null;
         AtomicFile f = file(c);
         try {
@@ -67,6 +70,10 @@ public final class MemoryStore {
             if (day == null || day.optJSONObject(id) == null) { m.plan(id, now); changed = true; }
         }
         if (changed) save(c);
+    }
+    static synchronized LearningLink.Progress learningProgress(Context c) {
+        plans(c, System.currentTimeMillis());
+        return LearningLink.memoryFromData(c, data(c));
     }
     public static synchronized String error() { return error; }
     public static synchronized MemoryData snapshot(Context c) {
@@ -112,6 +119,10 @@ public final class MemoryStore {
     public static synchronized void deleteDeck(Context c,String id) {data(c).deleteDeck(id,System.currentTimeMillis());save(c);}
     public static synchronized void restoreDeck(Context c,String id) {data(c).restoreDeck(id);save(c);}
     public static synchronized int purgeDeck(Context c,String id) {int removed=data(c).purgeDeck(id);save(c);return removed;}
+    /** 手动挑选某学科今日的复习+新学队列；开答前可反复重挑。 */
+    public static synchronized void pickPlan(Context c, String deck, JSONArray chosen) {
+        data(c).pickPlan(deck, chosen, System.currentTimeMillis()); save(c);
+    }
     public static synchronized void saveCard(Context c, JSONObject card) { data(c).saveCard(card); save(c); }
     public static synchronized boolean rate(Context c, String id, int rating) {
         boolean credit = data(c).rate(id, rating, System.currentTimeMillis()); save(c); return credit;

@@ -26,11 +26,16 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /** Native embedded memory module. All card content stays text/native Canvas, never executable HTML. */
 public class MemoryActivity extends ThemedActivity {
     private static final int IMAGE = 51, TEXT = 52, EXPORT = 53, RESTORE = 54, AUTHOR = 55;
+    /** 挑选弹窗每段最多渲染的候选行数；多了靠搜索，全画会把弹窗卡死。 */
+    private static final int PICK_CAP = 200;
     private static final String[] AUTHOR_FORMATS = {"Markdown（按学科与题目标记）", "JSON（含脚本生成的 cards.json）", T.s("JSONL（每行一个对象）"), T.s("CSV（含表头）"), T.s("TSV（含表头）"), T.s("TXT / TSV（无表头，Tab 分列）")};
     private static final String[] AUTHOR_KEYS = {"md", "json", "jsonl", "csv", "tsv", "txt"};
     private int authorFormat, authorType;
@@ -49,6 +54,11 @@ public class MemoryActivity extends ThemedActivity {
     private boolean revealed, submitting, incorrect;
     private boolean flashMode;
     private boolean motionResumed;
+    private final java.util.ArrayList<Runnable> deferredUi=new java.util.ArrayList<>();
+    private void imageActive(boolean active){
+        if(editorImage!=null)editorImage.setPageActive(active);
+        if(studyImage!=null)studyImage.setPageActive(active);
+    }
     private SwipeCardView activeSwipe;
     private long workGeneration;
     private ProgressDialog workProgress;
@@ -60,13 +70,14 @@ public class MemoryActivity extends ThemedActivity {
         if(workProgress!=null){try{workProgress.dismiss();}catch(RuntimeException ignored){}workProgress=null;
             if(!isFinishing()&&!isDestroyed())setRequestedOrientation(workOrientation);}
     }
-    @Override protected void onDestroy(){clearPageWorkUi();super.onDestroy();}
+    @Override protected void onDestroy(){deferredUi.clear();handler.removeCallbacksAndMessages(null);clearPageWorkUi();super.onDestroy();}
     private boolean managementMode;
     private String flashDate = "";
+    private long homeRevision=-1;
     private final Handler handler = new Handler();
     private final Runnable queueTick = new Runnable() {
         public void run() {
-            if ("review".equals(page) && current == null) review();
+            if (motionResumed && "review".equals(page) && current == null) review();
         }
     };
     /** Runs after the swipe exit animation; a rated card must never come back into view. */
@@ -102,11 +113,14 @@ public class MemoryActivity extends ThemedActivity {
         out.putInt("authorFormat", authorFormat); out.putInt("authorType", authorType); out.putString("authorSubject", authorSubject);
         if (draft != null) out.putString("draft", draft.toString()); super.onSaveInstanceState(out);
     }
-    protected void onPause() { motionResumed=false;if(activeSwipe!=null)activeSwipe.cancelVisual();super.onPause(); handler.removeCallbacks(queueTick); handler.removeCallbacks(advanceTick); }
+    protected void onPause() { motionResumed=false;imageActive(false);if(workProgress!=null)workProgress.hide();if(activeSwipe!=null)activeSwipe.cancelVisual();super.onPause(); handler.removeCallbacks(queueTick); handler.removeCallbacks(advanceTick); }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);
         if("editor".equals(page)&&(intent.getBooleanExtra("from_bottom_nav",false)||intent.getBooleanExtra("open_learning",false))){ThemeStore.dialog(this).setTitle(T.s("离开卡片编辑？")).setMessage(T.s("尚未保存的修改会被放弃。")).setNegativeButton(T.s("继续编辑"),null).setPositiveButton(T.s("放弃并进入记忆"),(d,w)->{setIntent(intent);resetPageScroll();managementMode=false;home();}).show();return;}setIntent(intent);
         if(intent.getBooleanExtra("from_bottom_nav",false)||intent.getBooleanExtra("open_learning",false)){
-            resetPageScroll();pageScrollCache.clear();managementMode=false;handler.removeCallbacksAndMessages(null);home();
+            clearPageWorkUi();deferredUi.clear();
+            boolean reuse="home".equals(page)&&!managementMode&&!revealed&&!submitting
+                &&homeRevision==MemoryStore.revision()&&flashDate.equals(MemoryData.date(System.currentTimeMillis()));
+            resetPageScroll();pageScrollCache.clear();managementMode=false;handler.removeCallbacksAndMessages(null);if(!reuse)home();
         }else if(intent.getBooleanExtra(CardManagementActivity.EXTRA_MANAGE,false)){managementMode=true;tools();}
     }
     protected void onResume() {
@@ -114,9 +128,12 @@ public class MemoryActivity extends ThemedActivity {
         super.onResume();
         if (ui != null && ui.dark != Ui.isDark(this)) { recreate(); return; }
         FloatingNav.fullscreen(this);
+        imageActive(true);
+        if(workProgress!=null&&deferredUi.isEmpty())workProgress.show();
+        java.util.ArrayList<Runnable> ready=new java.util.ArrayList<>(deferredUi);deferredUi.clear();for(Runnable r:ready)r.run();
         // The card was already graded before the exit animation; resume must not show it again.
         if (submitting) { submitting = false; advance(); return; }
-        if ("home".equals(page) && !flashDate.equals(MemoryData.date(System.currentTimeMillis()))) { home(); return; }
+        if ("home".equals(page) && (homeRevision!=MemoryStore.revision()||!flashDate.equals(MemoryData.date(System.currentTimeMillis())))) { home(); return; }
         if ("review".equals(page) && current == null) handler.postDelayed(queueTick, 1000);
     }
     public void onBackPressed() {
@@ -203,7 +220,7 @@ public class MemoryActivity extends ThemedActivity {
     }
     private void home() {
         page = "home"; flashMode = true; draft = null; MemoryData m;
-        try { m = MemoryStore.flashSnapshot(this); } catch (RuntimeException e) { errorPage(e); return; }
+        try { m = MemoryStore.flashSnapshot(this); homeRevision=MemoryStore.revision(); } catch (RuntimeException e) { errorPage(e); return; }
         long now = System.currentTimeMillis(); flashDate = MemoryData.date(now);
         MemoryFlashcards.Progress p = MemoryFlashcards.progress(m, now);
         JSONObject next = MemoryFlashcards.next(m, now);
@@ -317,12 +334,102 @@ public class MemoryActivity extends ThemedActivity {
             LinearLayout row = new LinearLayout(this); box.addView(row);
             small(row, T.s("卡片"), v -> { deck = id; cards(false); });
             small(row, T.s("错题"), v -> { deck = id; cards(true); });
+            small(row, T.s("挑选"), v -> { deck = id; pickQueue(d); });
             small(row, T.s("设置"), v -> { deck = id; settings(d); });
         }
         button(body,T.s("学科回收站 · ")+m.deletedDecks().length(),false,v->subjectTrash());
         button(body, T.s("开源组件与许可证"), false, v -> license());
         hint(body, T.s("每天每张卡只计一次。新卡和遗忘卡须完成学习步骤后才计数。\n今日目标最多为今日队列数量。开始答题后，当日计划固定，设置次日生效。"));
     }
+    /**
+     * 挑选今日队列：复习候选（今天到期）+ 新学候选（从未学过）两段多选。
+     * 勾选状态记在集合里而不是只在复选框上——候选超过渲染上限时，
+     * 没显示出来的已选卡也不会在保存时丢掉。
+     */
+    private void pickQueue(JSONObject d) {
+        final String id = d.optString("id");
+        MemoryData m;
+        try { m = MemoryStore.snapshot(this); } catch (RuntimeException e) { toast(e.getMessage()); return; }
+        if (m.deleted(id)) { toast(T.s("学科已移入回收站")); return; }
+        long now = System.currentTimeMillis();
+        if (m.plan(id, now).optBoolean("started")) { toast(T.s("今日队列已开始答题，挑选对下一次生效")); return; }
+        final Set<String> checked = new LinkedHashSet<>();
+        JSONArray planIds = m.plan(id, now).optJSONArray("ids");
+        for (int i = 0; i < planIds.length(); i++) checked.add(planIds.optString(i));
+        final List<JSONObject> review = m.dueCandidates(id, now);
+        final List<JSONObject> fresh = m.newCandidates(id);
+
+        LinearLayout b = dialogBox();
+        EditText search = field(b, T.s("搜索题目或答案"), "", false);
+        final LinearLayout reviewBox = new LinearLayout(this); reviewBox.setOrientation(LinearLayout.VERTICAL); b.addView(reviewBox);
+        final LinearLayout freshBox = new LinearLayout(this); freshBox.setOrientation(LinearLayout.VERTICAL); b.addView(freshBox);
+        final TextView summary = hint(b, "");
+        hint(b, T.s("复习候选按到期先后，新学候选按入库顺序；每段最多显示 200 张，搜不到就缩小关键词。勾选即进今日队列，不受每日上限约束；开始答题后队列固定。"));
+
+        final Runnable paint = () -> {
+            String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
+            paintCandidates(reviewBox, review, q, checked, T.s("复习候选 · 今天到期"), summary);
+            paintCandidates(freshBox, fresh, q, checked, T.s("新学候选 · 从未学过"), summary);
+        };
+        search.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int c, int f) { }
+            public void onTextChanged(CharSequence s, int a, int b, int c) { paint.run(); }
+            public void afterTextChanged(Editable s) { }
+        });
+        paint.run();
+
+        ScrollView scroll = new ScrollView(this); scroll.addView(b);
+        AlertDialog dlg = ThemeStore.dialog(this).setTitle(d.optString("name") + T.s(" · 挑选今日卡片")).setView(scroll)
+                .setPositiveButton(T.s("保存队列"), null).setNeutralButton(T.s("清空选择"), null).setNegativeButton(T.s("取消"), null).create();
+        pageWorkDialogs.put(dlg, true);
+        dlg.setOnShowListener(ignored -> {
+            dlg.getButton(-1).setOnClickListener(v -> {
+                // 复习在前、新学在后：和自动挑选同一顺序，复习先清积压。
+                JSONArray ids = new JSONArray(); int reviewPicked = 0, freshPicked = 0;
+                for (JSONObject c : review) if (checked.contains(c.optString("id"))) { ids.put(c.optString("id")); reviewPicked++; }
+                for (JSONObject c : fresh) if (checked.contains(c.optString("id"))) { ids.put(c.optString("id")); freshPicked++; }
+                try {
+                    MemoryStore.pickPlan(this, id, ids);
+                    dlg.dismiss(); tools();
+                    toast(T.s("今日队列已更新 · 复习 ") + reviewPicked + T.s(" · 新学 ") + freshPicked);
+                } catch (RuntimeException e) { toast(e.getMessage()); }
+            });
+            dlg.getButton(-3).setOnClickListener(v -> { checked.clear(); paint.run(); });
+        });
+        dlg.show();
+    }
+
+    /** 渲染一段候选：命中数（含搜索过滤）写入段标题，最多画 cap 行；勾选状态进 checked 集合。 */
+    private void paintCandidates(LinearLayout host, List<JSONObject> candidates, String q,
+                                 Set<String> checked, String title, TextView summary) {
+        host.removeAllViews();
+        TextView head = new TextView(this); head.setTextSize(13); head.setTextColor(ui.text2());
+        head.setPadding(0, ui.dp(10), 0, ui.dp(2));
+        host.addView(head);
+        int matched = 0, rendered = 0;
+        for (JSONObject c : candidates) {
+            String hay = (c.optString("front") + " " + c.optString("answer")).toLowerCase(Locale.ROOT);
+            if (!q.isEmpty() && !hay.contains(q)) continue;
+            matched++;
+            if (rendered >= PICK_CAP) continue;
+            rendered++;
+            final String cid = c.optString("id");
+            String front = c.optString("front").replaceAll("\\s+", " ");
+            CheckBox check = new CheckBox(this);
+            check.setMaxLines(2); check.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            check.setText(front.length() > 80 ? front.substring(0, 80) + "…" : front);
+            check.setTextSize(13); check.setTextColor(ui.text());
+            check.setChecked(checked.contains(cid));
+            check.setOnCheckedChangeListener((g, on) -> {
+                if (on) checked.add(cid); else checked.remove(cid);
+                summary.setText(T.s("已选 ") + checked.size() + T.s(" 张"));
+            });
+            host.addView(check);
+        }
+        head.setText(title + " · " + matched + T.s(" 张") + (matched > PICK_CAP ? T.s("（显示前 ") + PICK_CAP + T.s(" 张，请用搜索缩小范围）") : ""));
+        summary.setText(T.s("已选 ") + checked.size() + T.s(" 张"));
+    }
+
     private void manageSubjects() {
         try {
             JSONArray active=MemoryStore.snapshot(this).activeDecks();
@@ -830,13 +937,15 @@ public class MemoryActivity extends ThemedActivity {
     }
     private interface Job { void run(java.util.function.Consumer<Runnable> resultUi) throws Exception; }
     private void work(String title, Job job) {
-        finishWorkUi();
+        deferredUi.clear();finishWorkUi();
         final long token=workGeneration;final View owner=body;
         workOrientation=getRequestedOrientation();
         setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED);
         workProgress=ProgressDialog.show(this,title,T.s("请稍候…"),true,false);
         java.util.function.Consumer<Runnable> post=action->runOnUiThread(()->{
-            if(token==workGeneration&&owner==body&&!isFinishing()&&!isDestroyed())action.run();
+            if(token==workGeneration&&owner==body&&!isFinishing()&&!isDestroyed()){
+                if(motionResumed)action.run();else deferredUi.add(()->{if(owner==body&&!isFinishing()&&!isDestroyed())action.run();});
+            }
         });
         new Thread(()->{
             try{job.run(post);}

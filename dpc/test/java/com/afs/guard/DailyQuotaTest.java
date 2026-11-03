@@ -44,9 +44,9 @@ public final class DailyQuotaTest {
         check(DailyQuotaData.moveInto(moveConfig,"missing",a)==-1,"moving into a missing group is refused");
         DailyQuotaData paused=new DailyQuotaData(config(false,ga,gb),added.usage.toString(),noon+120000);paused.advance(noon+180000,spans(span(a,noon+120000,noon+180000)),true);check(!paused.exceeded(a)&&paused.used(ga)==60000,"paused quota neither blocks nor counts");DailyQuotaData resumed=new DailyQuotaData(config(true,ga,gb),paused.usage.toString(),noon+180000);resumed.advance(noon+210000,spans(span(b,noon+180000,noon+210000)),true);check(resumed.used(ga)==60000&&resumed.used(gb)==60000,"resume retains ledger and excludes disabled gap");
         DailyQuotaData restart=new DailyQuotaData(config(true,ga,gb),resumed.usage.toString(),noon+210000);restart.advance(noon+240000,spans(span(b,noon+210000,noon+240000)),true);check(restart.used(gb)==90000,"restart continues from persisted watermark");
-        DailyQuotaData unreadable=new DailyQuotaData(config(true,ga,gb),"broken",noon);check(unreadable.exceeded(a)&&unreadable.exceeded(b),"corrupt ledger cannot grant another allowance");unreadable.advance(at(30,0,0,1),Collections.emptyList(),true);check(!unreadable.exceeded(a),"corrupt day's protective freeze clears on next day");
+        DailyQuotaData unreadable=new DailyQuotaData(config(true,ga,gb),"broken",noon);check(unreadable.exceeded(a)&&unreadable.exceeded(b),"corrupt ledger cannot grant another allowance");unreadable.advance(at(30,8,0,1),Collections.emptyList(),true);check(!unreadable.exceeded(a),"corrupt day's protective freeze clears on next quota day (8:00)");
         DailyQuotaData permission=new DailyQuotaData(config(true,ga),"{}",noon);permission.advance(noon+1000,Collections.emptyList(),false);check(permission.exceeded(a),"unreadable events protect enabled group");permission.advance(noon+2000,Collections.emptyList(),true);check(!permission.exceeded(a),"recovered permission clears transient protection");
-        long before=at(29,23,59,59),after=at(30,0,0,1);DailyQuotaData midnight=new DailyQuotaData(config(true,ga),"{}",before);midnight.advance(after,spans(span(a,before,after)),true);check(midnight.used(ga)==1000,"midnight counts only new day's part");
+        long before=at(30,7,59,59),after=at(30,8,0,1);DailyQuotaData midnight=new DailyQuotaData(config(true,ga),"{}",before);midnight.advance(after,spans(span(a,before,after)),true);check(midnight.used(ga)==1000,"quota-day roll at 8:00 counts only the new day's part");
         Rule afternoon=new Rule(Rule.ALL_DAYS,new int[][]{{12*60,13*60}},true,true);
         Map<String,Rule> scopes=new HashMap<>();scopes.put(a,afternoon);
         DailyQuotaData scoped=new DailyQuotaData(config(true,shared),"{}",at(29,11,59,0));
@@ -62,7 +62,8 @@ public final class DailyQuotaTest {
         check(scoped.used(shared)==retained+30000,"moving back to all-day resumes counting without resetting usage");
         Rule night=new Rule(Rule.ALL_DAYS,new int[][]{{23*60,60}},true,true);scopes.put(a,night);
         DailyQuotaData overnight=new DailyQuotaData(config(true,ga),"{}",at(29,23,59,59));overnight.advance(at(30,0,0,1),spans(span(a,at(29,23,59,59),at(30,0,0,1))),true,scopes);
-        check(overnight.used(ga)==1000,"overnight assigned scope counts only new-day part at midnight");
+        // 额度日是 8 点到 8 点：零点不再是账本边界，跨零点的整段都算同一个额度日
+        check(overnight.used(ga)==2000,"overnight slot keeps counting across midnight (quota day is 8-to-8)");
         check(DailyQuotaData.inScope(night,at(30,0,59,59))&&!DailyQuotaData.inScope(night,at(30,1,0,0)),"overnight allowance ends at its exact release boundary");
         for(long stamp:new long[]{at(29,12,0,0),at(29,21,0,0),at(29,23,0,0),at(29,3,0,0)})check(!DailyQuotaData.editable(calendar(stamp)),"quota config locked outside 22-23 "+stamp);
         for(long stamp:new long[]{at(29,22,0,0),at(29,22,59,59)})check(DailyQuotaData.editable(calendar(stamp)),"quota config editable inside 22-23 "+stamp);

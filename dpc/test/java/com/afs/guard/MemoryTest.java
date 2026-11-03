@@ -22,7 +22,7 @@ public final class MemoryTest {
     public static void main(String[] args) {
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
         upstreamVectors(); learning(); quotas(); queues(); backupValidation(); text(); gate();customSubjects();subjectDeletion();
-        planSettings();presets();
+        planSettings();presets();picking();
         System.out.println("Memory: " + count + " assertions passed");
     }
     private static void planSettings() {
@@ -257,6 +257,51 @@ public final class MemoryTest {
         check(m.progress(d, at + 180000).total == 1, "short learning steps retained across midnight");
         check(m.next(d, at + 180000) == null, "next-day learning still waits until exact due");
         check(m.next(d, at + 600000) != null, "next-day learning becomes available");
+    }
+    /** 手挑今日队列：候选划分、覆盖自动计划、开答后锁定、落盘重读。 */
+    private static void picking() {
+        long now = System.currentTimeMillis();
+        MemoryData m = new MemoryData(); String d = deck(m, 0);
+        JSONObject n0 = add(m, d, "new0"), n1 = add(m, d, "new1"), n2 = add(m, d, "new2"), other = null;
+        JSONObject r0 = add(m, d, "review0"), r1 = add(m, d, "review1");
+        prepareReview(m, r0.optString("id"), now);
+        prepareReview(m, r1.optString("id"), now);
+        MemoryData.put(m.card(r0.optString("id")), "due", now - 5000);   // r0 更早到期
+        MemoryData.put(m.card(r1.optString("id")), "due", now - 1000);
+        // 新卡入库顺序 = new0, new1, new2
+        check(m.newCandidates(d).size() == 3
+                && m.newCandidates(d).get(0).optString("front").equals("new0"), "new candidates follow import order");
+        check(m.dueCandidates(d, now).size() == 2
+                && m.dueCandidates(d, now).get(0).optString("front").equals("review0"), "due candidates earliest first");
+        // 另一学科的新卡不该混进来
+        MemoryData m2 = new MemoryData(); other = add(m2, deck(m2, 0), "elsewhere");
+        final MemoryData fm = m; final String fd = d, otherId = other.optString("id");
+        check(!fm.newCandidates(fd).stream().anyMatch(c -> c.optString("id").equals(otherId)), "candidates stay in their deck");
+
+        // 自动计划：新卡全进（默认上限 10），复习 2 张
+        MemoryData.Progress auto = m.progress(d, now);
+        check(auto.newCount == 3 && auto.reviewCount == 2, "auto plan baseline");
+        // 手挑：只要 1 张复习 + 2 张新学
+        JSONArray chosen = new JSONArray();
+        chosen.put(r1.optString("id")); chosen.put(n0.optString("id")); chosen.put(n2.optString("id"));
+        m.pickPlan(d, chosen, now);
+        MemoryData.Progress p = m.progress(d, now);
+        check(p.reviewCount == 1 && p.newCount == 2 && p.total == 3, "picked plan composition");
+        check(m.next(d, now).optString("front").equals("review1"), "review outranks new in queue");
+        // 重复 id 去重；落盘重读后原样
+        JSONArray dup = new JSONArray(); dup.put(n0.optString("id")); dup.put(n0.optString("id"));
+        m.pickPlan(d, dup, now);
+        check(m.progress(d, now).total == 1, "duplicate picks collapse");
+        MemoryData reloaded = new MemoryData(m.db.toString());
+        check(reloaded.progress(d, now).total == 1, "picked plan survives restart");
+        // 开答后锁定
+        m.pickPlan(d, chosen, now);
+        m.rate(n0.optString("id"), 3, now);
+        final MemoryData fm2 = m; final String fd2 = d, n0id = n0.optString("id");
+        reject(() -> { JSONArray x = new JSONArray(); x.put(n0id); fm2.pickPlan(fd2, x, now); }, "started plan cannot be re-picked");
+        // 不属于本学科的卡片被拒
+        final MemoryData fm3 = new MemoryData(m.db.toString()); final String fd3 = fd2;
+        reject(() -> { JSONArray x = new JSONArray(); x.put(otherId); fm3.pickPlan(fd3, x, now); }, "foreign card rejected");
     }
     private static void backupValidation() {
         MemoryData m = new MemoryData(); String d = deck(m, 0); JSONObject c = add(m, d, "restore me");

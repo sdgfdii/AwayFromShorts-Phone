@@ -2589,10 +2589,9 @@ yyyy年M月d日	MMM d, yyyy
 ；	; 
 ？	?
 📊 屏幕使用统计	📊 Screen time stats
-🔒 关键应用名单	🔒 Key apps
-🔒 关键应用名单 · 	🔒 Key apps · 
-🧊 全部冻结	🧊 All frozen
-🧊 冻结中 	🧊 Frozen 
+关键应用名单 · 	🔒 Key apps · 
+全部冻结	🧊 All frozen
+冻结中 	🧊 Frozen 
  · 跨设备	 · Shared
 ⇄ 跨设备设置	⇄ Shared quota settings
 ⇄ 设为跨设备共享	⇄ Share with PC

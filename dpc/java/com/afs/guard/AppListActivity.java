@@ -239,7 +239,7 @@ public class AppListActivity extends ThemedActivity {
         // 关键应用名单：由用户自己列，不做任何自动猜测。
         // 名单里的应用在学习目标没完成时只按自己的放行时段走，不会被闸门延长冻结。
         keyBtn = new Button(this);
-        keyBtn.setText(T.s("🔒 关键应用名单"));
+        keyBtn.setText(T.s("关键应用名单"));
         keyBtn.setAllCaps(false);
         keyBtn.setTextSize(14);
         keyBtn.setTextColor(0xFF4CAF50);
@@ -954,7 +954,7 @@ public class AppListActivity extends ThemedActivity {
                 }
                 boolean scheduled = Guard.blocked(RuleStore.get(this, r.pkg),
                         java.util.Calendar.getInstance());
-                r.state.setText((scheduled ? T.s("🧊 冻结中 ") : T.s("学习闸门冻结 "))
+                r.state.setText((scheduled ? T.s("冻结中 ") : T.s("学习闸门冻结 "))
                         + frostDur(now - since));
                 r.state.setTextColor(iceText);
                 r.state.setTypeface(Typeface.DEFAULT_BOLD);
@@ -1016,7 +1016,7 @@ public class AppListActivity extends ThemedActivity {
                         earliest = s;
                     }
                 }
-                g.state.setText(T.s("🧊 全部冻结")
+                g.state.setText(T.s("全部冻结")
                         + (earliest > 0 ? " " + frostDur(now - earliest) : ""));
                 g.state.setTextColor(iceText);
                 g.state.setTypeface(Typeface.DEFAULT_BOLD);
@@ -1057,7 +1057,7 @@ public class AppListActivity extends ThemedActivity {
         batchBtn.setTextColor(BRAND);
         batchBtn.setBackgroundColor(surface);
         batchBtn.setAlpha(1f);
-        keyBtn.setText(T.s("🔒 关键应用名单 · ") + RuleStore.keyApps(this).size() + T.s(" 个"));
+        keyBtn.setText(T.s("关键应用名单 · ") + RuleStore.keyApps(this).size() + T.s(" 个"));
         keyBtn.setTextColor(0xFF4CAF50);
         keyBtn.setBackgroundColor(surface);
         keyBtn.setAlpha(1f);

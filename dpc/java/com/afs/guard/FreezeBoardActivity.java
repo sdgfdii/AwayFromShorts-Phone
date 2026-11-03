@@ -896,7 +896,9 @@ public class FreezeBoardActivity extends ThemedActivity {
         labels.addView(text(title,15,look.text()));
         labels.addView(text(subtitle,11,look.text3()));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f);lp.leftMargin=dp(12);row.addView(labels,lp);
-        row.addView(text("›",18,look.text3()));
+        LineIcon chevron = new LineIcon(this, "›", look.text3());
+        chevron.setPadding(dp(6), dp(2), dp(6), dp(2));
+        row.addView(chevron, new LinearLayout.LayoutParams(dp(18), dp(18)));
         row.setOnClickListener(v->{dialog.dismiss();if(run!=null)run.run();});
         return row;
     }
@@ -1538,8 +1540,16 @@ public class FreezeBoardActivity extends ThemedActivity {
         row.setBackground(new android.graphics.drawable.RippleDrawable(
                 android.content.res.ColorStateList.valueOf((look.accent() & 0x00ffffff) | 0x22000000),
                 null, look.round(0xffffffff, 14)));
-        TextView icon = text(glyph, 15, 0xFFFFFFFF);
-        icon.setGravity(Gravity.CENTER);
+        View icon;
+        if (LineIcon.known(glyph)) {
+            LineIcon line = new LineIcon(this, glyph, 0xFFFFFFFF);
+            line.setPadding(dp(8), dp(8), dp(8), dp(8));
+            icon = line;
+        } else {
+            TextView glyphText = text(glyph, 15, 0xFFFFFFFF);
+            glyphText.setGravity(Gravity.CENTER);
+            icon = glyphText;
+        }
         icon.setBackground(look.round(color, 12f));
         row.addView(icon, new LinearLayout.LayoutParams(dp(34), dp(34)));
         LinearLayout labels = new LinearLayout(this);
@@ -1548,7 +1558,9 @@ public class FreezeBoardActivity extends ThemedActivity {
         labels.addView(text(title, 15, look.text()));
         if (subtitle != null) labels.addView(subtitle);
         row.addView(labels, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        row.addView(text("›", 18, look.text3()));
+        LineIcon chevron = new LineIcon(this, "›", look.text3());
+        chevron.setPadding(dp(6), dp(2), dp(6), dp(2));
+        row.addView(chevron, new LinearLayout.LayoutParams(dp(18), dp(18)));
         row.setOnClickListener(click);
         return row;
     }
@@ -1840,12 +1852,21 @@ public class FreezeBoardActivity extends ThemedActivity {
     private View panelAction(String glyph, int color, String title, String subtitle, Runnable run) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(12), dp(10), dp(12));
+        row.setPadding(dp(12), dp(12), dp(12), dp(12));
         row.setBackground(new android.graphics.drawable.RippleDrawable(
                 android.content.res.ColorStateList.valueOf((look.accent() & 0x00ffffff) | 0x1F000000),
                 look.round(look.surface2(), 16f), look.round(0xffffffff, 16f)));
-        TextView icon = text(glyph, 15, color);
-        icon.setGravity(Gravity.CENTER);
+        // 图标徽章：认得的字形走矢量图标（1.6dp 描边），认不得的还按文字画
+        View icon;
+        if (LineIcon.known(glyph)) {
+            LineIcon line = new LineIcon(this, glyph, color);
+            line.setPadding(dp(9), dp(9), dp(9), dp(9));
+            icon = line;
+        } else {
+            TextView glyphText = text(glyph, 15, color);
+            glyphText.setGravity(Gravity.CENTER);
+            icon = glyphText;
+        }
         icon.setBackground(look.round((color & 0x00ffffff) | 0x18000000, 12f));
         row.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));
         LinearLayout copy = new LinearLayout(this);
@@ -1859,7 +1880,9 @@ public class FreezeBoardActivity extends ThemedActivity {
             copy.addView(sub);
         }
         row.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
-        row.addView(text("›", 18, look.text3()));
+        LineIcon chevron = new LineIcon(this, "›", look.text3());
+        chevron.setPadding(dp(6), dp(2), dp(6), dp(2));
+        row.addView(chevron, new LinearLayout.LayoutParams(dp(18), dp(18)));
         row.setOnClickListener(v -> run.run());
         return row;
     }

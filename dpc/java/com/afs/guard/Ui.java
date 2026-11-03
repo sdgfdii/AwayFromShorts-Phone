@@ -231,6 +231,13 @@ public final class Ui {
         row.setGravity(Gravity.CENTER_VERTICAL);
 
         if(amap){row.addView(new AmapStyle.Icon(ctx,name,text()),new LinearLayout.LayoutParams(dp(24),dp(24)));}
+        else if(LineIcon.known(glyph)){
+            // 章节标记也走矢量图标：图形统一，眉题那一行才整得起来
+            LineIcon icon = new LineIcon(ctx, glyph, 0xFFFFFFFF);
+            icon.setPadding(dp(5), dp(5), dp(5), dp(5));
+            icon.setBackground(round(glyphBg, 7f));
+            row.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        }
         else {
         TextView icon = new TextView(ctx);
         icon.setText(glyph);

@@ -2630,3 +2630,42 @@ yyyy年M月d日	MMM d, yyyy
  张，请用搜索缩小范围）	, narrow the search)
 有卡片不属于这个学科，请重试	A card does not belong to this subject, please retry
 挑选	Pick
+今天没有该复习的卡片	No cards due today
+复习记录已保存，明天按遗忘曲线重新排队。	Progress saved; tomorrow's queue is rebuilt from the forgetting curve.
+所选学科里没有卡片。可在守卫 → 卡管理 → 记忆卡中添加学科、制作或导入卡片。	The selected subjects have no cards. Add a subject or import cards under Guard → Cards → Memory.
+到期的旧卡已经清完，今天的新学额度也用完了（每天新学 %d 张）。可在抽取设置里调整上限，或明天继续。	Due reviews are done and today's new-card allowance is used up (%d per day). Raise the limit in draw settings, or continue tomorrow.
+每天上限（1–1000 张）	Daily cap (1–1000 cards)
+每天新学上限（0–1000 张）	New cards per day (0–1000)
+队列按遗忘曲线排：到期的旧卡按「此刻还记得的概率」从低到高——忘得最厉害的先复习；旧卡不够时，用从没学过的新卡按入库顺序补位，每天最多补新学上限那么多张。\n没有随机、没有顺序规则，也没有「全部 / 仅到期」的池子：该复习什么由每张卡自己的 FSRS 到期时间决定。	The queue follows the forgetting curve: due cards go first, sorted by how likely you still remember them right now — the ones you have forgotten most come first. When due cards run out, never-studied cards fill in, in import order, up to the daily new-card allowance.\nThere is no random mode, no sequential mode and no all/due-only pool: what to review is decided by each card's own FSRS due date.
+保存并重排	Save and re-queue
+请填写 0–1000 的整数	Enter an integer from 0 to 1000
+今日怎样抽卡\n到期旧卡先来，按可提取率（此刻还记得的概率）从低到高排；新卡只在旧卡之后补位，数量受每天新学上限约束。旧规则（随机 / 顺序 / 全部池 / 仅到期池）已删除，抽取范围只剩学科选择。	How today's cards are picked\nDue cards come first, sorted by retrievability (the chance you still remember them) from low to high; new cards only fill in afterwards, capped by the daily new-card allowance. The old rules (random / sequential / all-pool / due-only pool) are gone; only the subject scope remains.
+记忆统计	Memory stats
+复习量、记住率与遗忘曲线。	Reviews, recall rate and the forgetting curve.
+现在的位置	Where you stand
+卡片 %d 张 · 已学 %d 张 · 今天到期 %d 张	%d cards · %d learned · %d due today
+今日已复习 %d 张 · 连续 %d 天	%d reviewed today · %d-day streak
+近 7 天记住率 %.0f%%（%d 次评分里记住 %d 次）	%.0f%% recall over 7 days (%d remembered out of %d ratings)
+近 14 天复习量	Reviews, last 14 days
+共 %d 张，最近 7 天 %d 张。红线是当天的记住率（评分“记住/轻松”占比），没有复习的日子不画点。	%d in total, %d in the last 7 days. The red line is that day's recall rate (share of Good/Easy ratings); days without reviews get no dot.
+未来 7 天到期	Due in the next 7 days
+今天含已逾期 %d 张；后面几天是 FSRS 排出来的到期日。柱太高就说明那天会积压。	%d due today including overdue; later bars are the FSRS due dates. A tall bar means a backlog that day.
+留存曲线 · 距离越久还记得吗	Retention curve · does it stick
+柱是这一档的复习次数，线是其中记住的比例。样本少于 3 次的档位不画点——一两张卡撑不起一条曲线。越往右掉得越快，说明间隔该缩短（把目标记忆率调高）。	Bars are review counts per gap bucket, the line is the share remembered. Buckets with fewer than 3 samples get no dot — one or two cards cannot make a curve. A steep drop on the right means intervals should be shorter (raise the target retention).
+记忆强度构成	Memory strength mix
+未学 %d 张 · 学习中 %d 张 · 稳定度 ≤7 天 %d 张 · 稳定度 >7 天 %d 张	%d new · %d learning · %d with stability ≤7 days · %d above 7 days
+稳定度是 FSRS 认为这张卡能撑多久。>7 天的越多，说明长期记忆越扎实。	Stability is how long FSRS expects a card to hold. More cards above 7 days means firmer long-term memory.
+各学科今天到期	Due today by subject
+统计只读：不会改动卡片状态。曲线里的每一次评分都来自日志，删掉学科会一并从曲线里消失。	Read-only: card states are untouched. Every rating in these curves comes from the log, and deleting a subject removes it from the curves too.
+抽取设置  ·  按遗忘曲线  ·  	Draw settings · forgetting curve · 
+ 张/天	 cards/day
+ ·  新学 	 · new 
+到期旧卡按遗忘风险排序，新卡按新学上限补位。	Due cards are ordered by forgetting risk; new cards fill in up to the daily limit.
+记忆统计  ·  曲线	Memory stats · curves
+ · 	 · 
+\n到期旧卡按遗忘风险排序，新卡按新学上限补位。	\nDue cards are ordered by forgetting risk; new cards fill in up to the daily limit.
+图表，共 	Chart, 
+ 项，最高 	 points, peak 
+，含趋势线	 with a trend line
+新学上限请填写 0–1000	New-card limit must be between 0 and 1000
+↑ 上滑＝记住　·　↓ 下滑＝忘了	↑ swipe up = remembered   ·   ↓ swipe down = forgot

@@ -86,12 +86,9 @@ public final class MemoryStore {
         if (!before.equals(m.db.optJSONObject("flashcards").toString())) save(c);
         return new MemoryData(m.db.toString());
     }
-    public static synchronized void configureFlashcards(Context c, JSONArray subjects, int count, String mode) {
-        configureFlashcards(c, subjects, count, mode, MemoryFlashcards.POOL_ALL);
-    }
-    public static synchronized void configureFlashcards(Context c, JSONArray subjects, int count, String mode, String pool) {
+    public static synchronized void configureFlashcards(Context c, JSONArray subjects, int count, int newLimit) {
         MemoryData candidate = new MemoryData(data(c).db.toString());
-        MemoryFlashcards.configure(candidate, subjects, count, mode, pool, System.currentTimeMillis());
+        MemoryFlashcards.configure(candidate, subjects, count, newLimit, System.currentTimeMillis());
         cache = candidate; save(c);
     }
     public static synchronized void rateFlashcard(Context c, String id, int rating, String date) {

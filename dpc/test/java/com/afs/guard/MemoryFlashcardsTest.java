@@ -6,6 +6,10 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.TimeZone;
 
+/**
+ * 抽取规则已从「随机 / 顺序 / 全部池 / 仅到期池」换成遗忘曲线排序：
+ * 到期旧卡按可提取率升序，新卡按入库顺序补位并受新学上限约束。
+ */
 public final class MemoryFlashcardsTest {
     private static int count;
     private static final long NOW = 1792893600000L;
@@ -24,135 +28,101 @@ public final class MemoryFlashcardsTest {
     }
     public static void main(String[] args) {
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
-        sequence(); random(); changes(); validation(); pool();
+        forgettingOrder(); newLimitGate(); migration(); validation();
         System.out.println("Memory flashcards: " + count + " assertions passed");
     }
-    private static void due(MemoryData m, String id, long when) {
+    private static void due(MemoryData m, String id, long when, double stability, long last, int state) {
         JSONObject c = m.card(id);
-        MemoryData.put(c, "reps", 1); MemoryData.put(c, "state", MemoryScheduler.REVIEW);
-        MemoryData.put(c, "stability", 3); MemoryData.put(c, "difficulty", 5);
-        MemoryData.put(c, "last", when - MemoryScheduler.DAY); MemoryData.put(c, "due", when);
+        MemoryData.put(c, "reps", 1); MemoryData.put(c, "state", state);
+        MemoryData.put(c, "stability", stability); MemoryData.put(c, "difficulty", 5);
+        MemoryData.put(c, "last", last); MemoryData.put(c, "due", when);
     }
-    private static void pool() {
+    /** 忘得最厉害的先来：可提取率低的排在前面，学习步直接排最前。 */
+    private static void forgettingOrder() {
         MemoryData m = new MemoryData(); String d = deck(m, 0);
-        add(m, d, "new card");
-        String late = add(m, d, "due later"), early = add(m, d, "due early"), future = add(m, d, "future");
-        due(m, early, NOW - 2 * 3600000L); due(m, late, NOW - 3600000L); due(m, future, NOW + 3 * MemoryScheduler.DAY);
-        MemoryFlashcards.configure(m, selected(d), 20, "sequence", MemoryFlashcards.POOL_DUE, NOW);
-        check(MemoryFlashcards.POOL_DUE.equals(MemoryFlashcards.pool(m)), "due pool stored");
+        String strong = add(m, d, "strong"), weak = add(m, d, "weak"), learning = add(m, d, "learning");
+        String future = add(m, d, "future");
+        due(m, strong, NOW - 3600000L, 10, NOW - 5 * MemoryScheduler.DAY, MemoryScheduler.REVIEW);
+        due(m, weak, NOW - 3600000L, 2, NOW - 5 * MemoryScheduler.DAY, MemoryScheduler.REVIEW);
+        due(m, learning, NOW - 60000L, 1, NOW - 600000L, MemoryScheduler.LEARNING);
+        due(m, future, NOW + 3 * MemoryScheduler.DAY, 10, NOW - MemoryScheduler.DAY, MemoryScheduler.REVIEW);
+        MemoryFlashcards.configure(m, selected(d), 20, 0, NOW);
+        check(MemoryFlashcards.newLimit(m) == 0, "new limit stored");
         JSONArray ids = MemoryFlashcards.session(m, NOW).optJSONArray("ids");
-        check(ids.length() == 2, "due pool excludes new and future cards");
-        check(early.equals(ids.optString(0)) && late.equals(ids.optString(1)), "due pool is ascending by due");
-        check(early.equals(MemoryFlashcards.next(m, NOW).optString("id")), "oldest due comes first");
+        check(ids.length() == 3, "future card and new cards excluded when new limit is 0");
+        check(learning.equals(ids.optString(0)), "learning step comes first");
+        check(weak.equals(ids.optString(1)), "lower stability is more forgotten and comes first");
+        check(strong.equals(ids.optString(2)), "higher retrievability comes last");
+        check(MemoryScheduler.retrievability(2, NOW - 5 * MemoryScheduler.DAY, NOW)
+                < MemoryScheduler.retrievability(10, NOW - 5 * MemoryScheduler.DAY, NOW), "retrievability drops with stability");
         rate(m, 3, NOW);
-        check(late.equals(MemoryFlashcards.next(m, NOW).optString("id")), "graded card leaves the due queue");
+        check(weak.equals(MemoryFlashcards.next(m, NOW).optString("id")), "graded card leaves the queue");
+        rate(m, 1, NOW); rate(m, 3, NOW);
+        check(MemoryFlashcards.next(m, NOW) == null, "queue finishes");
+        check(MemoryFlashcards.progress(m, NOW).done == 3, "forgotten card still counts as reviewed");
+        check(m.card(weak).optInt("lapses") == 1, "forgotten card enters wrong book");
+    }
+    /** 新卡按入库顺序补位，且不超过每天新学上限；上限 0 表示只复习。 */
+    private static void newLimitGate() {
+        MemoryData m = new MemoryData(); String d = deck(m, 0);
+        String[] order = new String[30];
+        for (int i = 0; i < order.length; i++) order[i] = add(m, d, "word " + i);
+        MemoryFlashcards.configure(m, selected(d), 10, 3, NOW);
+        JSONArray ids = MemoryFlashcards.session(m, NOW).optJSONArray("ids");
+        check(ids.length() == 3, "new limit caps the queue");
+        check(order[0].equals(ids.optString(0)) && order[1].equals(ids.optString(1)) && order[2].equals(ids.optString(2)),
+                "new cards follow import order");
+        MemoryFlashcards.configure(m, selected(d), 10, 1000, NOW);
+        check(MemoryFlashcards.session(m, NOW).optJSONArray("ids").length() == 10, "daily cap still wins over new limit");
+        check(MemoryFlashcards.progress(m, NOW).requested == 10, "progress reports the daily cap");
+        MemoryFlashcards.configure(m, selected(d), 4, 2, NOW);
+        check(MemoryFlashcards.session(m, NOW).optJSONArray("ids").length() == 2, "new limit caps below the daily cap");
+        // 记过一张之后，队列重排时它不会再出现
         rate(m, 3, NOW);
-        check(MemoryFlashcards.next(m, NOW) == null, "due queue finishes");
-
-        MemoryData r = new MemoryData(); String dr = deck(r, 0);
-        String[] order = new String[5];
-        for (int i = 0; i < order.length; i++) {
-            order[i] = add(r, dr, "due " + i);
-            due(r, order[i], NOW - (order.length - i) * 60000L);
-        }
-        MemoryFlashcards.configure(r, selected(dr), 5, "random", MemoryFlashcards.POOL_DUE, NOW);
-        JSONArray rid = MemoryFlashcards.session(r, NOW).optJSONArray("ids");
-        check(rid.length() == 5, "due pool keeps all due cards");
-        boolean ascending = true;
-        for (int i = 1; i < rid.length(); i++)
-            if (r.card(rid.optString(i)).optLong("due") < r.card(rid.optString(i - 1)).optLong("due")) ascending = false;
-        check(ascending, "due pool ignores the random shuffle");
-
-        MemoryData empty = new MemoryData(); String de = deck(empty, 0); add(empty, de, "only new");
-        MemoryFlashcards.configure(empty, selected(de), 20, "random", MemoryFlashcards.POOL_DUE, NOW);
-        check(MemoryFlashcards.next(empty, NOW) == null, "empty due pool yields no card");
-        check(MemoryFlashcards.progress(empty, NOW).total == 0, "empty due pool has no progress");
-        MemoryFlashcards.configure(empty, selected(de), 20, "random", MemoryFlashcards.POOL_ALL, NOW);
-        check(MemoryFlashcards.next(empty, NOW) != null, "switching back to all restores cards");
-
-        MemoryData legacy = new MemoryData(); String dl = deck(legacy, 0);
-        String only = add(legacy, dl, "legacy card");
-        MemoryFlashcards.configure(legacy, selected(dl), 20, "random", NOW);
-        check(MemoryFlashcards.POOL_ALL.equals(MemoryFlashcards.pool(legacy)), "default pool is all");
-        check(only.equals(MemoryFlashcards.next(legacy, NOW).optString("id")), "all pool includes new cards");
-        JSONObject stored = MemoryData.copy(legacy.db);
-        stored.optJSONObject("flashcards").optJSONObject("settings").remove("pool");
-        MemoryData old = new MemoryData(stored.toString());
-        check(MemoryFlashcards.POOL_ALL.equals(MemoryFlashcards.pool(old)), "missing pool reads as all");
-        check(MemoryFlashcards.next(old, NOW) != null, "missing pool keeps old behaviour");
-        reject(() -> MemoryFlashcards.configure(legacy, selected(dl), 20, "random", "bad", NOW),
-                "invalid pool rejected on save");
-        JSONObject badPool = MemoryData.copy(legacy.db);
-        MemoryData.put(badPool.optJSONObject("flashcards").optJSONObject("settings"), "pool", "bad");
-        reject(() -> new MemoryData(badPool.toString()), "persisted invalid pool rejected");
+        MemoryData copy = new MemoryData(m.db.toString());
+        check(copy.cards().length() == 30, "backup roundtrip keeps cards");
+        check(MemoryFlashcards.next(copy, NOW).optString("id").equals(order[1]), "completed new card not repeated");
     }
-    private static void sequence() {
-        MemoryData m = new MemoryData(); String en = deck(m, 0), med = deck(m, 1);
-        String a = add(m, en, "a"), b = add(m, med, "b"), c = add(m, en, "c"), d = add(m, med, "d");
-        MemoryFlashcards.configure(m, selected(en, med), 2, "sequence", NOW);
-        check(MemoryFlashcards.session(m, NOW).optJSONArray("ids").toString().equals(selected(a, b).toString()), "insertion order across subjects");
-        reject(() -> m.rateFlashcard(b, 4, NOW, MemoryData.date(NOW)), "cannot skip queue order");
-        reject(() -> m.rateFlashcard(a, 0, NOW, MemoryData.date(NOW)), "invalid rating rejected");
-        check(MemoryFlashcards.progress(m, NOW).done == 0 && m.card(a).optInt("reps") == 0, "failed rating has no progress");
-        rate(m, 3, NOW);
-        check(MemoryFlashcards.next(m, NOW).optString("id").equals(b), "GOOD advances without minute wait");
-        reject(() -> m.rateFlashcard(a, 4, NOW, MemoryData.date(NOW)), "same-day duplicate rejected");
-        rate(m, 1, NOW);
-        check(MemoryFlashcards.next(m, NOW) == null, "daily set finishes");
-        check(m.card(b).optInt("lapses") == 1, "forgotten card enters wrong book");
-        check(m.card(a).optInt("reps") == 1, "FSRS state updated");
-        check(MemoryFlashcards.progress(m, NOW).done == 2, "all graded cards count as reviewed, not mastered");
-        long tomorrow = NOW + MemoryScheduler.DAY;
-        check(MemoryFlashcards.session(m, tomorrow).optJSONArray("ids").toString().equals(selected(c, d).toString()), "sequence continues tomorrow");
-        check(MemoryFlashcards.progress(m, tomorrow).done == 0, "daily count resets");
-        reject(() -> m.rateFlashcard(c, 3, tomorrow, MemoryData.date(NOW)), "stale midnight UI rejected");
-        rate(m, 4, tomorrow); rate(m, 4, tomorrow);
-        check(MemoryFlashcards.next(m, tomorrow + MemoryScheduler.DAY).optString("id").equals(a), "sequence wraps around");
-    }
-    private static void random() {
-        MemoryData m = new MemoryData(); String en = deck(m, 0), med = deck(m, 1); Set<String> expected = new HashSet<>();
-        for (int i = 0; i < 40; i++) expected.add(add(m, en, "word " + i));
-        String excluded = add(m, med, "excluded"); MemoryFlashcards.configure(m, selected(en), 12, "random", NOW);
-        JSONArray ids = MemoryFlashcards.session(m, NOW).optJSONArray("ids"); check(ids.length() == 12, "requested count");
-        Set<String> actual = new HashSet<>();
-        for (int i = 0; i < ids.length(); i++) { check(expected.contains(ids.optString(i)), "only selected subjects"); actual.add(ids.optString(i)); }
-        check(actual.size() == 12 && !actual.contains(excluded), "no duplicates or other subjects");
-        String fixed = ids.toString(); MemoryData restored = new MemoryData(m.db.toString());
-        check(MemoryFlashcards.session(restored, NOW + 1000).optJSONArray("ids").toString().equals(fixed), "restart does not reshuffle");
-        rate(restored, 4, NOW); MemoryData again = new MemoryData(restored.db.toString());
-        check(MemoryFlashcards.progress(again, NOW).done == 1, "progress survives restart");
-        check(!MemoryFlashcards.next(again, NOW).optString("id").equals(ids.optString(0)), "completed card not repeated");
-        MemoryFlashcards.configure(again, selected(en), 100, "sequence", NOW);
-        check(MemoryFlashcards.progress(again, NOW).total == 39, "short bank caps quantity and redraw excludes completed cards");
-        check(MemoryFlashcards.progress(again, NOW).reviewedToday == 1, "redraw preserves cumulative progress");
-    }
-    private static void changes() {
-        MemoryData m = new MemoryData(); String a = deck(m, 0), b = deck(m, 1);
-        check(MemoryFlashcards.progress(m, NOW).total == 0, "empty bank safe"); String first = add(m, a, "first");
-        check(MemoryFlashcards.next(m, NOW).optString("id").equals(first), "empty set refreshes after adding cards");
-        add(m, b, "second"); MemoryFlashcards.configure(m, selected(a, b), 20, "sequence", NOW); m.deleteDeck(a, NOW);
-        check(!MemoryFlashcards.next(m, NOW).optString("deck").equals(a), "trashed subject skipped");
-        check(MemoryFlashcards.progress(m, NOW).total == 1, "trashed subject removed from denominator");
-        m.restoreDeck(a); check(MemoryFlashcards.progress(m, NOW).total == 2, "restore preserves queue safely");
-        rate(m, 2, NOW); rate(m, 1, NOW); MemoryFlashcards.configure(m, selected(a, b), 20, "random", NOW);
-        check(MemoryFlashcards.next(m, NOW) == null, "fully reviewed bank does not repeat after redraw");
-        long tomorrow = NOW + MemoryScheduler.DAY;
-        check(MemoryFlashcards.next(m, tomorrow) != null, "full bank includes future scheduled reviews");
-        rate(m, 3, tomorrow); check(MemoryFlashcards.progress(m, tomorrow).done == 1, "custom review can grade future cards");
+    /** 老数据里的随机/顺序/池子不再影响抽取，写回时被清掉。 */
+    private static void migration() {
+        MemoryData m = new MemoryData(); String d = deck(m, 0);
+        String first = add(m, d, "one"), second = add(m, d, "two");
+        JSONObject legacy = MemoryData.copy(m.db);
+        JSONObject root = new JSONObject();
+        JSONObject settings = new JSONObject();
+        MemoryData.put(settings, "count", 5); MemoryData.put(settings, "mode", "sequence");
+        MemoryData.put(settings, "pool", "due"); MemoryData.put(settings, "subjects", selected(d));
+        MemoryData.put(root, "settings", settings); MemoryData.put(legacy, "flashcards", root);
+        MemoryData old = new MemoryData(legacy.toString());
+        check(MemoryFlashcards.count(old) == 5, "legacy count survives");
+        check(MemoryFlashcards.newLimit(old) == MemoryFlashcards.DEFAULT_NEW_LIMIT, "missing new limit falls back to default");
+        check(first.equals(MemoryFlashcards.next(old, NOW).optString("id")), "legacy mode/pool no longer decides the order");
+        MemoryFlashcards.configure(old, selected(d), 6, 4, NOW);
+        JSONObject saved = old.db.optJSONObject("flashcards").optJSONObject("settings");
+        check(!saved.has("mode") && !saved.has("pool"), "saving drops the removed rules");
+        check(saved.optInt("count") == 6 && saved.optInt("newLimit") == 4, "new settings persisted");
+        check(second.equals(MemoryFlashcards.session(old, NOW).optJSONArray("ids").optString(1)), "import order kept after migration");
     }
     private static void validation() {
         MemoryData m = new MemoryData(); String en = deck(m, 0);
-        reject(() -> MemoryFlashcards.configure(m, selected(), 20, "random", NOW), "subject required");
-        reject(() -> MemoryFlashcards.configure(m, selected(en), 0, "random", NOW), "zero count");
-        reject(() -> MemoryFlashcards.configure(m, selected(en), 1001, "random", NOW), "count bound");
-        reject(() -> MemoryFlashcards.configure(m, selected("missing"), 20, "random", NOW), "unknown subject");
-        reject(() -> MemoryFlashcards.configure(m, selected(en), 20, "bad", NOW), "unknown mode");
-        add(m, en, "a"); MemoryFlashcards.configure(m, selected(en), 1, "sequence", NOW);
-        check(new MemoryData(m.db.toString()).cards().length() == 1, "new backup roundtrip");
-        JSONObject duplicate = MemoryData.copy(m.db); JSONArray ids = duplicate.optJSONObject("flashcards").optJSONObject("session").optJSONArray("ids"); ids.put(ids.optString(0));
-        reject(() -> new MemoryData(duplicate.toString()), "duplicate backup queue rejected");
-        JSONObject bad = MemoryData.copy(m.db); MemoryData.put(bad.optJSONObject("flashcards").optJSONObject("settings"), "count", -1);
+        reject(() -> MemoryFlashcards.configure(m, selected(), 20, 10, NOW), "subject required");
+        reject(() -> MemoryFlashcards.configure(m, selected(en), 0, 10, NOW), "zero count");
+        reject(() -> MemoryFlashcards.configure(m, selected(en), 1001, 10, NOW), "count bound");
+        reject(() -> MemoryFlashcards.configure(m, selected(en), 20, -1, NOW), "negative new limit");
+        reject(() -> MemoryFlashcards.configure(m, selected(en), 20, 1001, NOW), "new limit bound");
+        reject(() -> MemoryFlashcards.configure(m, selected("missing"), 20, 10, NOW), "unknown subject");
+        add(m, en, "a"); MemoryFlashcards.configure(m, selected(en), 1, 1, NOW);
+        check(new MemoryData(m.db.toString()).cards().length() == 1, "roundtrip");
+        JSONObject duplicate = MemoryData.copy(m.db);
+        JSONArray ids = duplicate.optJSONObject("flashcards").optJSONObject("session").optJSONArray("ids");
+        ids.put(ids.optString(0));
+        reject(() -> new MemoryData(duplicate.toString()), "duplicate queue rejected");
+        JSONObject bad = MemoryData.copy(m.db);
+        MemoryData.put(bad.optJSONObject("flashcards").optJSONObject("settings"), "count", -1);
         reject(() -> new MemoryData(bad.toString()), "malformed settings rejected");
+        JSONObject badLimit = MemoryData.copy(m.db);
+        MemoryData.put(badLimit.optJSONObject("flashcards").optJSONObject("settings"), "newLimit", 5000);
+        reject(() -> new MemoryData(badLimit.toString()), "out of range new limit rejected");
         check(new MemoryData().db.optJSONObject("flashcards") == null, "old data stays compatible");
     }
 }

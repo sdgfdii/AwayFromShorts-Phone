@@ -83,6 +83,21 @@ public final class MemoryScheduler {
         return n;
     }
     /**
+     * FSRS 可提取率：此刻还记得这张卡的概率，R(t,S) = (1 + FACTOR·t/S)^DECAY。
+     *
+     * 抽取顺序用它排序 —— 值越低表示忘得越厉害，越该先复习。它和 {@link #intervalDays}
+     * 是同一套参数的两种读法：间隔是「推到目标记忆率」，这里是「现在掉到多少」。
+     * 没有稳定度（从未学过）按 0 处理，调用方不该拿它排序新卡。
+     */
+    public static double retrievability(double stability, long last, long now) {
+        double s = Math.max(.001, stability);
+        if (s <= .001 || last <= 0) return 0;
+        double days = Math.max(0, (now - last) / (double) DAY);
+        double decay = -W[20], factor = Math.pow(.9, 1 / decay) - 1;
+        return Math.pow(1 + factor * days / s, decay);
+    }
+
+    /**
      * Day-level interval derived from FSRS-6 retrievability: t = S / FACTOR * (R^(1/DECAY) - 1).
      * At the default 90% retention this is exactly S, so legacy scheduling stays bit-identical.
      */

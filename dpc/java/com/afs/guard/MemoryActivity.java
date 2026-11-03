@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -25,6 +26,7 @@ import android.text.TextWatcher;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.InputStream;
+import java.util.Calendar;
 import java.io.OutputStream;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -104,6 +106,7 @@ public class MemoryActivity extends ThemedActivity {
             else if ("review".equals(page)) review();
             else if ("cards".equals(page)) cards(false);
             else if ("tools".equals(page)) tools();
+            else if ("stats".equals(page)) stats();
             else home();
         } catch (RuntimeException e) { errorPage(e); }
     }
@@ -227,13 +230,11 @@ public class MemoryActivity extends ThemedActivity {
         revealed = false; submitting = false; incorrect = false; current = next; studyImage = null; typed = null;
         if (next == null) {
             base(T.s("本日记忆闪卡"), "");
-            boolean duePool = MemoryFlashcards.POOL_DUE.equals(MemoryFlashcards.pool(m));
             LinearLayout empty = ui.card(); body.addView(empty, ui.gap(12));
-            text(empty, p.total > 0 ? T.s("本日闪卡已完成") : duePool ? T.s("今天没有到期卡片") : T.s("暂无可抽取的闪卡"), 24);
-            hint(empty, p.total > 0 ? T.s("复习记录已保存，明天按抽取设置生成新的闪卡。")
-                    : duePool ? T.s("当前只抽到期卡片。可在守卫 → 卡管理 → 记忆卡调整抽取设置。")
-                    : p.available == 0 ? T.s("在守卫 → 卡管理 → 记忆卡中添加学科、制作或导入卡片。")
-                    : T.s("所选学科的卡片今天已经复习过。可以调整学科范围，或明天继续。"));
+            text(empty, p.total > 0 ? T.s("本日闪卡已完成") : T.s("今天没有该复习的卡片"), 24);
+            hint(empty, p.total > 0 ? T.s("复习记录已保存，明天按遗忘曲线重新排队。")
+                    : p.available == 0 ? T.s("所选学科里没有卡片。可在守卫 → 卡管理 → 记忆卡中添加学科、制作或导入卡片。")
+                    : T.f("到期的旧卡已经清完，今天的新学额度也用完了（每天新学 %d 张）。可在抽取设置里调整上限，或明天继续。", p.newLimit));
             return;
         }
         deck = next.optString("deck"); JSONObject d = m.deck(deck);
@@ -253,7 +254,7 @@ public class MemoryActivity extends ThemedActivity {
     private void flashSettings() {
         MemoryData m = MemoryStore.flashSnapshot(this); JSONArray active = m.activeDecks();
         if (active.length() == 0) { toast(T.s("请先在卡管理的记忆卡中添加学科")); return; }
-        JSONObject config = MemoryFlashcards.settings(m); JSONArray selected = MemoryFlashcards.subjects(m);
+        JSONArray selected = MemoryFlashcards.subjects(m);
         LinearLayout box = dialogBox(); hint(box, T.s("抽取学科（可多选）"));
         CheckBox[] checks = new CheckBox[active.length()];
         for (int i = 0; i < active.length(); i++) {
@@ -262,25 +263,21 @@ public class MemoryActivity extends ThemedActivity {
             check.setTextColor(ui.text()); check.setChecked(MemoryData.contains(selected, d.optString("id")));
             box.addView(check); checks[i] = check;
         }
-        EditText count = field(box, T.s("抽取数量（1–1000 张）"), "" + config.optInt("count", 20), false); count.setInputType(2);
-        hint(box, T.s("抽取池")); Spinner pool = spinner(box, new String[]{T.s("全部卡片（含未到期）"), T.s("仅到期卡片（按记忆曲线）")},
-                MemoryFlashcards.POOL_DUE.equals(MemoryFlashcards.pool(m)) ? 1 : 0);
-        hint(box, T.s("抽取规则")); Spinner mode = spinner(box, new String[]{T.s("随机抽取"), T.s("顺序执行 · 按入库顺序跨日接续")},
-                "sequence".equals(config.optString("mode")) ? 1 : 0);
-        hint(box, T.s("“全部卡片”包含尚未到复习日期的卡片；“仅到期卡片”只抽今天到期的卡片，按到期时间从早到晚。每张卡在今日闪卡中只出现一次。\n保存后重新抽取今日尚未复习的卡片，已完成记录保留。"));
+        EditText count = field(box, T.s("每天上限（1–1000 张）"), "" + MemoryFlashcards.count(m), false); count.setInputType(2);
+        EditText fresh = field(box, T.s("每天新学上限（0–1000 张）"), "" + MemoryFlashcards.newLimit(m), false); fresh.setInputType(2);
+        hint(box, T.s("队列按遗忘曲线排：到期的旧卡按「此刻还记得的概率」从低到高——忘得最厉害的先复习；旧卡不够时，用从没学过的新卡按入库顺序补位，每天最多补新学上限那么多张。\n没有随机、没有顺序规则，也没有「全部 / 仅到期」的池子：该复习什么由每张卡自己的 FSRS 到期时间决定。"));
         flashRules(box, active);
         ScrollView scroll = new ScrollView(this); scroll.addView(box);
         AlertDialog dialog = ThemeStore.dialog(this).setTitle(T.s("今日闪卡设置")).setView(scroll)
-                .setPositiveButton(T.s("保存并抽取"), null).setNegativeButton(T.s("取消"), null).create();
+                .setPositiveButton(T.s("保存并重排"), null).setNegativeButton(T.s("取消"), null).create();
         dialog.setOnShowListener(ignored -> dialog.getButton(-1).setOnClickListener(v -> {
             JSONArray ids = new JSONArray();
             for (int i = 0; i < checks.length; i++) if (checks[i].isChecked()) ids.put(active.optJSONObject(i).optString("id"));
             try {
                 MemoryStore.configureFlashcards(this, ids, Integer.parseInt(count.getText().toString().trim()),
-                        mode.getSelectedItemPosition() == 0 ? "random" : "sequence",
-                        pool.getSelectedItemPosition() == 0 ? MemoryFlashcards.POOL_ALL : MemoryFlashcards.POOL_DUE);
+                        Integer.parseInt(fresh.getText().toString().trim()));
                 dialog.dismiss(); if(managementMode)tools();else home();
-            } catch (RuntimeException e) { toast(e instanceof NumberFormatException ? T.s("请填写 1–1000 的整数") : e.getMessage()); }
+            } catch (RuntimeException e) { toast(e instanceof NumberFormatException ? T.s("请填写 0–1000 的整数") : e.getMessage()); }
         })); dialog.show();
     }
     /** Public explanation follows MemoryScheduler, MemoryFlashcards and MemoryData, not a fixed-day mnemonic. */
@@ -288,7 +285,7 @@ public class MemoryActivity extends ThemedActivity {
         TextView title=text(box,T.s("记忆规律与复习规则"),18);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         hint(box,T.s("按你的表现调整\n使用 FSRS-6，根据每次评分、距上次复习的时间、卡片稳定性和难度计算下一次复习，不固定为第 1、3、7 天。它是排程模型，不保证每个人都能达到同样的记忆效果。"));
-        hint(box,T.s("今日怎样抽卡\n“全部卡片”可抽新卡和未到期卡；“仅到期卡片”仅抽已学习且今天结束前到期的卡，优先较早到期的卡，不包含从未学习的新卡。随机模式从全部池随机抽取；顺序模式跨天接续。仅到期池始终按到期时间排序。"));
+        hint(box,T.s("今日怎样抽卡\n到期旧卡先来，按可提取率（此刻还记得的概率）从低到高排；新卡只在旧卡之后补位，数量受每天新学上限约束。旧规则（随机 / 顺序 / 全部池 / 仅到期池）已删除，抽取范围只剩学科选择。"));
         hint(box,T.s("上滑与下滑\n揭晓答案后，上滑按“记住了”评分，下滑按“忘了”评分。输入题答错时不能上滑，需加入重学。今日闪卡每张每天只复习一次；选“忘了”会记录到错题和重学计划，不会在今日闪卡里反复出现。"));
         hint(box,T.s("新卡的短期学习\n“忘了”：约 1 分钟后可重学；首次“记住了”：约 10 分钟后再确认，再次记住后转入按天复习。“费力想起”：第一步约 5 分 30 秒，后续学习步约 10 分钟；“很轻松”可直接转入按天复习。分钟间隔表示重学计划的到期时间，不会让今日闪卡当天重复抽到该卡。"));
         hint(box,T.s("已学卡的复习\n按天复习时选“忘了”，约 10 分钟后进入重学；重学中仍忘记，再等约 10 分钟；重学中“费力想起”约 15 分钟后再学，记住后恢复按天复习。按天间隔根据评分动态计算，并从到期日零点开放，不是一律等满 24 小时。"));
@@ -299,16 +296,113 @@ public class MemoryActivity extends ThemedActivity {
         }
         hint(box,T.s("进度怎样计算\n今日闪卡进度表示已复习的卡片数，包含选了“忘了”的卡，不代表全部记牢。学习联动以对应学科的学习目标为准：遗忘不计为有效完成；达到复习阶段的有效评分才可能增加完成量，同一计划内不重复计数。"));
     }
+    /**
+     * 记忆统计：把「复习量 / 记住率 / 到期预测 / 留存曲线」画成曲线。
+     *
+     * 全部从已有日志和卡片状态现算（{@link MemoryStats}），不另存计数器：
+     * 同一份数据重算永远同一个数，和今日闪卡的进度不会各说各话。
+     */
+    private void stats() {
+        page = "stats"; flashMode = false; draft = null; MemoryData m;
+        try { m = MemoryStore.snapshot(this); } catch (RuntimeException e) { errorPage(e); return; }
+        final long now = System.currentTimeMillis();
+        base(T.s("记忆统计"), T.s("复习量、记住率与遗忘曲线。"));
+        MemoryStats.Summary sum = MemoryStats.summary(m, now);
+
+        LinearLayout head = ui.card(); body.addView(head, ui.gap(12));
+        TextView title = text(head, T.s("现在的位置"), 18); title.setTypeface(Typeface.DEFAULT_BOLD);
+        hint(head, T.f("卡片 %d 张 · 已学 %d 张 · 今天到期 %d 张", sum.total, sum.learned, sum.dueToday)
+                + "\n" + T.f("今日已复习 %d 张 · 连续 %d 天", sum.reviewedToday, sum.streak)
+                + "\n" + T.f("近 7 天记住率 %.0f%%（%d 次评分里记住 %d 次）",
+                    sum.accuracy7() * 100, sum.reviews7, sum.correct7));
+
+        // 近 14 天：柱是复习张数，线是当天记住率。
+        final int days = 14;
+        int[] reviewed = new int[days], correct = new int[days];
+        String[] labels = new String[days];
+        MemoryStats.daily(m, now, days, reviewed, correct, labels);
+        double[] bars = new double[days], line = new double[days];
+        int total7 = 0;
+        for (int i = 0; i < days; i++) {
+            bars[i] = reviewed[i];
+            line[i] = reviewed[i] == 0 ? -1 : correct[i] / (double) reviewed[i];
+            if (i >= days - 7) total7 += reviewed[i];
+        }
+        LinearLayout daily = ui.card(); body.addView(daily, ui.gap(12));
+        TextView dailyTitle = text(daily, T.s("近 14 天复习量"), 18); dailyTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        hint(daily, T.f("共 %d 张，最近 7 天 %d 张。红线是当天的记住率（评分“记住/轻松”占比），没有复习的日子不画点。", sumReview(reviewed), total7));
+        addChart(daily, bars, line, labels, T.s(" 张"));
+
+        // 未来 7 天：到期量。柱高就是那天要还的债。
+        int[] forecast = MemoryStats.forecast(m, now, 7);
+        double[] fc = new double[7];
+        String[] fcLabels = new String[7];
+        Calendar c = Calendar.getInstance(); c.setTimeInMillis(now);
+        for (int i = 0; i < 7; i++) {
+            fc[i] = forecast[i];
+            Calendar day = Calendar.getInstance(); day.setTimeInMillis(now);
+            day.add(Calendar.DAY_OF_MONTH, i);
+            fcLabels[i] = i == 0 ? T.s("今天") : (day.get(Calendar.MONTH) + 1) + "/" + day.get(Calendar.DAY_OF_MONTH);
+        }
+        LinearLayout future = ui.card(); body.addView(future, ui.gap(12));
+        TextView futureTitle = text(future, T.s("未来 7 天到期"), 18); futureTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        hint(future, T.f("今天含已逾期 %d 张；后面几天是 FSRS 排出来的到期日。柱太高就说明那天会积压。", forecast[0]));
+        addChart(future, fc, null, fcLabels, T.s(" 张"));
+
+        // 留存曲线：按「距上次复习多久」分组，看每组还答得出来的比例。
+        int[] samples = new int[7], hits = new int[7];
+        String[] bucketLabels = new String[7];
+        MemoryStats.retention(m, samples, hits, bucketLabels);
+        double[] sbars = new double[7], sline = new double[7];
+        for (int i = 0; i < 7; i++) {
+            sbars[i] = samples[i];
+            sline[i] = samples[i] >= 3 ? hits[i] / (double) samples[i] : -1;
+        }
+        LinearLayout curve = ui.card(); body.addView(curve, ui.gap(12));
+        TextView curveTitle = text(curve, T.s("留存曲线 · 距离越久还记得吗"), 18); curveTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        hint(curve, T.s("柱是这一档的复习次数，线是其中记住的比例。样本少于 3 次的档位不画点——一两张卡撑不起一条曲线。越往右掉得越快，说明间隔该缩短（把目标记忆率调高）。"));
+        addChart(curve, sbars, sline, bucketLabels, T.s(" 次"));
+
+        int[] strength = MemoryStats.strength(m);
+        LinearLayout mix = ui.card(); body.addView(mix, ui.gap(12));
+        TextView mixTitle = text(mix, T.s("记忆强度构成"), 18); mixTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        hint(mix, T.f("未学 %d 张 · 学习中 %d 张 · 稳定度 ≤7 天 %d 张 · 稳定度 >7 天 %d 张",
+                strength[MemoryStats.BUCKET_NEW], strength[MemoryStats.BUCKET_LEARNING],
+                strength[MemoryStats.BUCKET_SHORT], strength[MemoryStats.BUCKET_LONG])
+                + "\n" + T.s("稳定度是 FSRS 认为这张卡能撑多久。>7 天的越多，说明长期记忆越扎实。"));
+
+        java.util.List<String> due = MemoryStats.dueByDeck(m, now);
+        if (!due.isEmpty()) {
+            LinearLayout each = ui.card(); body.addView(each, ui.gap(12));
+            TextView eachTitle = text(each, T.s("各学科今天到期"), 18); eachTitle.setTypeface(Typeface.DEFAULT_BOLD);
+            for (String row : due) {
+                String[] parts = row.split("\t");
+                hint(each, parts[0] + T.s(" · ") + (parts.length > 1 ? parts[1] : "0") + T.s(" 张"));
+            }
+        }
+        hint(body, T.s("统计只读：不会改动卡片状态。曲线里的每一次评分都来自日志，删掉学科会一并从曲线里消失。"));
+    }
+
+    private int sumReview(int[] values) { int n = 0; for (int v : values) n += v; return n; }
+
+    private void addChart(LinearLayout host, double[] bars, double[] line, String[] labels, String unit) {
+        MemoryChartView chart = new MemoryChartView(this);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(152));
+        lp.topMargin = ui.dp(4); lp.bottomMargin = ui.dp(4);
+        host.addView(chart, lp);
+        chart.render(bars, line, labels, unit);
+    }
+
     private void tools() {
         page = "tools"; flashMode = false; draft = null; MemoryData m;
         try { m = MemoryStore.snapshot(this); } catch (RuntimeException e) { errorPage(e); return; }
         base(T.s("记忆卡设置"), T.s("学科、卡片、错题与学习设置。"));
         MemoryFlashcards.Progress flash = MemoryFlashcards.progress(m, System.currentTimeMillis());
-        JSONObject config = MemoryFlashcards.settings(m);
-        button(body, T.s("抽取设置  ·  ") + ("sequence".equals(config.optString("mode")) ? T.s("顺序") : T.s("随机"))
-                + "  ·  " + config.optInt("count", 20) + T.s(" 张"), false, v -> flashSettings());
+        button(body, T.s("抽取设置  ·  按遗忘曲线  ·  ") + MemoryFlashcards.count(m) + T.s(" 张/天")
+                + T.s(" ·  新学 ") + MemoryFlashcards.newLimit(m), false, v -> flashSettings());
+        button(body, T.s("记忆统计  ·  曲线"), false, v -> stats());
         hint(body, T.s("本日已复习 ") + flash.done + "/" + flash.total + T.s(" · 今日累计 ") + flash.reviewedToday + T.s(" 张。")
-                + T.s("\n数量不足时按剩余可用卡片抽取。")
+                + T.s("\n到期旧卡按遗忘风险排序，新卡按新学上限补位。")
                 + T.s("\n先回忆再揭晓。每张闪卡复习后进入下一张；选择“忘了”会进入错题与重学计划。"));
         button(body, T.s("＋ 添加学科"), false, v -> addDeck());
         button(body, T.s("制作 / 导入卡片"), true, v -> authorDialog());
@@ -764,6 +858,12 @@ public class MemoryActivity extends ThemedActivity {
     /** 评分：手势之外保留四档按钮，卡片撑满页面时它们贴在卡面底部。 */
     private void showRateActions(LinearLayout host, String id, boolean onlyForget) {
         host.removeAllViews();
+        if (!onlyForget) {
+            TextView tip = ui.sub(T.s("↑ 上滑＝记住　·　↓ 下滑＝忘了"));
+            tip.setGravity(Gravity.CENTER);
+            tip.setPadding(0, ui.dp(2), 0, ui.dp(4));
+            host.addView(tip);
+        }
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         host.addView(row, ui.gap(6));
@@ -780,7 +880,17 @@ public class MemoryActivity extends ThemedActivity {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             if (i > 0) lp.leftMargin = ui.dp(6);
             row.addView(b, lp);
-            b.setOnClickListener(v -> { if (grade(id, rating)) advance(); });
+            // 手指从按钮上起手往上划时，滑动距离没到拦截阈值就会被当成一次点击 ——
+            // 而「忘了」正好是最左那颗，于是「上滑记住」被记成忘了。这里把位移一起判：
+            // 纵向挪过 8dp 就不算点击，交给上面的滑卡手势。
+            final float[] downY = {0};
+            final boolean[] dragged = {false};
+            b.setOnTouchListener((v, e) -> {
+                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) { downY[0] = e.getRawY(); dragged[0] = false; }
+                else if (e.getActionMasked() == MotionEvent.ACTION_MOVE && Math.abs(e.getRawY() - downY[0]) > ui.dp(8)) dragged[0] = true;
+                return false;
+            });
+            b.setOnClickListener(v -> { if (dragged[0]) return; if (grade(id, rating)) advance(); });
         }
     }
     private int slideDuration() {

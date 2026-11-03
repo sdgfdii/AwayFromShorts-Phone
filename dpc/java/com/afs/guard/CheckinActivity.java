@@ -226,6 +226,7 @@ public class CheckinActivity extends ThemedActivity {
             unverifiedRec.amount=b.getDouble("motion_receipt_amount");unverifiedRec.ts=b.getLong("motion_receipt_ts");
         }
         super.onCreate(b);
+        if(b==null&&getIntent().getBooleanExtra("backup_only",false))getWindow().getDecorView().post(()->backupMenu());
         dark = Ui.isDark(this);   // 主题是全局设置：不再跟着首页那张"是否全部屏蔽"走
         look = new Ui(this);
         pickColors();
@@ -244,6 +245,13 @@ public class CheckinActivity extends ThemedActivity {
             getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(manageBg()));
             manage();
         } else if ("taboo".equals(open)) {
+            // 从卡管理单独进来的禁忌卡：打卡页整页藏起来再开禁忌页。
+            // 不藏的话，关闭禁忌页的淡出动画会露出底下的打卡界面，看起来像「退出后跳到打卡」。
+            rootBox.setVisibility(View.INVISIBLE);
+            pageHost.setBackgroundColor(manageBg());
+            backdropView.setVisibility(View.GONE);
+            backdropTint.setVisibility(View.GONE);
+            getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(manageBg()));
             tabooManage();
         } else if ("font".equals(open)) {
             fontMenu();
@@ -702,7 +710,8 @@ public class CheckinActivity extends ThemedActivity {
      *                  入场由 {@link #enterFrom(int)} 或预摆卡负责，
      *                  两段动画同时改 alpha/translation 会互相打架，看着一顿一顿的。
      */
-    private void render(boolean animateIn) {
+    private void render(boolean animateIn) { render(animateIn, true); }
+    private void render(boolean animateIn, boolean rebuild) {
         cancelCardGesture();
         cancelCardVisual();
         stopHover();
@@ -718,7 +727,7 @@ public class CheckinActivity extends ThemedActivity {
         // 卡组可能因为「禁忌卡设置」变了：每次重排都按最新的一份重建。
         // 重建前先记住当前这张是谁 —— 增删禁忌项会让队列整体前移，只按下标恢复会看到别的卡
         String keepKey = entryKey(entryAt(selected));
-        rebuildCards();
+        if (rebuild) rebuildCards();
         if (keepKey != null) {
             int k = indexOfKey(keepKey);
             if (k >= 0) {
@@ -2483,7 +2492,7 @@ public class CheckinActivity extends ThemedActivity {
         rebuildCards();
         int idx = queueIndexOfGoal(keepId);
         selected = idx >= 0 ? idx : firstPendingCard();
-        render(false);
+        render(false, false);
     }
 
     /** 状态行：还剩几个待打卡 + 禁忌卡待确认。 */
@@ -2579,6 +2588,14 @@ public class CheckinActivity extends ThemedActivity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(20), dp(24), dp(20), dp(32));
+
+        TextView back = look.sub(T.s("‹  返回"));
+        back.setTextColor(look.accent());
+        back.setPadding(0, dp(6), 0, dp(4));
+        back.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { closeTabooPage(); }   // 单独进来时这里直接回卡管理
+        });
+        box.addView(back);
 
         TextView title = look.sub(T.s("禁忌卡"));
         title.setTextSize(22);
@@ -2756,7 +2773,13 @@ public class CheckinActivity extends ThemedActivity {
         final android.app.Dialog shown = tabooDialog;
         if (shown == null || closingTaboo) return;
         closingTaboo = true;
-        if (tabooPage == null) { shown.dismiss(); return; }
+        // 从卡管理单独进来的：直接关掉回卡管理，不播淡出。
+        // 淡出那 180ms 里露出的就是底下的页面，用户会以为自己被扔到了打卡界面。
+        if (tabooPage == null || "taboo".equals(getIntent().getStringExtra(EXTRA_OPEN))) {
+            closingTaboo = false;
+            shown.dismiss();
+            return;
+        }
         tabooPage.animate().translationX(dp(36)).alpha(0f).setDuration(MotionPolicy.duration(CheckinActivity.this,180))
                 .setInterpolator(new DecelerateInterpolator(1.4f))
                 .withEndAction(new Runnable() {
@@ -3037,9 +3060,7 @@ public class CheckinActivity extends ThemedActivity {
             }
         });
 
-        manageOption(box, T.s("备份与恢复"), T.s("换手机时导出或导入数据"), new View.OnClickListener() {
-            public void onClick(View v) { backupMenu(); }
-        });
+
 
         sc.addView(box);
         android.app.Dialog d = new android.app.Dialog(this,
@@ -3053,9 +3074,12 @@ public class CheckinActivity extends ThemedActivity {
             public void onDismiss(DialogInterface ignored) {
                 manageDialog = null;
                 if (!reopeningManage) {
+                    // 单独进来的（卡管理点「目标卡」）：直接回卡管理，不先重画一遍打卡页，
+                    // 否则关掉弹窗的瞬间会闪一眼打卡界面。
+                    boolean standalone = "manage".equals(getIntent().getStringExtra(EXTRA_OPEN));
                     loadLocal();
-                    render();
-                    if ("manage".equals(getIntent().getStringExtra(EXTRA_OPEN)) && !isFinishing()) finish();
+                    if (!standalone) render();
+                    if (standalone && !isFinishing()) finish();
                 }
             }
         });

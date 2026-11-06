@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Screen usage</string>
+    <string name="title">Screen usage</string>
+    <string name="subtitle">Monthly ranking · game time · 7-day entertainment · PC</string>
+    <string name="month_rank">Monthly app ranking</string>
+    <string name="games">Game time</string>
+    <string name="month_total">This month</string>
+    <string name="today">Today</string>
+    <string name="trend">Entertainment share, last 7 days</string>
+    <string name="trend_note">Entertainment = blocked apps + system games · share of total foreground time</string>
+    <string name="avg">7-day average %1$d%%</string>
+    <string name="pc_title">PC app time</string>
+    <string name="pc_day">Today</string>
+    <string name="pc_month">This month</string>
+    <string name="pc_total">Total</string>
+    <string name="pc_empty">No PC data yet. The PC panel pushes every 15 minutes while it is running; check again later.</string>
+    <string name="pc_updated">Since %1$s · updated %2$s</string>
+    <string name="pc_period_rank">%1$s app ranking</string>
+    <string name="rank_empty">The system has not collected enough data for this month yet.</string>
+    <string name="no_game">No game foreground time recorded this month.</string>
+    <string name="trend_tiny"> (too little data to count)</string>
+    <string name="loading">Reading the host aggregation…</string>
+    <string name="perm_title">Usage access is not enabled</string>
+    <string name="perm_message">Reading app usage requires the system Usage access setting. Android requires you to enable it manually; even a device owner cannot do it for you. Use the host grant page below to open system settings.</string>
+    <string name="perm_button">Enable usage access</string>
+    <string name="perm_unavailable">Could not open the host grant page. Open stats from the host again.</string>
+    <string name="no_ticket">Open this page from the host History screen.\nLaunching it directly cannot read any data.</string>
+    <string name="disabled">The plugin is disabled or was updated. Open it from the host again.</string>
+    <string name="expired">This session expired. Open it from the host again.</string>
+    <string name="no_grant">The host did not grant read access. Grant it in Settings → Plugins.</string>
+    <string name="unavailable">The host is temporarily unavailable. Try again later.</string>
+    <string name="busy">The previous request is still running. Try again shortly.</string>
+    <string name="timeout">Reading timed out. Try again.</string>
+    <string name="failed">Could not read usage statistics.</string>
+    <string name="retry">Retry</string>
+    <string name="back">‹ Back</string>
+    <string name="dur_zero">0 min</string>
+    <string name="dur_less">under 1 min</string>
+    <string name="dur_min">%1$d min</string>
+    <string name="dur_hm">%1$d h %2$d min</string>
+    <string name="too_short">The system has too little data. Check again after it collects some.</string>
+    <string name="unknown_app">Unknown app</string>
+    <string name="request_denied">Permission to request system access was revoked, or this session expired. Return to the host and check plugin permissions before reopening.</string>
+</resources>

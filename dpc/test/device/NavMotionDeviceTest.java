@@ -39,6 +39,40 @@ public final class NavMotionDeviceTest extends Instrumentation {
             check(token("consumedTransition")==consumed,"recreate does not create or consume a second request");
             check((Long)field(FloatingNav.class,nav(recreated),"playedTransition")==0L,"new dock does not replay consumed request");
             main(()->FloatingNav.swipeNavigate(recreated,0,1));Activity quiz=waitPage("QuizActivity",null);waitConsumed();
+            main(()->{
+                check(!(Boolean)field(MemoryActivity.class,recreated,"motionResumed"),"memory sleeps after navigation");
+                check((Boolean)field(QuizActivity.class,quiz,"pageActive"),"quiz active only in foreground");
+                LearningLink.Progress lite=LearningLink.memory(c), full=LearningLink.memoryFromData(c,MemoryStore.snapshot(c));
+                check(lite.done==full.done&&lite.target==full.target&&lite.selected==full.selected&&lite.available==full.available,"light memory progress equals full snapshot");
+                check(QuizStore.completedToday(c)==QuizStore.snapshot(c).stats(StudyStore.today())[0],"light quiz progress equals full snapshot");
+            });
+            final QuizMathView[] formula={null};
+            main(()->{try{
+                Method math=QuizActivity.class.getDeclaredMethod("math",android.widget.LinearLayout.class,String.class);math.setAccessible(true);
+                math.invoke(quiz,field(QuizActivity.class,quiz,"body"),"$x^2$");
+                java.util.ArrayList<?> views=(java.util.ArrayList<?>)field(QuizActivity.class,quiz,"mathViews");
+                formula[0]=(QuizMathView)views.get(views.size()-1);
+            }catch(Exception e){throw new RuntimeException(e);}});
+            final Object memoryBody=field(MemoryActivity.class,recreated,"body");
+            final Object quizBody=field(QuizActivity.class,quiz,"body");
+            main(()->FloatingNav.swipeNavigate(quiz,1,0));waitPage("MemoryActivity",null);Thread.sleep(100);
+            main(()->{
+                check(field(MemoryActivity.class,recreated,"body")==memoryBody,"unchanged memory homepage reused");
+                check(!(Boolean)field(QuizActivity.class,quiz,"pageActive"),"quiz sleeps after navigation");
+                check(!(Boolean)field(QuizMathView.class,formula[0],"pageActive"),"formula renderer sleeps with quiz");
+            });
+            final int[] delivered={0};
+            main(()->{try{
+                Method deliver=QuizActivity.class.getDeclaredMethod("deliverUi",Runnable.class);deliver.setAccessible(true);
+                deliver.invoke(quiz,(Runnable)()->delivered[0]++);
+                check(delivered[0]==0,"background result does not touch sleeping page");
+            }catch(Exception e){throw new RuntimeException(e);}});
+            main(()->FloatingNav.swipeNavigate(recreated,0,1));waitPage("QuizActivity",null);Thread.sleep(100);
+            main(()->{
+                check((Boolean)field(QuizMathView.class,formula[0],"pageActive"),"formula renderer resumes with quiz");
+                check(delivered[0]==1,"deferred result delivered once on resume");
+            });
+            main(()->check(field(QuizActivity.class,quiz,"body")==quizBody,"unchanged quiz homepage reused"));
             main(()->{try{FloatingNav current=nav(quiz);View panel=(View)field(FloatingNav.class,current,"panel");Method find=LiveNavWindow.class.getDeclaredMethod("find",Activity.class);find.setAccessible(true);Object live=find.invoke(null,quiz);Dialog dialog=(Dialog)field(LiveNavWindow.class,live,"dialog");View decor=dialog.getWindow().getDecorView();check(panel.getWidth()==decor.getWidth()&&panel.getHeight()==decor.getHeight(),"blur window matches capsule bounds without an outer blurred strip");}catch(Exception error){throw new RuntimeException(error);}});
             main(()->{try{FloatingNav current=nav(quiz);View content=(View)field(FloatingNav.class,current,"source");AppearanceConfig appearance=(AppearanceConfig)field(FloatingNav.class,current,"appearance");String oldAnimation=appearance.animation;Method enter=FloatingNav.class.getDeclaredMethod("enterContent",int.class);enter.setAccessible(true);for(String mode:new String[]{"slide","fade"}){appearance.animation=mode;enter.invoke(current,1);check(content.getTranslationX()==0&&content.getTranslationY()==0&&content.getAlpha()==1,"page appears immediately even with saved "+mode+" preference");}appearance.animation=oldAnimation;}catch(Exception error){throw new RuntimeException(error);}});
             main(()->{try{Method find=LiveNavWindow.class.getDeclaredMethod("find",Activity.class);find.setAccessible(true);Object live=find.invoke(null,quiz);Method background=LiveNavWindow.class.getDeclaredMethod("capsuleBackground",int.class);background.setAccessible(true);android.graphics.drawable.GradientDrawable shape=(android.graphics.drawable.GradientDrawable)background.invoke(live,0x88FFFFFF);View panel=(View)field(FloatingNav.class,nav(quiz),"panel");check(Math.abs(shape.getCornerRadius()-panel.getHeight()/2f)<=1,"window background uses capsule radius without card-theme clamping");}catch(Exception error){throw new RuntimeException(error);}});

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">屏幕使用统计</string>
+    <string name="title">屏幕使用统计</string>
+    <string name="subtitle">本月应用排行 · 游戏时长 · 娱乐占比趋势 · 电脑端</string>
+    <string name="month_rank">本月应用排行</string>
+    <string name="games">游戏时长</string>
+    <string name="month_total">本月合计</string>
+    <string name="today">今天</string>
+    <string name="trend">近 7 天娱乐占比</string>
+    <string name="trend_note">娱乐 = 黑名单应用 + 系统游戏类 · 占每天全部前台时长</string>
+    <string name="avg">7 天平均 %1$d%%</string>
+    <string name="pc_title">电脑端应用时长</string>
+    <string name="pc_day">本日</string>
+    <string name="pc_month">本月</string>
+    <string name="pc_total">总计</string>
+    <string name="pc_empty">还没拉到电脑数据。电脑开着面板时每 15 分钟推一次，晚点再进来看。</string>
+    <string name="pc_updated">累计自 %1$s 起 · 更新于 %2$s</string>
+    <string name="pc_period_rank">%1$s应用排行</string>
+    <string name="rank_empty">系统还没攒出本月数据（刚授权 / 刚开机）</string>
+    <string name="no_game">本月没有游戏类应用的前台记录</string>
+    <string name="trend_tiny">　（这天数据太少，不算数）</string>
+    <string name="loading">正在读取宿主聚合数据…</string>
+    <string name="perm_title">还没有「使用情况访问」权限</string>
+    <string name="perm_message">统计要读系统的应用使用时长。按 Android 的规矩，这一项必须由你在系统设置里亲手开启；设备所有者也不能代替。点下面经宿主授权页前往系统设置。</string>
+    <string name="perm_button">去开启使用情况访问</string>
+    <string name="perm_unavailable">打不开宿主授权页，请从宿主重新打开统计。</string>
+    <string name="request_denied">申请授权页的权限未授予或会话已失效。请返回宿主，在插件管理中核对授权后重新打开。</string>
+    <string name="no_ticket">请从宿主「打卡历史」里的屏幕使用统计入口打开。\n直接启动这个页面不能读取任何数据。</string>
+    <string name="disabled">插件已停用或已更新，请从宿主重新打开。</string>
+    <string name="expired">这次会话已过期，请从宿主重新打开。</string>
+    <string name="no_grant">宿主没有授予读取权限。请到宿主「设置 → 插件管理」授予后再试。</string>
+    <string name="unavailable">宿主暂时不可用，请稍后重试。</string>
+    <string name="busy">刚才的查询还没结束，请稍等再试。</string>
+    <string name="timeout">读取超时，请重试。</string>
+    <string name="failed">统计读取失败。</string>
+    <string name="retry">重试</string>
+    <string name="back">‹ 返回</string>
+    <string name="dur_zero">0 分</string>
+    <string name="dur_less">小于 1 分</string>
+    <string name="dur_min">%1$d 分</string>
+    <string name="dur_hm">%1$d 小时 %2$d 分</string>
+    <string name="too_short">系统数据还太少，等系统攒一些再看。</string>
+    <string name="unknown_app">未知应用</string>
+</resources>

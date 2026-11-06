@@ -47,7 +47,7 @@ final class LineIcon extends View {
             case "⇄": case "✎": case "⌫": case "▣": case "⧉": case "◉": case "⚙":
             case "!": case "◷": case "◔": case "◇": case "▤": case "↗": case "■":
             case "◎": case "▦": case "◌": case "✓": case "✕": case "＋": case "−":
-            case "›": case "‹": case "●":
+            case "›": case "‹": case "●": case "🔊":
                 return true;
             default:
                 return false;
@@ -75,6 +75,12 @@ final class LineIcon extends View {
     private void drawGlyph(Canvas c) {
         path.reset();
         switch (glyph) {
+            case "🔊":
+                path.moveTo(3,9);path.lineTo(7,9);path.lineTo(12,5);path.lineTo(12,19);path.lineTo(7,15);path.lineTo(3,15);path.close();
+                c.drawPath(path,paint);
+                rect.set(10,7,19,17);c.drawArc(rect,-55,110,false,paint);
+                rect.set(8,3,24,21);c.drawArc(rect,-55,110,false,paint);
+                break;
             case "⇄":
                 path.moveTo(4, 9); path.lineTo(17, 9);
                 path.moveTo(14, 6); path.lineTo(17, 9); path.lineTo(14, 12);

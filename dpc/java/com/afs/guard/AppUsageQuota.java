@@ -9,7 +9,14 @@ import java.util.*;
 /** Daily foreground allowance, independent of schedules; assigned apps use schedule intersections. */
 public final class AppUsageQuota {
     static final String SP="afs_usage_quota";
+    /**
+     * 每块查询覆盖的时长。系统的一次事件查询有传输上限，跨度太大就截断并丢最新事件；
+     * 按小时切块后每块的量都很小，绕开这个上限。
+     */
+    private static final long QUERY_CHUNK_MS=3600000L;
     private static long cachedAt;private static List<Span> cached=new ArrayList<>();
+    /** 与 spans 同一次事件流解析出的「前台服务在跑」区间（挂后台播放/画中画的判据）。 */
+    private static List<Span> cachedFgs=new ArrayList<>();
     static final class Span {String pkg;long start,end;boolean active;Span(String p,long s,long e){pkg=p;start=s;end=e;}}
     private AppUsageQuota(){}
     static JSONObject config(Context c){try{return new JSONObject(c.getSharedPreferences(SP,0).getString("limits","{}"));}catch(Exception e){throw new IllegalStateException(T.s("使用额度数据无法读取"),e);}}
@@ -40,13 +47,60 @@ public final class AppUsageQuota {
     }
     static synchronized List<Span> spans(Context c,long now){return spans(c,now,false);}
     static synchronized List<Span> spans(Context c,long now,boolean fresh){if(!fresh&&now>=cachedAt&&now-cachedAt<5000&&DayBoundary.key(c,now).equals(DayBoundary.key(c,cachedAt)))return cached;
-        long begin=DayBoundary.startMs(c,now);long queryFrom=begin-7L*86400000L;
-        UsageStatsManager manager=(UsageStatsManager)c.getSystemService(Context.USAGE_STATS_SERVICE);UsageEvents events=manager==null?null:manager.queryEvents(queryFrom,now);if(events==null)throw new IllegalStateException(T.s("使用记录暂不可读"));
+        // 只查今天这段（再往前留 6 小时兜住跨 08:00 还在前台的应用）。
+        // ★ 别查 7 天：真机上事件量一大，系统返回的结果会被截断且丢掉**最新**的事件，
+        //   表现就是「明明在刷，账本一动不动」（2026-11-04 实测：7 天窗口下最新 RESUMED 拿不到）。
+        long begin=DayBoundary.startMs(c,now);long queryFrom=begin-6L*3600000L;
+        UsageStatsManager manager=(UsageStatsManager)c.getSystemService(Context.USAGE_STATS_SERVICE);
+        if(manager==null)throw new IllegalStateException(T.s("使用记录暂不可读"));
         List<Span> out=new ArrayList<>();String foreground=null;long start=begin;UsageEvents.Event event=new UsageEvents.Event();
-        while(events.hasNextEvent()){events.getNextEvent(event);long stamp=event.getTimeStamp();int type=event.getEventType();String pkg=event.getPackageName();
-            if(type==1){if(foreground!=null&&!foreground.equals(pkg)&&stamp>begin)out.add(new Span(foreground,Math.max(begin,start),stamp));if(!Objects.equals(pkg,foreground))start=stamp;foreground=pkg;}
-            else if((type==2&&Objects.equals(pkg,foreground))||type==16||type==17||type==26){if(foreground!=null&&stamp>begin)out.add(new Span(foreground,Math.max(begin,start),stamp));foreground=null;}
-        }if(foreground!=null){Span open=new Span(foreground,Math.max(begin,start),now);open.active=true;out.add(open);}cached=out;cachedAt=now;return out;
+        // 前台服务可以多个应用同时在跑（听歌 + 画中画），必须按包名各记各的起点。
+        Map<String,Long> fgsOpen=new LinkedHashMap<>();List<Span> fgsOut=new ArrayList<>();String own=c.getPackageName();
+        // ★ 分块查询：一次 queryEvents 覆盖太久时，返回的事件会超过单次调用的传输上限被截断，
+        //   而且丢的是**最新**的那部分。额度日从 08:00 起算，所以每天 0 点到 8 点这段窗口有 22 小时，
+        //   重度使用的日子照样会被截断 —— 表现就是「正在用，额度不涨，限额锁不住」。
+        //   按小时切块查询，每块都很小，累计起来才是完整的一天。
+        for(long cursor=queryFrom;cursor<now;){
+            long piece=Math.min(cursor+QUERY_CHUNK_MS,now);
+            UsageEvents events=manager.queryEvents(cursor,piece);
+            if(events==null)throw new IllegalStateException(T.s("使用记录暂不可读"));
+            while(events.hasNextEvent()){events.getNextEvent(event);long stamp=event.getTimeStamp();int type=event.getEventType();String pkg=event.getPackageName();
+                if(type==1){if(foreground!=null&&!foreground.equals(pkg)&&stamp>begin)out.add(new Span(foreground,Math.max(begin,start),stamp));if(!Objects.equals(pkg,foreground))start=stamp;foreground=pkg;}
+                else if((type==2&&Objects.equals(pkg,foreground))||type==16||type==17||type==26){if(foreground!=null&&stamp>begin)out.add(new Span(foreground,Math.max(begin,start),stamp));foreground=null;}
+                // FOREGROUND_SERVICE_START(19)/STOP(20)：挂着后台还在跑的判据。自己的守护服务不算。
+                else if(type==19&&!Objects.equals(pkg,own)){if(!fgsOpen.containsKey(pkg))fgsOpen.put(pkg,stamp);}
+                else if(type==20&&fgsOpen.containsKey(pkg)){if(stamp>begin)fgsOut.add(new Span(pkg,Math.max(begin,fgsOpen.remove(pkg)),stamp));else fgsOpen.remove(pkg);}
+                else if(type==26){for(Map.Entry<String,Long> open:fgsOpen.entrySet())if(stamp>begin&&open.getValue()<stamp)fgsOut.add(new Span(open.getKey(),Math.max(begin,open.getValue()),stamp));fgsOpen.clear();}
+            }
+            cursor=piece;
+        }
+        for(Map.Entry<String,Long> open:fgsOpen.entrySet()){Span span=new Span(open.getKey(),Math.max(begin,open.getValue()),now);span.active=true;fgsOut.add(span);}
+        cached=out;cachedFgs=fgsOut;cachedAt=now;return out;
+    }
+    /** 前台服务区间（跟 spans 同一份缓存，先调 spans 保证新鲜）。 */
+    static synchronized List<Span> fgs(Context c,long now){spans(c,now,false);return cachedFgs;}
+    /**
+     * 把勾了「挂后台计时」应用的前台服务区间并进用量区间，重叠部分合并成一段（不双倍计）。
+     * 纯数据，离线可测；未勾选的应用完全不受影响。
+     */
+    static List<Span> effective(List<Span> base,List<Span> fgs,Set<String> flagged){
+        if(flagged.isEmpty()||fgs==null||fgs.isEmpty())return base;
+        List<Span> out=new ArrayList<>(base);for(Span s:fgs)if(flagged.contains(s.pkg))out.add(s);
+        return union(out);
+    }
+    /** 同一应用的重叠/相邻区间合并为一段；不同应用互不合并。纯数据，离线可测。 */
+    static List<Span> union(List<Span> spans){
+        Map<String,List<Span>> by=new LinkedHashMap<>();for(Span s:spans){List<Span> list=by.get(s.pkg);if(list==null){list=new ArrayList<>();by.put(s.pkg,list);}list.add(s);}
+        List<Span> out=new ArrayList<>();
+        for(Map.Entry<String,List<Span>> entry:by.entrySet()){
+            List<Span> list=entry.getValue();list.sort(Comparator.comparingLong(s->s.start));
+            Span current=null;
+            for(Span s:list){
+                if(current!=null&&s.start<=current.end){if(s.end>current.end)current.end=s.end;}
+                else{current=new Span(entry.getKey(),s.start,s.end);current.active=s.active;out.add(current);}
+            }
+        }
+        return out;
     }
     static long overlap(long start,long end,Rule schedule){if(end<=start)return 0;if(schedule==null)return end-start;long total=0;Calendar minute=Calendar.getInstance();for(long t=start;t<end;){minute.setTimeInMillis(t);long next=Math.min(end,t+(60000-t%60000));if(!schedule.inWindow(minute))total+=next-t;t=next;}return total;}
     public static long used(Context c,String pkg,Rule rule,long now){Rule scope=FreezeSlotStore.unassigned(rule)?null:rule;long total=0;for(Span span:spans(c,now))if(pkg.equals(span.pkg))total+=overlap(span.start,span.end,scope);return total;}

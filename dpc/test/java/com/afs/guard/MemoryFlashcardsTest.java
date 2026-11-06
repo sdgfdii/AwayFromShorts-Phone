@@ -28,7 +28,7 @@ public final class MemoryFlashcardsTest {
     }
     public static void main(String[] args) {
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
-        forgettingOrder(); newLimitGate(); migration(); validation();
+        forgettingOrder(); newLimitGate(); migration(); validation(); threeButtonRelearning();
         System.out.println("Memory flashcards: " + count + " assertions passed");
     }
     private static void due(MemoryData m, String id, long when, double stability, long last, int state) {
@@ -58,9 +58,13 @@ public final class MemoryFlashcardsTest {
         rate(m, 3, NOW);
         check(weak.equals(MemoryFlashcards.next(m, NOW).optString("id")), "graded card leaves the queue");
         rate(m, 1, NOW); rate(m, 3, NOW);
-        check(MemoryFlashcards.next(m, NOW) == null, "queue finishes");
-        check(MemoryFlashcards.progress(m, NOW).done == 3, "forgotten card still counts as reviewed");
+        check(MemoryFlashcards.next(m, NOW) == null, "future minute steps wait without blocking ready cards");
+        check(MemoryFlashcards.progress(m, NOW).done == 1, "forgotten and learning cards are not finished");
         check(m.card(weak).optInt("lapses") == 1, "forgotten card enters wrong book");
+        check(MemoryFlashcards.progress(m,NOW).nextDue==NOW+600000,"earliest next step exposed");
+        rate(m,3,NOW+600000);rate(m,3,NOW+600000);
+        check(MemoryFlashcards.progress(m,NOW+600000).done==3,"relearning graduates today");
+        check(MemoryFlashcards.progress(m,NOW+600000).reviewedToday==3,"repeated attempts count distinct cards");
     }
     /** 新卡按入库顺序补位，且不超过每天新学上限；上限 0 表示只复习。 */
     private static void newLimitGate() {
@@ -124,5 +128,37 @@ public final class MemoryFlashcardsTest {
         MemoryData.put(badLimit.optJSONObject("flashcards").optJSONObject("settings"), "newLimit", 5000);
         reject(() -> new MemoryData(badLimit.toString()), "out of range new limit rejected");
         check(new MemoryData().db.optJSONObject("flashcards") == null, "old data stays compatible");
+    }
+    private static void threeButtonRelearning(){
+        MemoryData m=new MemoryData();String d=deck(m,0),id=add(m,d,"vague review");
+        due(m,id,NOW-1,10,NOW-5*MemoryScheduler.DAY,MemoryScheduler.REVIEW);
+        m.plan(d,NOW);MemoryFlashcards.configure(m,selected(d),1,0,NOW);
+        MemoryScheduler.State predicted=m.previewRating(id,2,NOW);
+        check(predicted.state==MemoryScheduler.RELEARNING&&predicted.due==NOW+900000,"vague review schedules a 15-minute confirmation");
+        m.rateFlashcard(id,2,NOW,MemoryData.date(NOW));
+        check(!m.db.optJSONArray("logs").optJSONObject(0).optBoolean("credit"),"vague earns no target credit");
+        check(m.progress(d,NOW).done==0&&MemoryFlashcards.progress(m,NOW).done==0,"both progress counters wait for remembered confirmation");
+        check(MemoryFlashcards.next(m,NOW)==null,"vague not immediately repeated");
+        final MemoryData initial=m;
+        reject(()->initial.rateFlashcard(id,2,NOW,MemoryData.date(NOW)),"double click before due rejected");
+        m=new MemoryData(m.db.toString());final MemoryData persisted=m;
+        check(id.equals(MemoryFlashcards.next(m,NOW+900000).optString("id")),"relearning survives backup/restart");
+        m.rateFlashcard(id,3,NOW+900000,MemoryData.date(NOW));
+        check(m.progress(d,NOW+900000).done==1&&MemoryFlashcards.progress(m,NOW+900000).done==1,"remembered confirmation credits once");
+        reject(()->persisted.rateFlashcard(id,3,NOW+900000,MemoryData.date(NOW)),"finished card cannot be submitted twice");
+        check(m.db.optJSONObject("flashcards").optJSONObject("day").optJSONArray("seen").length()==1,"seen ids remain unique");
+        check(new MemoryData(m.db.toString()).cards().length()==1,"repeated-day data passes restore validation");
+        check(MemoryFlashcards.next(m,NOW+MemoryScheduler.DAY)==null,"next day follows real due instead of repeating yesterday session");
+        MemoryData fresh=new MemoryData();String fd=deck(fresh,0),fid=add(fresh,fd,"new");
+        fresh.plan(fd,NOW);MemoryFlashcards.configure(fresh,selected(fd),1,1,NOW);
+        fresh.rateFlashcard(fid,1,NOW,MemoryData.date(NOW));
+        check(MemoryFlashcards.progress(fresh,NOW).nextDue==NOW+60000,"forgotten new card waits one minute");
+        check(MemoryFlashcards.next(fresh,NOW+59999)==null,"minute deadline respected");
+        fresh.rateFlashcard(fid,3,NOW+60000,MemoryData.date(NOW));
+        check(MemoryFlashcards.progress(fresh,NOW+60000).done==0,"first remembered new card still has confirmation step");
+        fresh.rateFlashcard(fid,3,NOW+660000,MemoryData.date(NOW));
+        check(MemoryFlashcards.progress(fresh,NOW+660000).done==1,"new card finishes only after learning steps");
+        check(fresh.progress(fd,NOW+660000).done==1,"learning goal distinct from attempt count");
+        reject(()->fresh.rateFlashcard(fid,1,NOW+MemoryScheduler.DAY,MemoryData.date(NOW)),"yesterday buttons rejected across date boundary");
     }
 }

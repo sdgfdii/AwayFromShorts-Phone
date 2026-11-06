@@ -40,10 +40,41 @@ final class DailyQuotaStore {
             return cachedSnapshot;
         }
     }
+    /**
+     * 把已经卸载的应用从额度格子里清理掉（连同账本里的已用时间）。
+     *
+     * 在额度节拍（refresh）和 Guard.apply 里顺手跑：额度只按包名存，卸载不会触发移除，
+     * 共享格子里就会一直挂着一只已卸载的应用、还占着当天那份额度。清理后共享合计随之变小。
+     * 没变化（removed==0）就不写盘，避免每个节拍都 commit 一次。
+     */
+    static synchronized void pruneUninstalled(Context c){
+        try{
+            SharedPreferences p=prefs(c);
+            if(!p.contains("config"))return;
+            Set<String> installed=new LinkedHashSet<>();
+            android.content.pm.PackageManager pm=c.getPackageManager();
+            // 走 Guard.installed：它认得出「被隐藏」和「已卸载」，隐藏兜底冻上的应用不会被当成卸载清掉。
+            for(String pkg:packages(c))if(Guard.installed(pm,pkg))installed.add(pkg);
+            if(installed.size()==packages(c).size())return;   // 全都在装 → 不用清理
+            DailyQuotaData d=load(c,GuardClock.now(c).getTimeInMillis());
+            JSONObject result=DailyQuotaData.pruneUninstalled(d.config,d.usage,installed);
+            int removed=result.optInt("removed",0);
+            if(removed<=0)return;
+            if(!p.edit().putString("config",result.optJSONObject("config").toString())
+                    .putString("usage",result.optJSONObject("usage").toString()).commit())
+                throw new IllegalStateException(T.s("每日限额未能保存"));
+            refreshed=0;signature="";
+        }catch(RuntimeException error){
+            android.util.Log.w("AFS","prune uninstalled quota apps failed: "+error);
+        }
+    }
     static synchronized void refresh(Context c){refresh(c,false);}
     private static synchronized void refresh(Context c,boolean force){long now=GuardClock.now(c).getTimeInMillis();if(!force&&now>=refreshed&&now-refreshed<4500)return;DailyQuotaData d=load(c,now);if(d.groups().length()==0||!d.enabled()&&!force)return;
         recountTodayOnce(c,d,now);
-        boolean reliable=AppUsageQuota.permission(c);List<AppUsageQuota.Span> spans=Collections.emptyList();if(d.enabled()&&reliable)try{spans=AppUsageQuota.spans(c,now,true);}catch(RuntimeException error){reliable=false;}
+        boolean reliable=AppUsageQuota.permission(c);List<AppUsageQuota.Span> spans=Collections.emptyList();if(d.enabled()&&reliable)try{spans=AppUsageQuota.spans(c,now,true);
+            // 挂后台也计时：勾选的应用把「前台服务在跑」的区间并进用量（重叠合并成一段，不双倍）；没勾的原样只计前台。
+            if(!d.backgroundPackages().isEmpty())spans=AppUsageQuota.effective(spans,AppUsageQuota.fgs(c,now),d.backgroundPackages());
+        }catch(RuntimeException error){reliable=false;}
         // 全天推进：调整时段只管「能不能改设置」，不参与统计。
         d.advance(now,spans,reliable,RuleStore.all(c),DayBoundary.hour(c));if(!prefs(c).edit().putString("usage",d.usage.toString()).commit()){writeFailed=true;throw new IllegalStateException(T.s("每日限额用量未能保存"));}writeFailed=false;refreshed=now;
     }
@@ -65,6 +96,7 @@ final class DailyQuotaStore {
         try{
             DailyQuotaData.put(d.usage,"targets",new JSONObject());
             DailyQuotaData.put(d.usage,"lastAt",DayBoundary.startMs(now,hour));
+            DailyQuotaData.put(d.usage,"since",DayBoundary.startMs(now,hour));
             d.usage.remove("error");
             d.usage.remove("unavailable");
         }catch(RuntimeException ignored){return;}
@@ -79,6 +111,39 @@ final class DailyQuotaStore {
         if(!prefs(c).edit().putString("config",candidate.toString()).putString("usage",current.usage.toString()).commit())throw new IllegalStateException(T.s("每日限额未能保存"));refreshed=0;signature="";
     }
     static synchronized void beforeScheduleChange(Context c){if(active(c))refresh(c,true);}
+    /**
+     * 跨设备格子的分钟数改成电脑那一份。
+     *
+     * 池子的预算只有电脑端一个权威（{@code game-quota-config.json} 里那条 shared 规则），
+     * 手机本地那份 minutes 只是给进度条和文案用的副本。以前两边各存一个数、谁也不管谁，
+     * 电脑改成 90 之后手机还顶着 120 显示，非等调整时段还改不动 —— 于是只能看到两个数。
+     *
+     * 这里刻意绕开 {@link #save}：那条路会拦「减少额度」，而同步是状态对齐，不是用户的
+     * 编辑动作。写盘失败（进程被打断之类）就静默跳过，下一轮轮询会再同步一次。
+     */
+    static synchronized void syncSharedMinutes(Context c,String groupId,int minutes){
+        if(groupId==null||groupId.isEmpty()||minutes<1||minutes>1440)return;
+        try{
+            SharedPreferences p=prefs(c);
+            if(!p.contains("config"))return;
+            JSONObject config=new JSONObject(p.getString("config","{}"));
+            JSONArray groups=config.optJSONArray("groups");
+            if(groups==null)return;
+            boolean changed=false;
+            for(int i=0;i<groups.length();i++){
+                JSONObject group=groups.optJSONObject(i);
+                if(group==null||!groupId.equals(group.optString("id"))||group.optInt("minutes")==minutes)continue;
+                group.put("minutes",minutes);
+                changed=true;
+            }
+            if(!changed)return;
+            DailyQuotaData.validate(config);
+            if(!p.edit().putString("config",config.toString()).commit())throw new IllegalStateException(T.s("每日限额未能保存"));
+            refreshed=0;signature="";
+        }catch(Exception error){
+            android.util.Log.w("AFS","sync shared quota minutes failed: "+error);
+        }
+    }
 
     /**
      * 把旧「全天限时」（{@link AppUsageQuota}，一只应用一份、天生不能共享）并进每日限额格子：
@@ -129,9 +194,25 @@ final class DailyQuotaStore {
     static boolean hasAllowance(Context c,String pkg){DailyQuotaData d=snapshot(c);return d.enabled()&&d.group(pkg)!=null;}
     /** 先放开权限：没授权也能配额度，但判不出用量就不冻结；授权后立刻恢复计时与冻结。 */
     /** 超限判定：只看额度本身和应用自身冻结时段，与全局调整时段无关；额度用完当场就冻。 */
-    static boolean exceeded(Context c,String pkg){if(!AppUsageQuota.permission(c))return false;DailyQuotaData d=snapshot(c);Rule rule=RuleStore.all(c).get(pkg);JSONObject group=d.group(pkg);boolean shared=group!=null&&LanQuota.isShared(c,group.optString("id"));boolean local=DailyQuotaData.inScope(rule,GuardClock.now(c).getTimeInMillis())&&d.enabled()&&group!=null&&(writeFailed||d.usage.optBoolean("unavailable")||d.exceeded(pkg));
-        // 共享池：合计（电脑 + 手机）超了就算超。本机先满也继续冻 —— 合计一定不小与它。
-        return local||(shared&&LanQuota.exhausted(c));}
+    static boolean exceeded(Context c,String pkg){
+        if(!AppUsageQuota.permission(c))return false;
+        DailyQuotaData d=snapshot(c);Rule rule=RuleStore.all(c).get(pkg);JSONObject group=d.group(pkg);
+        if(group==null||!d.enabled())return false;
+        // 「共享格子」＝这一格有多个成员（一个格子放多个应用就是它们共用一份额度）。
+        // 注意：本机的多应用格子也算共享，不能只看跨设备那条——之前只认 LanQuota.isShared，
+        // 导致「Chrome 这种本机多应用格子」仍被成员自己的放行时段压制（nextplayer 的案例）。
+        JSONArray members=group.optJSONArray("apps");
+        boolean shared=members!=null&&members.length()>1;
+        boolean lanShared=LanQuota.isShared(c,group.optString("id"));
+        // 本机账本已经写不出来 / 损坏 → 保护性冻结（与时段无关）。
+        boolean broken=writeFailed||d.usage.optBoolean("unavailable");
+        boolean localExceeded=broken||d.exceeded(pkg);
+        // 共享格子优先于自身冻结时段：只要共享额度（含本机这一份）满了就冻，
+        // 不看应用此刻是不是在自己的放行时段里；跨设备格子再把电脑那半边的合计算进来。
+        boolean lanExhausted=lanShared&&LanQuota.exhausted(c);
+        boolean inScope=DailyQuotaData.inScope(rule,GuardClock.now(c).getTimeInMillis());
+        return DailyQuotaData.exceededBy(shared,localExceeded,inScope,lanExhausted);
+    }
     static boolean enforcementChanged(Context c){try{refresh(c);}catch(IllegalStateException error){if(!writeFailed)throw error;}StringBuilder out=new StringBuilder();for(String pkg:packages(c))if(exceeded(c,pkg))out.append(pkg).append(';');synchronized(DailyQuotaStore.class){String next=out.toString();boolean changed=!next.equals(signature);signature=next;return changed;}}
     static String status(Context c,String pkg){DailyQuotaData d=snapshot(c);JSONObject g=d.group(pkg);Rule rule=RuleStore.all(c).get(pkg);if(g==null)return "";return (rule==null||FreezeSlotStore.unassigned(rule)?T.s("全天限额 · "):T.s("所绑时段限额 · "))+description(c,d,g);}
     static boolean readable(Context c,DailyQuotaData d){return !writeFailed&&AppUsageQuota.permission(c)&&!d.usage.optBoolean("unavailable")&&d.usage.optString("error").isEmpty();}

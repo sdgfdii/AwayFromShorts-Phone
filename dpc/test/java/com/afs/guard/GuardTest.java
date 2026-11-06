@@ -329,25 +329,25 @@ public final class GuardTest {
                 "2026-10-22", stampMs("2026-10-22 22:40"));
         ok(StudyGate.shouldHold(late, at(2026, 10, 22, 23, 0)),
                 "★ 23:00 时段结束后仍在 hold（直到打完为止）");
-        // 20:00 前只按应用原有冻结时间运行。
+        // 未完成打卡从当天首次应用冻结结束点接续，不再等 20:00。
         StudyGate.Snapshot morning = StudyGate.parse(
                 "{\"date\":\"2026-10-22\",\"enabled\":true,\"start\":\"22:00\",\"end\":\"23:00\","
                         + "\"allDone\":false,\"checkedAt\":\"2026-10-22 09:00\"}",
                 "2026-10-22", stampMs("2026-10-22 09:10"));
-        ok(!StudyGate.shouldHold(morning, at(2026, 10, 22, 9, 30)),
-                "★ 早上 9:30 未打卡，不延长冻结");
+        ok(StudyGate.shouldHold(morning, at(2026, 10, 22, 9, 30)),
+                "★ 早上 9:30 未打卡，也从原冻结结束后接续");
         StudyGate.Snapshot beforeCheck = StudyGate.parse(
                 "{\"date\":\"2026-10-22\",\"enabled\":true,\"allDone\":false,"
                         + "\"checkedAt\":\"2026-10-22 19:55\"}",
                 "2026-10-22", stampMs("2026-10-22 19:55"));
-        ok(!StudyGate.shouldHold(beforeCheck, at(2026, 10, 22, 19, 59)),
-                "19:59 未打卡，仍不延长冻结");
+        ok(StudyGate.shouldHold(beforeCheck, at(2026, 10, 22, 19, 59)),
+                "19:59 未打卡，按应用冻结结束点接续");
         ok(StudyGate.shouldHold(beforeCheck, at(2026, 10, 22, 20, 0)),
                 "20:00 未打卡，开始延长冻结");
-        eq(StudyGate.stateOf(beforeCheck, at(2026, 10, 22, 19, 59)), StudyGate.ST_PENDING,
-                "20:00 前显示待检查");
-        ok(StudyGate.textOf(beforeCheck, at(2026, 10, 22, 19, 59)).contains("20:00"),
-                "待检查文案说明 20:00 边界");
+        eq(StudyGate.stateOf(beforeCheck, at(2026, 10, 22, 19, 59)), StudyGate.ST_ACTIVE,
+                "20:00 前未完成也显示联动生效");
+        ok(StudyGate.textOf(beforeCheck, at(2026, 10, 22, 19, 59)).contains("直接延长冻结"),
+                "未完成文案说明直接接续冻结");
         eq(StudyGate.nextCheckBoundaryMillis(at(2026, 10, 22, 19, 59)),
                 at(2026, 10, 22, 20, 0).getTimeInMillis(), "下次检查精确排到 20:00");
         eq(StudyGate.nextCheckBoundaryMillis(at(2026, 10, 22, 20, 0)),
@@ -399,8 +399,8 @@ public final class GuardTest {
                 "{\"date\":\"2026-10-23\",\"enabled\":true,\"start\":\"23:00\","
               + "\"end\":\"01:00\",\"allDone\":false,\"checkedAt\":\"2026-10-23 00:20\"}",
                 "2026-10-23", stampMs("2026-10-23 00:30"));
-        ok(!StudyGate.shouldHold(crossAm, at(2026, 10, 23, 0, 30)),
-                "次日 00:30 不继承昨日延长冻结");
+        ok(StudyGate.shouldHold(crossAm, at(2026, 10, 23, 0, 30)),
+                "次日 00:30 目标仍未完成，联动继续生效");
 
         // 8.7 与 Guard.blocked 的叠加语义（文档化行为：纯函数不含闸门）
         System.out.println("  · 与时间表的叠加");

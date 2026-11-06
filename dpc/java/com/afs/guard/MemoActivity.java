@@ -88,6 +88,7 @@ public final class MemoActivity extends ThemedActivity {
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        if(state==null&&getIntent().getBooleanExtra("backup_only",false))getWindow().getDecorView().post(this::backupMenu);
         ui = new Ui(this);
         if(state!=null)notebookFilter=state.getString("bookFilter","*");
         if(state!=null)exportText=state.getString("exportText","");
@@ -220,7 +221,7 @@ public final class MemoActivity extends ThemedActivity {
         if(android.os.Build.VERSION.SDK_INT>=29){optionScroll.setHorizontalScrollbarThumbDrawable(ui.round((ui.accent()&0xffffff)|0x66000000,3));optionScroll.setHorizontalScrollbarTrackDrawable(ui.round(ui.line(),3));}
         optionScroll.addView(options);root.addView(optionScroll);
         optionChip(options,T.s("笔记本"),()->chooseBook(false));optionChip(options,T.s("列表/网格"),()->{MemoLibrary.setGrid(this,!MemoLibrary.grid(this));refreshList();});
-        optionChip(options,T.s("备份与恢复"),this::backupMenu);optionChip(options,T.s("导入文件"),this::importFile);optionChip(options,T.s("回收站"),this::showTrash);optionChip(options,T.s("开源说明"),this::sources);
+        optionChip(options,T.s("导入文件"),this::importFile);optionChip(options,T.s("回收站"),this::showTrash);optionChip(options,T.s("开源说明"),this::sources);
         notebookTabs=new MemoNotebookTabs(this,id->{notebookFilter=id;refreshList(true);});
         LinearLayout.LayoutParams tabsLp=new LinearLayout.LayoutParams(-1,ui.dp(48));tabsLp.setMargins(ui.dp(20),ui.dp(8),ui.dp(20),ui.dp(12));root.addView(notebookTabs,tabsLp);
 
@@ -529,6 +530,7 @@ public final class MemoActivity extends ThemedActivity {
         LinearLayout actions=row();actions.setPadding(ui.dp(12),ui.dp(4),ui.dp(12),ui.dp(12));root.addView(actions);
         undoButton=iconTool(actions,T.s("撤销"),()->travel(false));redoButton=iconTool(actions,T.s("重做"),()->travel(true));
         iconTool(actions,T.s("待办"),()->{if(previewing)togglePreview();bodyInput.checklist();bodyInput.requestFocus();showKeyboard(bodyInput);});
+        iconTool(actions,"Markdown",this::markdownMenu);
         iconTool(actions,T.s("管理"),this::taskManager);
         previewButton=iconTool(actions,T.s("预览"),this::togglePreview);iconTool(actions,T.s("更多"),this::editorMore);
         applyPaper();
@@ -832,6 +834,33 @@ public final class MemoActivity extends ThemedActivity {
         if(change.body.equals(original)){message(T.s("内容未改变，或已达到 2 万字上限"));return;}
         bodyInput.apply(new MemoChecklist.Change(change.body,change.cursor));
         if("delete".equals(operation))message(T.s("已删除段落，可用底部撤销恢复"));
+    }
+    private void markdownMenu(){
+        if(previewing)togglePreview();
+        final int anchor=Math.max(0,bodyInput.getSelectionStart()),focus=Math.max(0,bodyInput.getSelectionEnd());
+        String[] labels={T.s("标题"),T.s("副标题"),T.s("小标题"),T.s("正文"),T.s("注释"),T.s("圆点符号"),T.s("数字符号"),T.s("待办事项"),T.s("增加缩进"),T.s("减少缩进")};
+        LinearLayout grid=new LinearLayout(this);grid.setOrientation(1);grid.setPadding(ui.dp(12),ui.dp(8),ui.dp(12),ui.dp(12));
+        android.app.AlertDialog dialog=ThemeStore.dialog(this).setTitle("Markdown").setView(grid).setNegativeButton(T.s("关闭"),null).create();
+        for(int rowIndex=0;rowIndex<2;rowIndex++){
+            LinearLayout line=row();grid.addView(line);
+            for(int col=0;col<5;col++){
+                final int index=rowIndex*5+col;LinearLayout cell=new LinearLayout(this);cell.setOrientation(1);cell.setGravity(Gravity.CENTER);
+                MemoToolButton icon=new MemoToolButton(this,labels[index]);icon.setIconSize(24);cell.addView(icon,new LinearLayout.LayoutParams(-1,ui.dp(48)));
+                TextView label=text(labels[index],10,ui.text2());label.setGravity(Gravity.CENTER);label.setMaxLines(2);cell.addView(label,new LinearLayout.LayoutParams(-1,ui.dp(32)));
+                Runnable apply=()->{dialog.dismiss();markdownAction(index,anchor,focus);};icon.setOnClickListener(v->apply.run());cell.setOnClickListener(v->apply.run());
+                line.addView(cell,new LinearLayout.LayoutParams(0,-2,1));
+            }
+        }
+        dialog.show();
+    }
+    private void markdownAction(int action,int anchor,int focus){
+        String body=bodyInput.getText().toString();MemoTextFormat.Change change;
+        if(action<=3)change=MemoTextFormat.heading(body,anchor,focus,action==3?0:action+1);
+        else if(action==4)change=MemoTextFormat.quote(body,anchor,focus);
+        else if(action<=6)change=MemoTextFormat.list(body,anchor,focus,action==6);
+        else if(action==7){MemoChecklist.Change task=MemoChecklist.convert(body,anchor,focus);bodyInput.apply(task);bodyInput.requestFocus();showKeyboard(bodyInput);return;}
+        else change=MemoTextFormat.indent(body,anchor,focus,action==8);
+        bodyInput.apply(new MemoChecklist.Change(change.body,change.cursor));bodyInput.requestFocus();showKeyboard(bodyInput);
     }
     private void formatMenu(){String[] labels={T.s("标题"),T.s("副标题"),T.s("小标题"),T.s("正文"),T.s("粗体"),T.s("斜体"),T.s("删除线"),T.s("下划线"),T.s("高亮"),T.s("无序列表"),T.s("有序列表"),T.s("增加缩进"),T.s("减少缩进")};
         ThemeStore.dialog(this).setTitle(T.s("格式")).setItems(labels,(d,i)->{if(previewing)togglePreview();String body=bodyInput.getText().toString();int a=Math.max(0,bodyInput.getSelectionStart()),b=Math.max(0,bodyInput.getSelectionEnd());MemoTextFormat.Change change;

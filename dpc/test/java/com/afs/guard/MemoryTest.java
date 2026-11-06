@@ -348,7 +348,7 @@ public final class MemoryTest {
         String stamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(now.getTime());
         String pending = "{\"enabled\":true,\"allDone\":false,\"date\":\"" + day + "\",\"checkedAt\":\"" + stamp + "\"}";
         StudyGate.Snapshot s = StudyGate.parse(pending, day, now.getTimeInMillis());
-        check(!StudyGate.shouldHold(s, now), "memory target does not hold before 20");
+        check(StudyGate.shouldHold(s, now), "unfinished memory target participates before 20");
         now.set(Calendar.HOUR_OF_DAY, 20); now.set(Calendar.MINUTE, 0);
         check(StudyGate.shouldHold(s, now), "memory pending participates in existing gate at 20");
         StudyGate.Snapshot done = StudyGate.parse(pending.replace("false", "true"), day, now.getTimeInMillis());

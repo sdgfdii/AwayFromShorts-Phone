@@ -9,6 +9,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -23,25 +24,25 @@ public final class Ui {
     public static final String K_THEME = "theme";     // dark | light | auto
 
     /* ---------- 深色（默认） ---------- */
-    public static final int D_BG = 0xFF0B0C10;
-    public static final int D_SURFACE = 0xFF16171C;
-    public static final int D_SURFACE2 = 0xFF1E2027;
-    public static final int D_LINE = 0xFF262932;
-    public static final int D_TEXT = 0xFFF2F3F5;
-    public static final int D_TEXT2 = 0xFF9096A1;
-    public static final int D_TEXT3 = 0xFF6B707A;
+    public static final int D_BG = 0xFF090B0F;
+    public static final int D_SURFACE = 0xFF171A20;
+    public static final int D_SURFACE2 = 0xFF20242C;
+    public static final int D_LINE = 0xFF2B3039;
+    public static final int D_TEXT = 0xFFF7F9FC;
+    public static final int D_TEXT2 = 0xFFAEB6C2;
+    public static final int D_TEXT3 = 0xFF737D8B;
 
     /* ---------- 浅色 ---------- */
-    public static final int L_BG = 0xFFF3F4F6;
+    public static final int L_BG = 0xFFF4F7FA;
     public static final int L_SURFACE = 0xFFFFFFFF;
-    public static final int L_SURFACE2 = 0xFFEDEFF2;
-    public static final int L_LINE = 0xFFE3E6EB;
-    public static final int L_TEXT = 0xFF14161A;
-    public static final int L_TEXT2 = 0xFF5F6570;
-    public static final int L_TEXT3 = 0xFF8B9199;
+    public static final int L_SURFACE2 = 0xFFEEF2F6;
+    public static final int L_LINE = 0xFFE1E6EC;
+    public static final int L_TEXT = 0xFF111418;
+    public static final int L_TEXT2 = 0xFF5C6570;
+    public static final int L_TEXT3 = 0xFF9099A5;
 
     /* ---------- 强调色（两套主题共用） ---------- */
-    public static final int BLUE = 0xFF2F6FED;      // 主色：Voyage 那种蓝
+    public static final int BLUE = 0xFF246BFD;      // Figma 视觉系统主色
     public static final int BLUE_DIM = 0xFF1F4FB0;
     public static final int TEAL = 0xFF12A594;
     public static final int GREEN = 0xFF2FA36B;
@@ -148,6 +149,15 @@ public final class Ui {
                 ctx.getResources().getDisplayMetrics()) + 0.5f);
     }
 
+    /** Blend two opaque colours without pulling AndroidX into the native build. */
+    int mix(int from, int to, float amount) {
+        float keep = 1f - Math.max(0f, Math.min(1f, amount));
+        int r = Math.round(((from >> 16) & 255) * keep + ((to >> 16) & 255) * (1f - keep));
+        int g = Math.round(((from >> 8) & 255) * keep + ((to >> 8) & 255) * (1f - keep));
+        int b = Math.round((from & 255) * keep + (to & 255) * (1f - keep));
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
     /* ==================== 构件 ==================== */
 
     public GradientDrawable round(int color, float radiusDp) {
@@ -177,23 +187,35 @@ public final class Ui {
         return baseDp;
     }
 
-    /** 一张标准卡片：圆角 18、内边距 16、无描边。 */
+    /** 一张标准悬浮卡：22dp 圆角、18dp 内边距和极轻的轮廓与阴影。 */
     public LinearLayout card() {
-        return card(18f, 16f);
+        return card(22f, 18f);
     }
 
     public LinearLayout card(float radiusDp, float padDp) {
         LinearLayout box = new LinearLayout(ctx);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setBackground(round(surface(), radiusDp));
+        int edge = amap ? line() : mix(line(), surface(), dark ? .28f : .48f);
+        box.setBackground(round(surface(), radiusDp, edge, amap ? .5f : .7f));
         int p = dp(padDp);
         box.setPadding(p, p, p, p);
-        if(amap){box.setElevation(dp(1));box.setClipToOutline(true);}
+        box.setElevation(dp(amap ? 1 : 2));
+        box.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
         return box;
     }
 
-    /** Amap's pale blue header fades into the neutral page; classic stays unchanged. */
-    public void page(View view){if(amap)view.setBackground(AmapStyle.page(this));else view.setBackgroundColor(bg());}
+    /**
+     * Figma 的底色不是一块死色：在不打扰文字的前提下，把主色和暖色各掺入 2–4%。
+     * 每个页面只创建一个小型渐变 drawable，不增加常驻动画或模糊开销。
+     */
+    public void page(View view){
+        if(amap){view.setBackground(AmapStyle.page(this));return;}
+        int edgeA=mix(bg(), accent(), dark ? .055f : .045f);
+        int edgeB=mix(bg(), dark ? 0xFF171A20 : 0xFFF8F5EF, .10f);
+        GradientDrawable g=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{edgeA,bg(),edgeB});
+        view.setBackground(g);
+    }
 
     /** 卡片之间统一留 10dp，看起来才像一组。 */
     public LinearLayout.LayoutParams gap(int bottomDp) {
@@ -263,8 +285,9 @@ public final class Ui {
             TextView a = new TextView(ctx);
             a.setText(action);
             a.setTextSize(12);
-            a.setTextColor(text2());
+            a.setTextColor(accent());
             a.setPadding(dp(8), dp(6), 0, dp(6));
+            a.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
             if (onAction != null) {
                 a.setOnClickListener(onAction);
             }
@@ -293,39 +316,52 @@ public final class Ui {
                              View.OnClickListener onClick) {
         LinearLayout box = new LinearLayout(ctx);
         box.setOrientation(LinearLayout.VERTICAL);
-        box.setGravity(Gravity.CENTER_HORIZONTAL);
-        box.setBackground(round(surface(), 16f));
-        int p = dp(12);
-        box.setPadding(p, p, p, p);
+        box.setGravity(Gravity.START);
+        box.setBackground(round(surface(), 22f, mix(line(),surface(),.42f), .7f));
+        int p = dp(16);
+        box.setPadding(p, p, p, dp(14));
+        box.setMinimumHeight(dp(104));
+        box.setElevation(dp(2));
+        box.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
         if (onClick != null) {
             box.setOnClickListener(onClick);
         }
 
         LinearLayout iconWrap = new LinearLayout(ctx);
         iconWrap.setGravity(Gravity.CENTER);
-        if(amap)iconWrap.addView(new AmapStyle.Icon(ctx,label,text()),new LinearLayout.LayoutParams(dp(32),dp(32)));
-
-        else iconWrap.addView(circle(glyph, circleColor, 44f, 17));
-        box.addView(iconWrap);
+        iconWrap.setBackground(round(soft(accent(), .86f), 13f));
+        if(amap)iconWrap.addView(new AmapStyle.Icon(ctx,label,accent()),new LinearLayout.LayoutParams(dp(22),dp(22)));
+        else if(LineIcon.known(glyph))iconWrap.addView(new LineIcon(ctx,glyph,accent()),new LinearLayout.LayoutParams(dp(21),dp(21)));
+        else {
+            TextView glyphView=new TextView(ctx);
+            glyphView.setText(glyph);
+            glyphView.setTextSize(16);
+            glyphView.setTextColor(accent());
+            glyphView.setGravity(Gravity.CENTER);
+            ThemeStore.excludeFont(glyphView);
+            iconWrap.addView(glyphView,new LinearLayout.LayoutParams(dp(22),dp(22)));
+        }
+        box.addView(iconWrap,new LinearLayout.LayoutParams(dp(38),dp(38)));
 
         TextView t = new TextView(ctx);
         t.setText(label);
-        t.setTextSize(13);
+        t.setTextSize(14);
         t.setTextColor(text());
-        t.setGravity(Gravity.CENTER);
+        t.setGravity(Gravity.START);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         t.setMaxLines(1);
         t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tlp.topMargin = dp(9);
+        tlp.topMargin = dp(14);
         box.addView(t, tlp);
 
         if (hint != null) {
             TextView h = new TextView(ctx);
             h.setText(hint);
-            h.setTextSize(10);
+            h.setTextSize(11);
             h.setTextColor(text3());
-            h.setGravity(Gravity.CENTER);
+            h.setGravity(Gravity.START);
             h.setMaxLines(1);
             // 英文比中文长，超出宽度时静默裁掉会留下「Cards · rewards ·」这种断尾。
             // 显示省略号至少说明「还有内容」，不至于看起来像 bug。
@@ -343,7 +379,8 @@ public final class Ui {
         tv.setTextColor(fg);
         tv.setGravity(Gravity.CENTER);
         tv.setBackground(round(fill, 99f));
-        tv.setPadding(dp(10), dp(5), dp(10), dp(5));
+        tv.setMinHeight(dp(28));
+        tv.setPadding(dp(12), dp(5), dp(12), dp(5));
         return tv;
     }
 
@@ -367,7 +404,9 @@ public final class Ui {
         LinearLayout box = new LinearLayout(ctx);
         box.setOrientation(LinearLayout.HORIZONTAL);
         box.setGravity(Gravity.CENTER);
-        box.setBackground(round(fill, 12f));
+        box.setBackground(round(fill, 16f, mix(line(),fill,.42f), .7f));
+        box.setElevation(dp(2));
+        box.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
         box.addView(new GearIcon(ctx, fg), new LinearLayout.LayoutParams(dp(19), dp(19)));
         box.setContentDescription(T.s("设置"));
         return box;
@@ -381,7 +420,7 @@ public final class Ui {
         tv.setTextSize(15);
         tv.setTextColor(fg);
         tv.setGravity(Gravity.CENTER);
-        tv.setBackground(round(fill, 12f));
+        tv.setBackground(round(fill, 14f, mix(line(),fill,.42f), .7f));
         tv.setLayoutParams(new LinearLayout.LayoutParams(dp(34), dp(34)));
         return tv;
     }

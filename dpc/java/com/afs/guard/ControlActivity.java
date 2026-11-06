@@ -300,10 +300,12 @@ public final class ControlActivity extends ThemedActivity {
         });
         row(card, T.s("每隔多久提醒"), RestReminder.minutes(ReminderStore.every(this)), this::pickEvery);
         row(card, T.s("时间段"), ReminderStore.window(this), this::pickRestWindow);
+        row(card, T.s("消失方式"), ReminderStore.confirm(this) ? T.s("点一下才消失") : T.s("15 秒后自动消失"), this::pickDismiss);
         row(card, T.s("后台提醒弹窗"), RestReminderActivity.backgroundAllowed(this) ? T.s("已允许") : T.s("去授权"), this::openReminderPermission);
         note(card, Lang.t(this,
                 "到点只弹提醒页面，不发通知；关掉页面就回到原来的界面。灭屏、正在锁机、放行期里都不打扰。",
                 "When it is time, only a reminder page appears — no notification. Close it and you are back to where you were. Nothing fires while the screen is off, while the phone is locked, or during an unlock pass."));
+        note(card, T.s("不管选哪一种，前 15 秒都关不掉：返回键、点卡片外面都不理。提醒就是提醒，别一个手势划过去。开关只管「要不要提醒」，不管这一次能不能提前跳过。"));
         note(card, Lang.t(this,
                 "因为没有通知兜底，「后台提醒弹窗」必须允许；不给这个权限，系统会直接拦掉弹窗，这一次提醒就什么都不会出现。",
                 "There is no notification fallback, so the background pop-up permission is required. Without it the system blocks the launch and that reminder never appears."));
@@ -330,6 +332,21 @@ public final class ControlActivity extends ThemedActivity {
         }
         pick(T.s("每隔多久提醒"), labels, checked, which -> {
             ReminderStore.setEvery(this, values[which]);
+            render();
+        });
+    }
+
+    /**
+     * 提醒卡片是「等人点」还是「放着不管自己走」——默认自动走。
+     *
+     * 这一项只决定 15 秒之后怎么退场：自动模式下到点自己消失，
+     * 点一下模式往下留着等人点。前 15 秒两种模式都关不掉，那是另一道闸。
+     */
+    private void pickDismiss() {
+        String[] labels = {T.s("15 秒后自动消失"), T.s("点一下才消失")};
+        int checked = ReminderStore.confirm(this) ? 1 : 0;
+        pick(T.s("消失方式"), labels, checked, which -> {
+            ReminderStore.setConfirm(this, which == 1);
             render();
         });
     }

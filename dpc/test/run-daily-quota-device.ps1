@@ -1,4 +1,4 @@
-param([string]$Python,[string]$Serial='emulator-5580')
+param([string]$Python,[string]$Serial='emulator-5580',[switch]$CoreOnly)
 $ErrorActionPreference='Stop'
 if($Serial -notlike "emulator-*"){throw "Daily quota fixture tests require an emulator serial"}
 $taskRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -43,10 +43,12 @@ foreach($taskName in @('one','two')) {
 }
 Checked $taskAdb @('-s',$Serial,'install','--no-incremental','-r',"$taskOut/qa.apk")
 try {
-    $taskResult=& $taskAdb -s $Serial shell am instrument -w com.afs.guard.quotaqa/com.afs.guard.DailyQuotaDeviceTest 2>&1
+    $taskCall=@("-s",$Serial,"shell","am","instrument","-w");if($CoreOnly){$taskCall+=@("-e","core_only","true")};$taskCall+="com.afs.guard.quotaqa/com.afs.guard.DailyQuotaDeviceTest"
+    $taskResult=& $taskAdb @taskCall 2>&1
     $taskResult | Write-Output
     $taskText=$taskResult -join "`n"
-    if($taskText -notmatch 'Daily quota device: \d+ checks passed' -or $taskText -match 'INSTRUMENTATION_FAILED|AssertionError|Exception:'){throw 'Daily quota device checks failed'}
+    $taskExpected=if($CoreOnly){"Daily quota core device: \d+ checks passed"}else{"Daily quota device: \d+ checks passed"}
+    if($taskText -notmatch $taskExpected -or $taskText -match 'INSTRUMENTATION_FAILED|AssertionError|Exception:'){throw 'Daily quota device checks failed'}
 } finally {
     & $taskAdb -s $Serial uninstall com.afs.quota.one | Out-Null
     & $taskAdb -s $Serial uninstall com.afs.quota.two | Out-Null

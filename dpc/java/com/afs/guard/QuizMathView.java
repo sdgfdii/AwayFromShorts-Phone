@@ -9,6 +9,15 @@ import org.json.JSONObject;
 
 /** Only bundled, read-only assets are served. Imported content is escaped text, never markup or JS. */
 public final class QuizMathView extends WebView {
+    private boolean pageActive=true, disposed, loaded, reloadNeeded;
+    private int lifecycle;
+    private final Runnable measureLater=()->measureContent();
+    void setPageActive(boolean active) {
+        if(disposed)return;
+        pageActive=active;lifecycle++;removeCallbacks(measureLater);
+        if(active){onResume();if(reloadNeeded){reloadNeeded=false;reload();}else measureContent();}else{if(!loaded){stopLoading();reloadNeeded=true;}onPause();}
+    }
+    @Override public void destroy(){disposed=true;lifecycle++;removeCallbacks(measureLater);super.destroy();}
     private static final String ORIGIN="https://quiz.afs.invalid/";
     public QuizMathView(Context context,Ui ui,String content) {
         super(context);
@@ -34,7 +43,7 @@ public final class QuizMathView extends WebView {
                 return empty();
             }
             private WebResourceResponse empty(){return new WebResourceResponse("text/plain","UTF-8",new java.io.ByteArrayInputStream(new byte[0]));}
-            @Override public void onPageFinished(WebView v,String url){measureContent();}
+            @Override public void onPageFinished(WebView v,String url){if(!pageActive)return;loaded=true;measureContent();if(pageActive&&!disposed){removeCallbacks(measureLater);postDelayed(measureLater,200);}}
         });
         String fg=String.format("#%06X",ui.text()&0xFFFFFF);
         // All imported strings go through HTML escaping; no Javascript bridge is exposed.
@@ -54,18 +63,15 @@ public final class QuizMathView extends WebView {
         loadDataWithBaseURL(ORIGIN,html,"text/html","UTF-8",null);
     }
     private void measureContent() {
+        if(!pageActive||disposed)return;
+        final int token=lifecycle;
         evaluateJavascript("Math.ceil(document.getElementById('math').getBoundingClientRect().height)",value->{
+            if(!pageActive||disposed||token!=lifecycle)return;
             try {
-                int height=(int)Math.ceil(Double.parseDouble(value)*getResources().getDisplayMetrics().density);
-                height=Math.max(48,Math.min(height,24000));
+                int height=Math.max(48,Math.min(24000,(int)Math.ceil(Double.parseDouble(value)*getResources().getDisplayMetrics().density)));
                 ViewGroup.LayoutParams lp=getLayoutParams();if(lp!=null&&lp.height!=height){lp.height=height;setLayoutParams(lp);}
-            } catch(Exception ignored) { }
+            }catch(Exception ignored){}
         });
-        postDelayed(()->evaluateJavascript("document.fonts.ready.then(function(){return true;})",v->{
-            if(getParent()!=null) evaluateJavascript("Math.ceil(document.getElementById('math').getBoundingClientRect().height)",h->{
-                try{ViewGroup.LayoutParams lp=getLayoutParams();lp.height=Math.max(48,(int)Math.ceil(Double.parseDouble(h)*getResources().getDisplayMetrics().density));setLayoutParams(lp);}catch(Exception ignored){}
-            });
-        }),200);
     }
     public static String escape(String s) {return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;").replace("'","&#39;");}
 }

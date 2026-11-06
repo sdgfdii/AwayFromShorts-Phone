@@ -4,7 +4,8 @@ package com.afs.guard;
  * Pure swipe decision logic: "how far counts, and which direction". No Android imports, so the exact
  * thresholds the UI uses can be tested offline; pixel conversion stays in {@link SwipeCardView}.
  *
- * 闪卡用上下滑：上滑 = 记住了（3），下滑 = 忘了（1）；2/4 仍只走按钮。
+ * 记忆卡只用手势评分：上滑 = 认识（3），下滑 = 忘了（1），点卡片 = 完全不认识（同为 1）。
+ * 四档按钮（忘了 / 费力 / 记住 / 轻松）已删除，2 和 4 不再由界面产生。
  */
 public final class MemorySwipe {
     /** 方向值等于手指纵向位移的符号：上滑 dy&lt;0，下滑 dy&gt;0。 */

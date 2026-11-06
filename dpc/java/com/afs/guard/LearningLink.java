@@ -14,7 +14,13 @@ final class LearningLink {
     static Progress memory(Context c) {
         Progress out = new Progress();
         try {
-            MemoryData data = MemoryStore.snapshot(c);
+            return MemoryStore.learningProgress(c);
+        } catch (RuntimeException ignored) { }
+        return out;
+    }
+    static Progress memoryFromData(Context c, MemoryData data) {
+        Progress out = new Progress();
+        try {
             long now = System.currentTimeMillis();
             for (int i = 0; i < data.decks().length(); i++) {
                 JSONObject deck = data.decks().optJSONObject(i);
@@ -48,7 +54,7 @@ final class LearningLink {
         if (!quizEnabled(c)) return p;
         p.selected = true;
         try {
-            p.done = QuizStore.snapshot(c).stats(StudyStore.today())[0];
+            p.done = QuizStore.completedToday(c);
             p.target = quizTarget(c);
             p.available = true;
         } catch (RuntimeException ignored) { }

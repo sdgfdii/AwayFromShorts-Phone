@@ -60,6 +60,7 @@ public final class FloatingNav extends FrameLayout {
     private final Ui ui;
     private final AppearanceConfig appearance;
     private final View source;
+    private NavContentInsets contentInsets;
     private final FrameLayout host, panel;
     private final LinearLayout tabs;
     private final Material material;
@@ -86,23 +87,45 @@ public final class FloatingNav extends FrameLayout {
     private final Choreographer.FrameCallback frame=this::step;
 
     public static View wrap(Activity activity, View content, int selected) {
+        return wrap(activity,content,selected,content);
+    }
+
+    /**
+     * 子页面不挂底栏：卡管理、卡设置、编辑器这些是别的页面下面的层级，
+     * 底下再亮一条主标签栏，既回不去也容易误触，直接只给内容。
+     */
+    public static View plain(Activity activity, View content) {
+        fullscreen(activity);
+        return content;
+    }
+    public static View wrap(Activity activity, View content, int selected,View safeContent) {
         fullscreen(activity);
         Ui ui=new Ui(activity);
-        if(content instanceof ScrollView && ((ScrollView)content).getChildCount()>0) {
-            View body=((ScrollView)content).getChildAt(0);
-            body.setPadding(body.getPaddingLeft(),body.getPaddingTop(),body.getPaddingRight(),body.getPaddingBottom()+ui.dp(94));
-            ((ScrollView)content).setClipToPadding(false);
-        } else if(content instanceof LinearLayout) {
-            content.setPadding(content.getPaddingLeft(),content.getPaddingTop(),content.getPaddingRight(),content.getPaddingBottom()+ui.dp(94));
-        }
         FrameLayout host=new FrameLayout(activity);
         host.setBackgroundColor(ui.bg());host.setClipChildren(false);host.setClipToPadding(false);
         // 全局滑页手势已删（2026-11-02 用户要求）：切页只走底栏。
         // 页面内容直接进 host，不再套 SwipeNavHost。
         host.addView(content,new LayoutParams(-1,-1));
         FloatingNav nav=new FloatingNav(activity,content,host,selected,null);
+        nav.contentInsets=new NavContentInsets(safeContent);
+        nav.contentInsets.apply(ui.dp(62+21+12));
         LiveNavWindow.attach(activity,host,nav);
         return host;
+    }
+
+    void updateContentInsets(boolean keyboard,int safe,int bottom){
+        if(contentInsets==null)return;
+        if(keyboard){
+            // adjustResize already shrinks some windows; fullscreen windows may only pan.
+            // Reserve just the uncovered keyboard overlap, never add its height twice.
+            android.graphics.Rect visible=new android.graphics.Rect();host.getWindowVisibleDisplayFrame(visible);
+            int[] location=new int[2];host.getLocationOnScreen(location);
+            contentInsets.apply(Math.max(0,location[1]+host.getHeight()-visible.bottom));return;
+        }
+        int fallback=ui.dp(62+12)+(floating()?bottom:safe);
+        int[] page=new int[2],dock=new int[2];host.getLocationOnScreen(page);getLocationOnScreen(dock);
+        int clearance=getWidth()>0&&getHeight()>0?NavContentInsets.clearance(page[1]+host.getHeight(),dock[1],dock[1]+getHeight(),ui.dp(12),fallback):fallback;
+        contentInsets.apply(clearance);
     }
 
     public static void fullscreen(Activity activity) {

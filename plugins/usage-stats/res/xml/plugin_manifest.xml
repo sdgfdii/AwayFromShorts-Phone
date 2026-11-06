@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plugin id="usage-stats" protocolMin="1" protocolMax="1" versionCode="1">
+    <capability name="usage.summary.read" />
+    <capability name="usage.access.request" />
+    <page slot="HISTORY_MORE" id="screen" activity=".UsageStatsActivity" order="10" />
+</plugin>

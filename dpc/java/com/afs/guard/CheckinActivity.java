@@ -30,7 +30,6 @@ import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -531,10 +530,10 @@ public class CheckinActivity extends ThemedActivity {
         // （topSub / footHint / dots 同理，字段引用保持安全即可）。
 
         // ---- 卡片舞台：悬浮在更暗的底色上，立体感从这里来 ----
-        int pageBg = look.amap?look.bg():(dark ? 0xFF232A34 : 0xFFE2E5EA);
+        int pageBg = look.bg();
         // 开了亚克力底，页面自身就不能再铺死色 —— 让底下的模糊图透上来。
-        root.setBackgroundColor(Backdrop.has(this) ? Color.TRANSPARENT : pageBg);
-        if(look.amap&&!Backdrop.has(this))look.page(root);
+        if (Backdrop.has(this)) root.setBackgroundColor(Color.TRANSPARENT);
+        else look.page(root);
         stage = new FrameLayout(this);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
@@ -588,8 +587,10 @@ public class CheckinActivity extends ThemedActivity {
         host.addView(root, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        root.setPadding(root.getPaddingLeft(),root.getPaddingTop(),root.getPaddingRight(),root.getPaddingBottom()+dp(94));
-        setContentView(FloatingNav.wrap(this, host, getIntent().getBooleanExtra(CardManagementActivity.EXTRA_MANAGE,false)?4:3));
+        // 打卡是主标签，底栏要留着；从卡管理进来的目标卡、禁忌卡、外观字体都是子页面，不挂底栏。
+        boolean manage = getIntent().getBooleanExtra(CardManagementActivity.EXTRA_MANAGE,false);
+        String open = getIntent().getStringExtra(EXTRA_OPEN);
+        setContentView(NavPolicy.checkinShowsNav(manage, open) ? FloatingNav.wrap(this, host, 3, root) : FloatingNav.plain(this, host));
         loadBackdrop();
     }
 
@@ -783,8 +784,8 @@ public class CheckinActivity extends ThemedActivity {
             card.setTranslationY(dp(56));
             card.setAlpha(0f);
             card.animate().translationY(0).alpha(1f)
-                    .setInterpolator(new DecelerateInterpolator(1.6f))
-                    .setDuration(MotionPolicy.duration(CheckinActivity.this,210)).start();
+                    .setInterpolator(Motion.OUT)
+                    .setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.ENTER)).start();
         }
 
         renderDots();
@@ -1455,7 +1456,7 @@ public class CheckinActivity extends ThemedActivity {
     private void floatify(View v, float elevPx) {
         v.setOutlineProvider(new ViewOutlineProvider() {
             public void getOutline(View view, Outline outline) {
-                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(20));
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(22));
             }
         });
         v.setClipToOutline(false);
@@ -1707,14 +1708,14 @@ public class CheckinActivity extends ThemedActivity {
         if (card != null) {
             card.animate().translationX(0).translationY(0).rotation(0).alpha(1f)
                     .scaleX(1f).scaleY(1f).rotationX(0f).rotationY(0f)
-                    .setInterpolator(new DecelerateInterpolator(1.6f))
-                    .setDuration(MotionPolicy.duration(CheckinActivity.this,190)).start();
+                    .setInterpolator(Motion.OUT_SOFT)
+                    .setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.ENTER)).start();
         }
         if (ghost != null) {
             ghost.animate().scaleX(0.94f).scaleY(0.94f).translationX(0)
                     .translationY(dp(12)).alpha(0.6f)
-                    .setInterpolator(new DecelerateInterpolator(1.6f))
-                    .setDuration(MotionPolicy.duration(CheckinActivity.this,190)).start();
+                    .setInterpolator(Motion.OUT_SOFT)
+                    .setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.ENTER)).start();
         }
         if (pre != null) {
             // 没换成就滑回原来那格，不能直接删 —— 直接删等于"啪"地消失
@@ -1726,8 +1727,8 @@ public class CheckinActivity extends ThemedActivity {
             pre = null;
             preIndex = -1;
             v.animate().translationX(backX).translationY(backY)
-                    .setInterpolator(new DecelerateInterpolator(1.6f))
-                    .setDuration(MotionPolicy.duration(CheckinActivity.this,170))
+                    .setInterpolator(Motion.OUT_SOFT)
+                    .setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.EXIT))
                     .withEndAction(new Runnable() {
                         public void run() {
                             stage.removeView(v);
@@ -1765,8 +1766,8 @@ public class CheckinActivity extends ThemedActivity {
         float w = stageWidth();
         // 出去 = 整整一页宽，进来那张从整整一页宽处补位：轮换，不是盖上去
         out.animate().translationX(-step * w)
-                .setInterpolator(new DecelerateInterpolator(1.8f))
-                .setDuration(MotionPolicy.duration(CheckinActivity.this,170))
+                .setInterpolator(Motion.IN_OUT)
+                .setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.EXIT))
                 .withEndAction(new Runnable() {
                     public void run() {
                         if (in != null) {
@@ -1783,8 +1784,8 @@ public class CheckinActivity extends ThemedActivity {
 
         if (in != null) {
             in.animate().translationX(0)
-                    .setInterpolator(new DecelerateInterpolator(1.8f))
-                    .setDuration(MotionPolicy.duration(CheckinActivity.this,170)).start();
+                    .setInterpolator(Motion.IN_OUT)
+                    .setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.EXIT)).start();
         }
     }
 
@@ -1818,8 +1819,8 @@ public class CheckinActivity extends ThemedActivity {
         }
         card.setTranslationX(stageWidth() * step);
         card.animate().translationX(0)
-                .setInterpolator(new DecelerateInterpolator(1.8f))
-                .setDuration(MotionPolicy.duration(CheckinActivity.this,200)).start();
+                .setInterpolator(Motion.OUT)
+                .setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.ENTER)).start();
     }
 
     /* ==================== 提交 ==================== */
@@ -1916,8 +1917,8 @@ public class CheckinActivity extends ThemedActivity {
             return;
         }
         c.animate().translationY(stageHeight()).alpha(0.35f)
-                .setInterpolator(new DecelerateInterpolator(1.7f))
-                .setDuration(MotionPolicy.duration(CheckinActivity.this,200))
+                .setInterpolator(Motion.IN)
+                .setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.EXIT))
                 .withEndAction(after).start();
     }
 
@@ -1958,74 +1959,9 @@ public class CheckinActivity extends ThemedActivity {
         if(!cardMotion()){end.run();return;}
         v.animate().setListener(null).withEndAction(null).cancel();
         v.animate().translationY(-stageHeight()).alpha(.25f)
-            .setInterpolator(new DecelerateInterpolator(1.4f)).setDuration(180)
+            .setInterpolator(Motion.IN).setDuration(MotionPolicy.duration(this,Motion.EXIT))
             .withEndAction(()->{if(generation==cardVisualGeneration&&card==v&&!isFinishing()&&!isDestroyed())end.run();}).start();
     }
-
-    private void shatter(final View v, final Runnable end) {
-        int w = v.getWidth();
-        int h = v.getHeight();
-        if (w <= 0 || h <= 0) {
-            end.run();
-            return;
-        }
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas cv = new Canvas(bmp);
-        v.draw(cv);                       // 含底图/圆环/全部文字，快照即所见
-        int cols = 7;
-        int rows = 10;
-        int tw = w / cols;
-        int th = h / rows;
-        Random rnd = new Random();
-        List<View> tiles = new ArrayList<>();
-        float baseX = v.getX();           // 卡此刻的视觉位置（含拖拽位移）
-        float baseY = v.getY();
-        for (int r = 0; r < rows; r++) {
-            for (int ci = 0; ci < cols; ci++) {
-                int pw = (ci == cols - 1) ? (w - ci * tw) : tw;
-                int ph = (r == rows - 1) ? (h - r * th) : th;
-                if (pw <= 0 || ph <= 0) {
-                    continue;
-                }
-                Bitmap piece = Bitmap.createBitmap(bmp, ci * tw, r * th, pw, ph);
-                ImageView t = new ImageView(this);
-                t.setImageBitmap(piece);
-                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(pw, ph);
-                lp.leftMargin = (int) baseX + ci * tw;
-                lp.topMargin = (int) baseY + r * th;
-                stage.addView(t, lp);
-                tiles.add(t);
-            }
-        }
-        v.setVisibility(View.INVISIBLE);   // 原卡让位给碎块
-        long maxDur = 0;
-        float sw = Math.max(stage.getWidth(), w);
-        for (View t : tiles) {
-            long dur = 420 + rnd.nextInt(340);
-            maxDur = Math.max(maxDur, dur + 130);
-            t.animate()
-                    .translationX((rnd.nextFloat() - 0.5f) * sw * 1.5f)
-                    .translationY(-(dp(80) + rnd.nextFloat() * sw * 0.8f))
-                    .rotation((rnd.nextFloat() - 0.5f) * 130f)
-                    .scaleX(0.55f).scaleY(0.55f).alpha(0f)
-                    .setStartDelay(rnd.nextInt(130))
-                    .setInterpolator(new DecelerateInterpolator(1.1f))
-                    .setDuration(dur).start();
-        }
-        stage.postDelayed(new Runnable() {
-            public void run() {
-                // 只摘碎块（都是 ImageView），别碰后面的卡和空壳
-                for (int i = stage.getChildCount() - 1; i >= 0; i--) {
-                    View ch = stage.getChildAt(i);
-                    if (ch instanceof ImageView) {
-                        stage.removeViewAt(i);
-                    }
-                }
-                end.run();
-            }
-        }, maxDur);
-    }
-
 
     private AlertDialog dlg;                     // 字体颜色弹窗
     private android.app.Dialog tabooDialog;
@@ -2286,8 +2222,8 @@ public class CheckinActivity extends ThemedActivity {
         card.setScaleX(.98f); card.setScaleY(.98f);
         card.setAlpha(.65f);
         card.animate().translationY(0).alpha(1f).scaleX(1f).scaleY(1f)
-                .setInterpolator(new android.view.animation.OvershootInterpolator(.9f))
-                .setDuration(MotionPolicy.duration(CheckinActivity.this,230)).start();
+                .setInterpolator(Motion.OUT)
+                .setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.ENTER)).start();
     }
 
     /**
@@ -2753,10 +2689,9 @@ public class CheckinActivity extends ThemedActivity {
         closingTaboo = false;
         styleFullScreenDialog(shown);
         if (animatePage) {
-            sc.setTranslationX(dp(36));
             sc.setAlpha(0f);
-            sc.animate().translationX(0f).alpha(1f).setDuration(MotionPolicy.duration(CheckinActivity.this,220))
-                    .setInterpolator(new DecelerateInterpolator(1.6f)).start();
+            sc.animate().translationX(0f).alpha(1f).setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.ENTER))
+                    .setInterpolator(Motion.OUT).start();
         }
         shown.setOnDismissListener(new DialogInterface.OnDismissListener() {
             public void onDismiss(DialogInterface ignored) {
@@ -2780,8 +2715,8 @@ public class CheckinActivity extends ThemedActivity {
             shown.dismiss();
             return;
         }
-        tabooPage.animate().translationX(dp(36)).alpha(0f).setDuration(MotionPolicy.duration(CheckinActivity.this,180))
-                .setInterpolator(new DecelerateInterpolator(1.4f))
+        tabooPage.animate().alpha(0f).setDuration(MotionPolicy.duration(CheckinActivity.this,Motion.EXIT))
+                .setInterpolator(Motion.IN)
                 .withEndAction(new Runnable() {
                     public void run() { closingTaboo = false; shown.dismiss(); }
                 }).start();

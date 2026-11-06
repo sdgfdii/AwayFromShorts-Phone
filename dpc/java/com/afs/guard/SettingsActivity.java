@@ -42,6 +42,7 @@ public final class SettingsActivity extends ThemedActivity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private boolean destroyed;
     private TextView updateLine;
+    private TextView pluginLine;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -54,6 +55,10 @@ public final class SettingsActivity extends ThemedActivity {
         super.onResume();
         // 从系统设置页返回后状态会变，重画一次，不让用户看旧勾。
         if (body != null) render();
+        try { com.afs.host.plugins.HostRuntime.get(this).registry().refreshAsync(() -> {
+            if (!destroyed && pluginLine != null) pluginLine.setText(pluginSummary());
+        }); }
+        catch (RuntimeException ignored) { }
     }
 
     @Override protected void onDestroy() {
@@ -80,10 +85,13 @@ public final class SettingsActivity extends ThemedActivity {
         body.addView(look, ui.gap(10));
         row(look, Lang.t(this, "主题", "Theme"), themeSummary(), () ->
                 startActivity(new Intent(this, ThemeActivity.class)));
+        row(look, Lang.t(this, "开屏动画", "Opening animation"),
+                StartupPreferences.enabled(this) ? T.s("已开启") : T.s("已关闭"),
+                this::toggleStartupAnimation);
         row(look, Lang.t(this, "界面语言", "Language"), Lang.modeName(this), this::pickLanguage);
         addNote(look, Lang.t(this,
-                "风格、深浅、主题色、字体、圆角都在这一页调，改完立刻生效，不用重启。少数系统术语（应用名、系统设置项）仍是系统语言。",
-                "Style, light/dark, accent colour, fonts and corner radius are all set here and apply immediately. A few system terms (app names, system settings entries) stay in the system language."));
+                "风格、深浅、主题色、字体、圆角都在这一页调，改完立刻生效，不用重启。开屏动画关闭后直接进入主页面；Android 12 及以上仍会显示系统提供的启动遮罩。",
+                "Style, light/dark, accent colour, fonts and corner radius are set here and apply immediately. Turning off the opening animation goes straight to the main page; Android 12 and later still show the platform launch screen."));
 
         /* ---------- 自律 ---------- */
         body.addView(groupTitle(Lang.t(this, "自律", "Self-control")));
@@ -109,6 +117,8 @@ public final class SettingsActivity extends ThemedActivity {
         body.addView(groupTitle(Lang.t(this, "应用", "App")));
         LinearLayout app = ui.card();
         body.addView(app, ui.gap(10));
+        pluginLine = row(app, Lang.t(this, "插件管理", "Plugins"), pluginSummary(),
+                () -> startActivity(new Intent(this, com.afs.host.plugins.PluginManagerActivity.class)));
         row(app, Lang.t(this, "成就", "Achievements"), AchievementCenter.summary(this),
                 () -> startActivity(new Intent(this, AchievementActivity.class)));
         row(app, Lang.t(this, "数据与备份", "Data & backup"),
@@ -180,6 +190,20 @@ public final class SettingsActivity extends ThemedActivity {
         PageScrollState.restore(this, position);
     }
 
+    private String pluginSummary() {
+        int enabled = 0, total = 0;
+        try {
+            for (com.afs.host.plugins.PluginEntry entry
+                    : com.afs.host.plugins.HostRuntime.get(this).registry().entries()) {
+                total++;
+                if (entry.usable()) enabled++;
+            }
+        } catch (RuntimeException ignored) { }
+        if (total == 0) return Lang.t(this, "未安装", "Not installed");
+        return Lang.t(this, enabled + " / " + total + " 已启用",
+                enabled + " / " + total + " enabled");
+    }
+
     private View header() {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
@@ -205,7 +229,7 @@ public final class SettingsActivity extends ThemedActivity {
         return view;
     }
 
-    private void row(LinearLayout parent, String title, String value, Runnable onClick) {
+    private TextView row(LinearLayout parent, String title, String value, Runnable onClick) {
         LinearLayout line = new LinearLayout(this);
         line.setOrientation(LinearLayout.HORIZONTAL);
         line.setGravity(Gravity.CENTER_VERTICAL);
@@ -226,6 +250,7 @@ public final class SettingsActivity extends ThemedActivity {
 
         if (onClick != null) line.setOnClickListener(v -> onClick.run());
         parent.addView(line);
+        return tail;
     }
 
     private void permRow(LinearLayout parent, String title, boolean granted, String why, Runnable onClick) {
@@ -288,6 +313,13 @@ public final class SettingsActivity extends ThemedActivity {
                 })
                 .setNegativeButton(Lang.t(this, "取消", "Cancel"), null)
                 .show();
+    }
+
+    private void toggleStartupAnimation() {
+        boolean enabled = !StartupPreferences.enabled(this);
+        StartupPreferences.setEnabled(this, enabled);
+        toast(enabled ? T.s("开屏动画已开启") : T.s("开屏动画已关闭"));
+        render();
     }
 
     private void checkUpdate() {

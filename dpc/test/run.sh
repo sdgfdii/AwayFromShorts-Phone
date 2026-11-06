@@ -27,10 +27,22 @@ esac
 
 OUT="build/test"
 rm -rf "$OUT"
-mkdir -p "$OUT"
+mkdir -p "$OUT" "$OUT/aidlgens"
 
 # BuildConfig 是构建期生成的（真 token 只在本机 build.sh 里注入）。
 # 离线回归用空 token 生成一份 —— 没有它 Gist 编译不过（token 现在归 Gist 管）。
+PACKAGE_AIDL="../plugin-api/aidl"
+if command -v cygpath >/dev/null 2>&1; then
+  PACKAGE_AIDL_ARG="$(cygpath -m "$(cd "$PACKAGE_AIDL" && pwd)")"
+  AIDL_OUT_ARG="$(cygpath -m "$(cd "$OUT/aidlgens" && pwd)")"
+  while IFS= read -r -d '' f; do
+    "$SDK/build-tools/34.0.0/aidl.exe" -I "$PACKAGE_AIDL_ARG" -o "$AIDL_OUT_ARG" "$(cygpath -m "$f")"
+  done < <(find "$PACKAGE_AIDL" -name '*.aidl' -print0)
+else
+  while IFS= read -r -d '' f; do
+    "$SDK/build-tools/34.0.0/aidl" -I "$PACKAGE_AIDL" -o "$OUT/aidlgens" "$f"
+  done < <(find "$PACKAGE_AIDL" -name '*.aidl' -print0)
+fi
 mkdir -p "$OUT/gen/com/afs/guard"
 cat > "$OUT/gen/com/afs/guard/BuildConfig.java" <<'EOF'
 package com.afs.guard;
@@ -38,10 +50,23 @@ package com.afs.guard;
 /** 离线回归用：空 token（测试不联网，也不该碰真凭据）。 */
 public final class BuildConfig {
     public static final String PREFILL_TOKEN = "";
+    public static final boolean PLUGIN_TEST_MODE = false;
+    public static final String PLUGIN_TRUST_SHA256 = "0c047b4af90f7d980852fa089f5384dea14c39df8f4bcf816adb254e8e74be97";
+    public static final boolean PLUGIN_STATS_LEGACY = false;
+}
+EOF
+cat > "$OUT/gen/com/afs/guard/R.java" <<'EOF'
+package com.afs.guard;
+
+/** Minimal app-resource stub for offline source compilation; tests never inflate views. */
+public final class R {
+    public static final class drawable {
+        public static final int startup_window = 0;
+    }
 }
 EOF
 
-find java test/java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
+find java test/java "$OUT/gen" "$OUT/aidlgens" ../plugin-api/java -name '*.java' > "$OUT/sources.txt"
 if ! "$JAVAC" -encoding UTF-8 -nowarn --release 8 \
   -classpath "$ANDROID_JAR${SEP}libs/pdfbox-android-2.0.27.0.jar" -d "$OUT" @"$OUT/sources.txt" > "$OUT/javac.log" 2>&1; then
   cat "$OUT/javac.log" >&2
@@ -67,6 +92,10 @@ fi
 "$JAVA" -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 \
   -cp "$RUN_CP" com.afs.guard.GuardTest
 
-for TEST in ScreenLockTest PageRuleTest CheckinPenaltyTest RestReminderTest LockPlanTest UnlockCodeTest KeywordRuleTest KeyGateTest CapabilityTest PenaltyTimingTest AppUsageQuotaTest DailyQuotaTest PercentTextTest DayBoundaryTest TimeWindowTest NetWindowTest NetFallbackTest NetSlotTest ProxyRulesTest FocusPlanTest UpdateCheckTest CalendarDataTest FreezeRuleTest LedgerMergeTest MemoryTest MemoryFlashcardsTest MemoryStatsTest MemorySwipeTest MemoryAuthoringTest TabOrderTest FreezeSlotTest QuizTest QuizImportTest DockSpringTest AppearanceTest MemoTest MemoEditorTest MemoChecklistTest MemoLibraryTest MemoBackupTest MemoTextFormatTest MemoBlocksTest MemoTableTest MemoSketchTest LearningPolicyTest CardDataTest SyncTargetTest LocalArchiveTest TranslationTest; do
-  "$JAVA" -Dfile.encoding=UTF-8 -cp "$RUN_CP" "com.afs.guard.$TEST"
+for TEST in ScreenLockTest PageRuleTest CheckinPenaltyTest RestReminderTest LockPlanTest UnlockCodeTest KeywordRuleTest KeyGateTest CapabilityTest PenaltyTimingTest AppUsageQuotaTest DailyQuotaTest PercentTextTest DayBoundaryTest TimeWindowTest NetWindowTest NetFallbackTest NetSlotTest ProxyRulesTest FocusPlanTest UpdateCheckTest CalendarDataTest FreezeRuleTest LedgerMergeTest MemoryTest MemoryFlashcardsTest MemoryStatsTest MemoryMomoModelTest MemorySwipeTest SpeechTest MemoryAuthoringTest TabOrderTest FreezeSlotTest QuizTest QuizImportTest DockSpringTest AppearanceTest MemoTest MemoEditorTest MemoChecklistTest MemoLibraryTest MemoBackupTest MemoTextFormatTest MemoBlocksTest MemoTableTest MemoSketchTest LearningPolicyTest CardDataTest SyncTargetTest LocalArchiveTest TranslationTest com.afs.host.plugins.PluginManifestTest com.afs.host.plugins.PluginSessionTest com.afs.host.plugins.PluginBoundsTest com.afs.host.plugins.PluginPrepareTest; do
+  case "$TEST" in
+    *.*) CLASS="$TEST" ;;
+    *) CLASS="com.afs.guard.$TEST" ;;
+  esac
+  "$JAVA" -Dfile.encoding=UTF-8 -cp "$RUN_CP" "$CLASS"
 done

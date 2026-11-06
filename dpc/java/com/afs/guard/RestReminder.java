@@ -13,7 +13,7 @@ package com.afs.guard;
  */
 public final class RestReminder {
 
-    public static final int DEFAULT_EVERY = 45;
+    public static final int DEFAULT_EVERY = 60;
     public static final int MAX_EVERY = 240;
 
     private RestReminder() {

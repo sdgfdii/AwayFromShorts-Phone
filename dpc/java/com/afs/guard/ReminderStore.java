@@ -19,6 +19,10 @@ public final class ReminderStore {
     private static final String K_TO = "to";
     private static final String K_LAST = "last";
     private static final String K_PENDING = "pending";
+    private static final String K_CONFIRM = "confirm";
+
+    /** 提醒卡片自己消失前停留多久；不点也走，别让一次轻提醒卡在屏幕上。 */
+    public static final long AUTO_DISMISS_MS = 15_000L;
 
     public static final int DEFAULT_FROM = 8 * 60;
     public static final int DEFAULT_TO = 22 * 60;
@@ -28,6 +32,13 @@ public final class ReminderStore {
 
     private static SharedPreferences sp(Context c) {
         return c.getSharedPreferences(SP, Context.MODE_PRIVATE);
+    }
+
+    /** Advance only when a new reminder is displayed; survives process restarts. */
+    static synchronized int takeNextCard(Context c) {
+        int card = Math.floorMod(sp(c).getInt("next_card", 0), 7);
+        sp(c).edit().putInt("next_card", (card + 1) % 7).apply();
+        return card;
     }
 
     public static boolean on(Context c) {
@@ -51,6 +62,23 @@ public final class ReminderStore {
     public static void setEvery(Context c, int minutes) {
         sp(c).edit().putInt(K_EVERY, clamp(minutes, 1, RestReminder.MAX_EVERY)).apply();
         setLastFired(c, System.currentTimeMillis());   // 改了间隔重新起算
+    }
+
+    /**
+     * 提醒卡片要不要「点一下才消失」。
+     *
+     * 默认 false：放着不管 15 秒自己走 —— 这是轻提醒，不该等着人腾出手来点。
+     * 想让它一直留在屏幕上等人确认的，在设置页里切过去。
+     *
+     * ★ 注意这和「15 秒内关不掉」不冲突：两种模式都吃那 15 秒的强制停留，
+     *   区别只在到点之后是自动退场还是继续等一次点击。
+     */
+    public static boolean confirm(Context c) {
+        return sp(c).getBoolean(K_CONFIRM, false);
+    }
+
+    public static void setConfirm(Context c, boolean value) {
+        sp(c).edit().putBoolean(K_CONFIRM, value).apply();
     }
 
     public static int from(Context c) {

@@ -8,6 +8,8 @@ import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.UserManager;
@@ -150,7 +152,7 @@ public final class Guard {
     }
 
     static int blockReason(Rule rule, boolean keyApp, boolean holding, boolean taboo, Calendar now) {
-        return blockReason(rule,keyApp,holding,taboo,now,false);
+        return blockReason(rule,keyApp,holding,taboo,false,now,false);
     }
     /**
      * 最终判定 = 时段/额度/禁忌这些基础规则，再叠一层钥匙闸门。
@@ -168,20 +170,31 @@ public final class Guard {
         key=key||!rule.gate;
         hold=hold&&StudyGate.learningFor(c,rule,now);
         taboo=PenaltyStore.holding(c,pkg,now.getTimeInMillis());
-        if(AppUsageQuota.minutes(c,pkg)==0&&!DailyQuotaStore.hasAllowance(c,pkg))return blockReason(rule,key,hold,taboo,now,reward);
-        int base=blockReason(FreezeSlotStore.withoutSchedule(),key,hold,taboo,now,false);
+        boolean checkin=PenaltyStore.checkinHolding(c,pkg,now.getTimeInMillis());
+        if(AppUsageQuota.minutes(c,pkg)==0&&!DailyQuotaStore.hasAllowance(c,pkg))return blockReason(rule,key,hold,taboo,checkin,now,reward);
+        int base=blockReason(FreezeSlotStore.withoutSchedule(),key,hold,taboo,checkin,now,false);
         if(base!=0)return base;return AppUsageQuota.exceeded(c,pkg,rule,now.getTimeInMillis())?4:0;
     }
 
     static int blockReason(Rule rule, boolean keyApp, boolean holding, boolean taboo, Calendar now, boolean reward) {
+        return blockReason(rule,keyApp,holding,taboo,false,now,reward);
+    }
+    /**
+     * 带「打卡罚时」的判定。
+     *
+     * 打卡没完成的罚时对**所有被冻结的应用**生效：它排在 keyApp 豁免之前，
+     * 否则非联动应用会被直接放行，罚时条目等于白记；热爱奖励也不抵扣。
+     */
+    static int blockReason(Rule rule, boolean keyApp, boolean holding, boolean taboo, boolean checkin, Calendar now, boolean reward) {
         if (blocked(rule, now) && !reward) return 1;
+        if (checkin) return 3;
         if (keyApp) return 0;
         if (taboo) return 3;
         return holding ? 2 : 0;
     }
 
     public static String blockReasonText(int reason) {
-        return reason == 1 ? T.s("时段冻结") : reason == 2 ? T.s("学习联动冻结") : reason == 3 ? T.s("禁忌延长冻结") : reason==4?T.s("使用额度冻结"):reason==5?T.s("每日限额用尽"):reason==6?T.s("钥匙应用未达标"):T.s("可使用");
+        return reason == 1 ? T.s("时段冻结") : reason == 2 ? T.s("学习联动冻结") : reason == 3 ? T.s("延长冻结") : reason==4?T.s("使用额度冻结"):reason==5?T.s("每日限额用尽"):reason==6?T.s("钥匙应用未达标"):T.s("可使用");
     }
 
     /** 最近一次「额度用完请出去」的对象与时刻：同一次使用只拉一次提示页。 */
@@ -358,6 +371,9 @@ public final class Guard {
         synchronized(APPLY_LOCK){return applySerial(ctx);}
     }
     private static String applySerial(Context ctx) {
+        // 卸载的应用先从额度格子里清掉（含已用时间），否则共享格子会一直挂着一只已卸载的应用。
+        // 在每次 apply 里跑：价格便宜（只在有变化时写盘），且 apply 本身是幂等的。
+        try{DailyQuotaStore.pruneUninstalled(ctx);}catch(RuntimeException error){Log.w(TAG,"quota prune failed",error);}
         try{DailyQuotaStore.refresh(ctx);}catch(IllegalStateException error){Log.e(TAG,"daily quota state unavailable",error);}
         DailyCardCompletion.capture(ctx);
         DevicePolicyManager d = dpm(ctx);
@@ -414,6 +430,7 @@ public final class Guard {
             if (!rules.containsKey(p)) {
                 try {
                     setSuspended(d, a, new String[] { p }, false);
+                    hide(d, a, p, false);   // 用隐藏顶过冻结的，移出列表时必须恢复显示
                     setUninstall(d, a, p, false);
                 } catch (Throwable ignored) {
                 }
@@ -435,16 +452,38 @@ public final class Guard {
             } catch (Throwable ignored) {
             }
             String state;
+            // ★ setPackagesSuspended 不抛异常不代表成功：系统会把拒绝的包名放进返回数组。
+            //   原来完全不看这个返回值，拒绝时界面照样显示「已冻结」—— 用户只看到「锁不住」，
+            //   却以为已经冻上了（明明应用还能点开）。现在把拒绝明写出来。
+            boolean refused = false;
             try {
                 String[] failed=setSuspended(d, a, new String[] { pkg }, block);
-                if(reward&&!block&&blocked(r,now)&&(failed==null||failed.length==0))rewardUsed=true;
-                state = block
-                        ? (gateBlock && !blocked(r, now) ? T.s("冻结（学习闸门）") : T.s("已冻结"))
-                        : T.s("放行中");
+                boolean suspendRefused = failed != null && failed.length > 0;
+                if (suspendRefused) {
+                    // ★ 有些 ROM 不让挂起系统应用 —— OPPO 真机上 Google Play 商店就是：
+                    //   额度已经超额，setPackagesSuspended 却没有冻上（返回在失败名单里），
+                    //   用户看到的就是「锁不住」。退一步用隐藏：图标从桌面消失、点不开，
+                    //   对「额度用完」这个场景和冻结是一回事；放行时恢复显示。
+                    if (hide(d, a, pkg, block)) {
+                        state = block ? T.s("已冻结（隐藏）") : T.s("放行中");
+                        refused = false;
+                    } else {
+                        state = block ? T.s("冻结被系统拒绝") : T.s("解冻被系统拒绝");
+                        refused = true;
+                    }
+                } else {
+                    // 曾经用隐藏顶过冻结的，放行时要恢复显示（幂等，没隐藏过也不会报错）。
+                    if (!block) hide(d, a, pkg, false);
+                    state = block
+                            ? (gateBlock && !blocked(r, now) ? T.s("冻结（学习闸门）") : T.s("已冻结"))
+                            : T.s("放行中");
+                }
+                if(reward&&!block&&blocked(r,now)&&!refused)rewardUsed=true;
             } catch (Throwable t) {
+                refused = true;
                 state = T.s("冻结失败：") + t.getClass().getSimpleName();
             }
-            if (block) {
+            if (block && !refused) {
                 frozen++;
             }
             // 应用名给人看，包名方便核对是哪个版本，后面带它自己的放行时段
@@ -486,6 +525,36 @@ public final class Guard {
     static final Object POLICY_LOCK = new Object();
     static String[] setSuspended(DevicePolicyManager d, ComponentName a, String[] packages, boolean value) {
         synchronized (POLICY_LOCK) { return d.setPackagesSuspended(a,packages,value); }
+    }
+    /**
+     * 挂起被 ROM 拒绝时的退路：把应用隐藏起来。
+     *
+     * 隐藏后图标从桌面消失、点不开，效果和冻结一样；数据保留，放行时恢复显示即可。
+     * 返回 false 表示这条路也被拒了（那时候才真的没办法，结果页会明说）。
+     */
+    static boolean hide(DevicePolicyManager d, ComponentName a, String pkg, boolean hidden) {
+        try {
+            synchronized (POLICY_LOCK) { return d.setApplicationHidden(a, pkg, hidden); }
+        } catch (Throwable error) {
+            Log.w(TAG, "hide " + pkg + " failed: " + error.getClass().getSimpleName());
+            return false;
+        }
+    }
+    /**
+     * 这个应用现在是不是靠「隐藏」顶替冻结（ROM 不让挂起系统应用时的退路）。
+     *
+     * 冻结页要能把这类应用和真正 suspended 的区分开：Google Play 这类系统应用在 OPPO 上
+     * 挂不起，只能隐藏——图标不见了、点不开，但 dumpsys 里 suspended=false、FLAG_SUSPENDED=0，
+     * 只看那个标志会把它误判成「可使用」。这里直接问设备管理员策略。
+     */
+    static boolean hiddenNow(Context ctx, String pkg) {
+        try {
+            DevicePolicyManager d = dpm(ctx);
+            if (d == null || !isOwner(ctx)) return false;
+            return d.isApplicationHidden(admin(ctx), pkg);
+        } catch (Throwable error) {
+            return false;
+        }
     }
     private static void setUninstall(DevicePolicyManager d, ComponentName a, String pkg, boolean value) {
         synchronized (POLICY_LOCK) { d.setUninstallBlocked(a,pkg,value); }
@@ -548,8 +617,14 @@ public final class Guard {
     static String labelOf(PackageManager pm, String pkg) {
         try {
             return String.valueOf(pm.getApplicationInfo(pkg, 0).loadLabel(pm));
-        } catch (Throwable t) {
-            return pkg;
+        } catch (Throwable hidden) {
+            // 被隐藏兜底冻上的应用在普通查询里查不到，结果页会只剩包名。
+            // 再带 MATCH_UNINSTALLED_PACKAGES 查一次，名字照样拿得到。
+            try {
+                return String.valueOf(pm.getApplicationInfo(pkg, PackageManager.MATCH_UNINSTALLED_PACKAGES).loadLabel(pm));
+            } catch (Throwable t) {
+                return pkg;
+            }
         }
     }
 
@@ -564,10 +639,19 @@ public final class Guard {
         return r.freezeSummary() + (r.gate ? "" : T.s(" · 不受学习闸门影响"));
     }
 
-    private static boolean installed(PackageManager pm, String pkg) {
+    /**
+     * 应用是否还装着。
+     *
+     * ★ 不能只看 getPackageInfo(pkg, 0)：被 setApplicationHidden 隐藏的应用在普通查询里
+     *   和「已卸载」一模一样查不到，但它明明还在。用 MATCH_UNINSTALLED_PACKAGES 再核对
+     *   FLAG_INSTALLED，隐藏和卸载就分得开了。
+     *   （踩过：隐藏兜底一上线，被隐藏的应用被额度清理当成已卸载删掉，配置直接丢。）
+     */
+    static boolean installed(PackageManager pm, String pkg) {
         try {
-            pm.getPackageInfo(pkg, 0);
-            return true;
+            PackageInfo info = pm.getPackageInfo(pkg, PackageManager.MATCH_UNINSTALLED_PACKAGES);
+            return info != null && info.applicationInfo != null
+                    && (info.applicationInfo.flags & ApplicationInfo.FLAG_INSTALLED) != 0;
         } catch (Throwable t) {
             return false;
         }

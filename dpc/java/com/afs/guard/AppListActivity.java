@@ -1236,7 +1236,7 @@ public class AppListActivity extends ThemedActivity {
             gateCb.setPadding(0, dp(12), 0, 0);
             if (allowGateEdit) {
                 TextView gateHint = new TextView(AppListActivity.this);
-                gateHint.setText(T.s("只有关键应用不受学习闸门影响；其他应用在 20:00 检查后可能延长冻结。"));
+                gateHint.setText(T.s("只有关键应用不受学习闸门影响；其他应用在当天任务未完成时，从自身冻结结束点继续冻结。"));
                 gateHint.setTextSize(11);
                 gateHint.setTextColor(TEXT2);
                 gateHint.setPadding(0, dp(4), 0, 0);

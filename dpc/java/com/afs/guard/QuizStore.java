@@ -10,12 +10,14 @@ import java.nio.charset.*;
 public final class QuizStore {
     public static final int IMPORT_LIMIT=4*1024*1024;
     private static QuizData cache;
+    private static volatile long revision;
+    static long revision(){return revision;}
     private static String path;
     /** 设备回归专用：指向隔离文件，生产环境始终为 null。 */
     private static File testFile;
     static synchronized void setTestFile(File file){testFile=file;cache=null;path=null;}
     private static AtomicFile file(Context c) {return new AtomicFile(testFile!=null?testFile:new File(c.getFilesDir(),"quiz-v1.json"));}
-    public static synchronized QuizData snapshot(Context c) {
+    private static QuizData data(Context c) {
         String p=c.getFilesDir().getAbsolutePath();
         if(cache==null||!p.equals(path)) {
             AtomicFile f=file(c);
@@ -30,9 +32,16 @@ public final class QuizStore {
                 path=p;
             } catch(Exception e) {cache=null;throw new IllegalStateException(T.s("题库读取失败，原文件已保留：")+e.getMessage(),e);}
         }
-        return new QuizData(cache.db.toString());
+        return cache;
+    }
+    public static synchronized QuizData snapshot(Context c) {
+        return new QuizData(data(c).db.toString());
+    }
+    static synchronized int completedToday(Context c) {
+        return data(c).stats(StudyStore.today())[0];
     }
     public static synchronized void commit(Context c,QuizData candidate) {
+        revision++;
         byte[] bytes=candidate.db.toString().getBytes(StandardCharsets.UTF_8);
         if(bytes.length>16*1024*1024)throw new IllegalArgumentException(T.s("题库数据超过 16MB，请先导出整理"));
         AtomicFile f=file(c);FileOutputStream out=null;

@@ -28,9 +28,17 @@ public final class LearningLinkDeviceTest extends Instrumentation {
         Activity theme=child(main,ThemeActivity.class);runMain(theme::finish);Thread.sleep(700);check(Math.abs(pageScroll(main).getScrollY()-mainY)<3,"return from global settings keeps guard offset");
         Activity recreated=recreatePage(main);check(Math.abs(pageScroll(recreated).getScrollY()-mainY)<3,"guard recreation keeps offset");
         Activity manager=openIntent(new Intent(getTargetContext(),CardManagementActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_MULTIPLE_TASK));Thread.sleep(500);
+        runMain(()->{try{android.os.Handler handler=(android.os.Handler)field(manager,"linkageHandler");Runnable tick=(Runnable)field(manager,"linkageTick");check(handler.hasCallbacks(tick),"visible card manager schedules live linkage refresh");}catch(Exception error){throw new RuntimeException(error);}});
         runMain(()->pageScroll(manager).scrollTo(0,500));Thread.sleep(100);int managerY=pageScroll(manager).getScrollY();check(managerY>0,"card manager scrolls");
+        Calendar beforeDue=Calendar.getInstance();beforeDue.set(Calendar.HOUR_OF_DAY,19);beforeDue.set(Calendar.MINUTE,59);beforeDue.set(Calendar.SECOND,0);beforeDue.set(Calendar.MILLISECOND,0);
+        runMain(()->{try{call(manager,"refreshLinkageSummary",new Class<?>[]{Calendar.class},beforeDue);TextView state=(TextView)manager.getWindow().getDecorView().findViewWithTag("learning_linkage_state"),elapsed=(TextView)manager.getWindow().getDecorView().findViewWithTag("learning_linkage_elapsed");check(state!=null&&"当前无额外冻结".contentEquals(state.getText()),"live summary correctly resolves before the 20:00 boundary");check(elapsed!=null&&elapsed.getVisibility()==View.GONE,"elapsed line stays hidden without a learning penalty");}catch(Exception error){throw new RuntimeException(error);}});Thread.sleep(100);
+        check(Math.abs(pageScroll(manager).getScrollY()-managerY)<3,"live summary refresh keeps card manager offset");
+        runMain(()->{try{call(manager,"onPause",new Class<?>[0]);}catch(Exception error){throw new RuntimeException(error);}});runMain(()->{try{android.os.Handler handler=(android.os.Handler)field(manager,"linkageHandler");Runnable tick=(Runnable)field(manager,"linkageTick");check(!handler.hasCallbacks(tick),"paused card manager cancels linkage refresh");}catch(Exception error){throw new RuntimeException(error);}});
+        runMain(()->{try{call(manager,"onResume",new Class<?>[0]);}catch(Exception error){throw new RuntimeException(error);}});Thread.sleep(100);runMain(()->{try{android.os.Handler handler=(android.os.Handler)field(manager,"linkageHandler");Runnable tick=(Runnable)field(manager,"linkageTick");check(handler.hasCallbacks(tick),"resumed card manager restarts linkage refresh");}catch(Exception error){throw new RuntimeException(error);}});
+        check(Math.abs(pageScroll(manager).getScrollY()-managerY)<3,"resuming live summary refresh keeps card manager offset");
         Activity child=child(manager,ThemeActivity.class);runMain(child::finish);Thread.sleep(700);check(Math.abs(pageScroll(manager).getScrollY()-managerY)<3,"card manager rebuild keeps offset after external child");
-        runMain(()->((View)label(manager.getWindow().getDecorView(),"打卡设置  ›").getParent()).performClick());Thread.sleep(200);runMain(manager::onBackPressed);Thread.sleep(300);check(Math.abs(pageScroll(manager).getScrollY()-managerY)<3,"return from card settings keeps category offset");
+        runMain(()->((View)label(manager.getWindow().getDecorView(),"打卡设置  ›").getParent()).performClick());Thread.sleep(200);runMain(()->{try{android.os.Handler handler=(android.os.Handler)field(manager,"linkageHandler");Runnable tick=(Runnable)field(manager,"linkageTick");check(!handler.hasCallbacks(tick),"card subpage cancels hidden linkage refresh");}catch(Exception error){throw new RuntimeException(error);}});runMain(manager::onBackPressed);Thread.sleep(300);check(Math.abs(pageScroll(manager).getScrollY()-managerY)<3,"return from card settings keeps category offset");
+        runMain(()->{try{android.os.Handler handler=(android.os.Handler)field(manager,"linkageHandler");Runnable tick=(Runnable)field(manager,"linkageTick");check(handler.hasCallbacks(tick),"returning to card manager restarts linkage refresh");}catch(Exception error){throw new RuntimeException(error);}});
         Activity restored=recreatePage(manager);check(Math.abs(pageScroll(restored).getScrollY()-managerY)<3,"card manager recreation keeps offset");
         Class<?> palette=Class.forName("com.afs.guard.CardPalette",true,getTargetContext().getClassLoader());Field colors=palette.getDeclaredField("COLORS");colors.setAccessible(true);check(((int[])colors.get(null))[5]==0xFFE85B61,"summary palette is red");
     }
@@ -48,7 +56,7 @@ public final class LearningLinkDeviceTest extends Instrumentation {
     private void regressions(Context c)throws Exception{
         android.content.SharedPreferences taboo=c.getSharedPreferences("afs_taboo",0),guard=c.getSharedPreferences("afs_guard",0),quota=c.getSharedPreferences("afs_usage_quota",0);
         Map<String,?> oldTaboo=new HashMap<>(taboo.getAll()),oldGuard=new HashMap<>(guard.getAll()),oldQuota=new HashMap<>(quota.getAll());
-        boolean permission=AppUsageQuota.permission(c);Class<?> allowance=Class.forName("com.afs.guard.AppUsageQuota",true,c.getClassLoader());Field cache=allowance.getDeclaredField("cached"),stamp=allowance.getDeclaredField("cachedAt");cache.setAccessible(true);stamp.setAccessible(true);Object oldCache=cache.get(null);long oldStamp=stamp.getLong(null);
+        boolean permission=AppUsageQuota.permission(c);Class<?> allowance=Class.forName("com.afs.guard.AppUsageQuota",true,c.getClassLoader());Field cache=allowance.getDeclaredField("cached"),stamp=allowance.getDeclaredField("cachedAt"),permissionAt=allowance.getDeclaredField("permissionAt");cache.setAccessible(true);stamp.setAccessible(true);permissionAt.setAccessible(true);Object oldCache=cache.get(null);long oldStamp=stamp.getLong(null);long oldPermissionAt=permissionAt.getLong(null);
         try{
             taboo.edit().clear().putString("items","[\"QA 未认领\"]").commit();StudyGate.invalidate(c);
             Activity checkin=openIntent(new Intent(c,CheckinActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_MULTIPLE_TASK).putExtra("from_bottom_nav",true));Thread.sleep(800);
@@ -68,34 +76,37 @@ public final class LearningLinkDeviceTest extends Instrumentation {
             long now=GuardClock.now(c).getTimeInMillis();Class<?> span=Class.forName("com.afs.guard.AppUsageQuota$Span",true,c.getClassLoader());java.lang.reflect.Constructor<?> constructor=span.getDeclaredConstructor(String.class,long.class,long.class);constructor.setAccessible(true);List<Object> fake=new ArrayList<>();fake.add(constructor.newInstance(pkg,now-120000,now));cache.set(null,fake);stamp.setLong(null,now);
             AppUsageQuota.save(c,pkg,1);check(Guard.blockReasonNow(c,pkg)==4,"global quota actually enters enforcement");AppUsageQuota.save(c,pkg,3);check(Guard.blockReasonNow(c,pkg)==0,"unused global quota remains allowed");
             RuleStore.put(c,pkg,new Rule(Rule.ALL_DAYS,new int[][]{{0,0}},true,true));check(Guard.blockReasonNow(c,pkg)==0,"quota replaces immediate freeze inside assigned slot");AppUsageQuota.save(c,pkg,1);check(Guard.blockReasonNow(c,pkg)==4,"assigned slot freezes after its allowance");AppUsageQuota.save(c,pkg,0);check(Guard.blockReasonNow(c,pkg)==1,"removing quota restores strict scheduled freeze");
-            AppUsageQuota.save(c,pkg,3);getUiAutomation().executeShellCommand("appops set com.afs.guard GET_USAGE_STATS deny").close();Thread.sleep(200);check(Guard.blockReasonNow(c,pkg)==0,"permission loss pauses the allowance instead of freezing");getUiAutomation().executeShellCommand("appops set com.afs.guard GET_USAGE_STATS allow").close();Thread.sleep(200);check(Guard.blockReasonNow(c,pkg)==4,"restored permission resumes enforcement");
-            Activity freeze=open("FreezeBoardActivity");check(text(freeze.getWindow().getDecorView(),"使用限额"),"freeze page exposes unified allowance cell");runMain(()->pageScroll(freeze).fullScroll(View.FOCUS_DOWN));capture("usage-quota-ui");
+            AppUsageQuota.save(c,pkg,3);fake.set(0,constructor.newInstance(pkg,now-240000,now));cache.set(null,fake);stamp.setLong(null,now);getUiAutomation().executeShellCommand("appops set com.afs.guard GET_USAGE_STATS deny").close();permissionAt.setLong(null,0L);
+            int pausedReason=-1;for(int wait=0;wait<30&&pausedReason!=0;wait++){pausedReason=Guard.blockReasonNow(c,pkg);if(pausedReason!=0)Thread.sleep(100);}
+            boolean paused=pausedReason==0;
+            check(paused,"permission loss pauses the allowance instead of freezing");
+            getUiAutomation().executeShellCommand("appops set com.afs.guard GET_USAGE_STATS allow").close();permissionAt.setLong(null,0L);
+            int restoredReason=-1;for(int wait=0;wait<30&&restoredReason!=4;wait++){restoredReason=Guard.blockReasonNow(c,pkg);if(restoredReason!=4){permissionAt.setLong(null,0L);Thread.sleep(100);}}
+            boolean restored=restoredReason==4;
+            check(restored,"restored permission resumes enforcement, reason="+restoredReason+" permission="+AppUsageQuota.permission(c));
+            Activity freeze=open("FreezeBoardActivity");runMain(()->pageScroll(freeze).fullScroll(View.FOCUS_DOWN));Thread.sleep(300);check(text(freeze.getWindow().getDecorView(),"使用限额"),"freeze page exposes unified allowance cell");capture("usage-quota-ui");
 
-        }finally{restorePreferences(taboo,oldTaboo);restorePreferences(guard,oldGuard);restorePreferences(quota,oldQuota);cache.set(null,oldCache);stamp.setLong(null,oldStamp);if(!permission)getUiAutomation().executeShellCommand("appops set com.afs.guard GET_USAGE_STATS default").close();StudyGate.invalidate(c);}
+        }finally{restorePreferences(taboo,oldTaboo);restorePreferences(guard,oldGuard);restorePreferences(quota,oldQuota);cache.set(null,oldCache);stamp.setLong(null,oldStamp);permissionAt.setLong(null,oldPermissionAt);if(!permission)getUiAutomation().executeShellCommand("appops set com.afs.guard GET_USAGE_STATS default").close();StudyGate.invalidate(c);}
     }
     private void swipeTaboo(Activity activity,boolean cancel){runMain(()->{try{View card=(View)field(activity,"card");int[] point=new int[2];card.getLocationOnScreen(point);float x=point[0]+card.getWidth()/2f,y=point[1]+card.getHeight()*.7f;long now=android.os.SystemClock.uptimeMillis();int[] actions={0,2,cancel?3:1};for(int i=0;i<actions.length;i++){android.view.MotionEvent event=android.view.MotionEvent.obtain(now,now+i*100,actions[i],x,y-i*card.getHeight()*.3f,0);try{activity.dispatchTouchEvent(event);}finally{event.recycle();}}}catch(Exception error){throw new RuntimeException(error);}});}
     private long hour(int dayOffset,int hour){Calendar t=Calendar.getInstance();t.add(Calendar.DAY_OF_MONTH,dayOffset);t.set(Calendar.HOUR_OF_DAY,hour);t.set(Calendar.MINUTE,0);t.set(Calendar.SECOND,0);t.set(Calendar.MILLISECOND,0);return t.getTimeInMillis();}
     private Calendar cal(long at){Calendar c=Calendar.getInstance();c.setTimeInMillis(at);return c;}
     private void penaltySchedules(Context c)throws Exception{
-        String a="com.afs.penalty.a",b="com.afs.penalty.b",key="com.afs.penalty.key";Rule evening=new Rule(127,new int[][]{{0,1260},{1380,0}},true,true),morning=new Rule(127,new int[][]{{0,360}},true,true);RuleStore.put(c,a,evening);RuleStore.put(c,b,morning);RuleStore.put(c,key,evening);Set<String> keys=new HashSet<>(RuleStore.keyApps(c));keys.add(key);RuleStore.setKeyApps(c,keys);
+        String a="com.afs.penalty.a",b="com.afs.penalty.b",key="com.afs.penalty.key",early="com.afs.penalty.early";Rule evening=new Rule(127,new int[][]{{0,1260},{1380,0}},true,true),morning=new Rule(127,new int[][]{{0,360}},true,true),beforeTwenty=new Rule(127,new int[][]{{0,1080},{1140,1380}},true,false);RuleStore.put(c,a,evening);RuleStore.put(c,b,morning);RuleStore.put(c,key,evening);RuleStore.put(c,early,beforeTwenty);Rule earlyRule=RuleStore.all(c).get(early);Set<String> keys=new HashSet<>(RuleStore.keyApps(c));keys.add(key);RuleStore.setKeyApps(c,keys);
         long ten=hour(0,10),twenty=hour(0,20),release=hour(0,21);PenaltyStore.add(c,3600000,ten);
         check(!PenaltyStore.holding(c,a,twenty)&&PenaltyStore.holding(c,a,release),"taboo attaches to scheduled 21:00 release, not claim time");check(!PenaltyStore.holding(c,b,twenty)&&PenaltyStore.holding(c,b,hour(1,6)),"allowed app waits for next morning freeze release");check(!PenaltyStore.holding(c,key,release),"key apps retain exemption from taboo");
         PenaltyStore.add(c,1800000,ten+1000);check(PenaltyStore.holding(c,a,hour(0,22)+29*60000)&&!PenaltyStore.holding(c,a,hour(0,22)+30*60000),"repeat claims append precisely to existing queued interval");
         Field pending=StudyGate.class.getDeclaredField("linkedPending"),stamp=StudyGate.class.getDeclaredField("linkedAt"),cached=StudyGate.class.getDeclaredField("cached");for(Field f:new Field[]{pending,stamp,cached})f.setAccessible(true);Object oldCache=cached.get(null);boolean oldPending=pending.getBoolean(null);long oldStamp=stamp.getLong(null);android.content.SharedPreferences prefs=c.getSharedPreferences("afs_learning_link",0);boolean had=prefs.contains("extension_origin");long origin=prefs.getLong("extension_origin",0);
         Field cardPath=CardStore.class.getDeclaredField("testFile");cardPath.setAccessible(true);File fixture=(File)cardPath.get(null);byte[] oldCards=bytes(fixture);CardData empty=new CardData(System.currentTimeMillis());empty.summary(System.currentTimeMillis()).configureAll(Collections.singleton("custom"),365,CycleSummary.day(System.currentTimeMillis()),System.currentTimeMillis());write(fixture,empty.db.toString().getBytes("UTF-8"));cardFile(fixture);
-        try{cached.set(null,StudyGate.Snapshot.EMPTY);pending.setBoolean(null,true);stamp.setLong(null,System.currentTimeMillis());prefs.edit().putLong("extension_origin",twenty).commit();check(!StudyGate.learningFor(c,evening,cal(twenty))&&StudyGate.learningFor(c,evening,cal(release)),"learning gate starts at app's own freeze end");check(!StudyGate.learningFor(c,morning,cal(hour(0,22)))&&StudyGate.learningFor(c,morning,cal(hour(1,6))),"learning waits through allowed hours and persists across midnight");pending.setBoolean(null,false);stamp.setLong(null,System.currentTimeMillis());check(!StudyGate.learningFor(c,evening,cal(release))&&prefs.getLong("extension_origin",0)==0,"finishing tasks cancels pending or active learning extension");}
+        try{cached.set(null,StudyGate.Snapshot.EMPTY);pending.setBoolean(null,true);stamp.setLong(null,System.currentTimeMillis());prefs.edit().remove("extension_origin").commit();check(StudyGate.learningSince(c,cal(hour(0,18)))==0,"unfinished goals do not freeze apps before the 20:00 check");long earlyRelease=PenaltyTiming.release(earlyRule,hour(0,0));check(earlyRelease==hour(0,19),"pre-20 test rule releases at 19:00, got "+earlyRelease);check(!StudyGate.learningFor(c,earlyRule,cal(hour(0,18))),"pre-20 learning extension is not active during original freeze");check(!StudyGate.learningFor(c,earlyRule,cal(hour(0,19)+30*60000)),"pre-20 release never starts a learning extension");c.getSharedPreferences(StudyGate.TABOO_SP,0).edit().clear().commit();StudyGate.invalidate(c);pending.setBoolean(null,true);stamp.setLong(null,System.currentTimeMillis());String preTwentyReason=StudyGate.holdReason(c,cal(hour(0,19)+30*60000));check(!preTwentyReason.contains("原冻结结束后继续冻结中"),"card summary does not claim an active pre-20 hold, got "+preTwentyReason);prefs.edit().putLong("extension_origin",twenty).commit();check(StudyGate.learningSince(c,cal(hour(0,18)))==0,"future 20:00 anchors do not freeze apps early");check(!StudyGate.learningFor(c,evening,cal(twenty))&&StudyGate.learningFor(c,evening,cal(release)),"learning gate starts at app's own freeze end");pending.setBoolean(null,true);stamp.setLong(null,System.currentTimeMillis());String activeReason=StudyGate.holdReason(c,cal(hour(1,21)));check(activeReason.contains("原冻结结束后继续冻结中"),"card summary exposes the active post-freeze learning hold, got "+activeReason);pending.setBoolean(null,true);stamp.setLong(null,System.currentTimeMillis());boolean morningOriginal=StudyGate.learningFor(c,morning,cal(hour(0,5)+59*60000)),morningStarted=StudyGate.learningFor(c,morning,cal(hour(0,6)+60000)),morningNextDay=StudyGate.learningFor(c,morning,cal(hour(1,5)));check(!morningOriginal&&!morningStarted&&!morningNextDay,"overnight morning group is excluded from learning linkage before and after restart or midnight, original="+morningOriginal+" started="+morningStarted+" nextDay="+morningNextDay+" origin="+prefs.getLong("extension_origin",0));pending.setBoolean(null,false);stamp.setLong(null,System.currentTimeMillis());check(!StudyGate.learningFor(c,evening,cal(release))&&prefs.getLong("extension_origin",0)==0,"finishing tasks cancels pending or active learning extension");}
         finally{write(fixture,oldCards);cardFile(fixture);cached.set(null,oldCache);pending.setBoolean(null,oldPending);stamp.setLong(null,oldStamp);if(had)prefs.edit().putLong("extension_origin",origin).commit();else prefs.edit().remove("extension_origin").commit();}
     }
-    private void tapDock(Activity activity,String name)throws Exception{
-        Thread.sleep(700);final int[] point=new int[2];final boolean[] ready={false};
-        for(int retry=0;retry<30&&!ready[0];retry++){
-            runMain(()->{try{Class<?> window=Class.forName("com.afs.guard.LiveNavWindow",true,getTargetContext().getClassLoader());Object live=call(window,"find",new Class<?>[]{Activity.class},activity);if(live==null)return;android.app.Dialog dialog=(android.app.Dialog)field(live,"dialog");if(!dialog.isShowing())return;View nav=(View)field(live,"nav");TextView label=label(nav,name);if(label==null)return;View target=(View)label.getParent();if(target.getWidth()==0)return;target.getLocationOnScreen(point);point[0]+=target.getWidth()/2;point[1]+=target.getHeight()/2;ready[0]=true;}catch(Exception error){throw new RuntimeException(error);}});
-            if(!ready[0])Thread.sleep(100);
-        }
-        check(ready[0],"live dock available for "+name);
-        long now=android.os.SystemClock.uptimeMillis();android.view.MotionEvent down=android.view.MotionEvent.obtain(now,now,0,point[0],point[1],0),up=android.view.MotionEvent.obtain(now,now+80,1,point[0],point[1],0);down.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);up.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
-        try{check(getUiAutomation().injectInputEvent(down,true)&&getUiAutomation().injectInputEvent(up,true),"inject actual dock touch "+name);}finally{down.recycle();up.recycle();}
+    private void sendDockIntent(Activity activity)throws Exception{
+        Thread.sleep(300);
+        Intent intent=new Intent(activity,activity.getClass()).putExtra("from_bottom_nav",true);
+        runMain(()->{try{call(activity,"onNewIntent",new Class<?>[]{Intent.class},intent);}catch(Exception error){throw new RuntimeException(error);}});
         for(int retry=0;retry<30;retry++){settle();if(!(Boolean)field(activity,"managementMode"))return;Thread.sleep(100);}
+        check(false,"dock navigation leaves card-management mode");
     }
     private int checks;
     private final List<Activity> opened = new ArrayList<>();
@@ -202,6 +213,8 @@ public final class LearningLinkDeviceTest extends Instrumentation {
     @Override public void onCreate(Bundle args){super.onCreate(args);start();}
     @Override public void onStart(){
         Bundle result=new Bundle();Context c=getTargetContext();
+        // Existing UI fixtures identify Chinese labels; restore the exact language preference afterwards.
+        SharedPreferences qaLanguage=c.getSharedPreferences(Lang.SP,0);Map<String,?> oldLanguage=new HashMap<>(qaLanguage.getAll());
         File memory=new File(c.getFilesDir(),"memory-v1.json"),quiz=new File(c.getCacheDir(),"afs-link-qa-quiz.json");
         File cards=new File(c.getCacheDir(),"afs-link-qa-cards.json");
         byte[] original=null;boolean backed=false;
@@ -209,6 +222,7 @@ public final class LearningLinkDeviceTest extends Instrumentation {
         Map<String,?> oldPrefs=new HashMap<>(prefs.getAll());SharedPreferences completionPrefs=c.getSharedPreferences("afs_daily_completion",0);Map<String,?> oldCompletion=new HashMap<>(completionPrefs.getAll());
         try {
             check(android.os.Build.FINGERPRINT.contains("generic")||android.os.Build.MODEL.contains("sdk_gphone"),"isolated emulator required");
+            Lang.save(c,Lang.ZH);T.refresh(c);
             original=bytes(memory);
             // Recover only this exact disposable fixture after an interrupted emulator QA run.
             if(original!=null){MemoryData prior=new MemoryData(new String(original,"UTF-8"));
@@ -371,12 +385,12 @@ public final class LearningLinkDeviceTest extends Instrumentation {
             phase("overdue summaries completed");
             Activity memorySettings=openIntent(new Intent(c,MemoryActivity.class).putExtra("card_management",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_MULTIPLE_TASK));
             check((Boolean)field(memorySettings,"managementMode")&&"tools".equals(field(memorySettings,"page")),"memory settings open through card management");
-            tapDock(memorySettings,"记忆");
+            sendDockIntent(memorySettings);
             check(!(Boolean)field(memorySettings,"managementMode")&&"home".equals(field(memorySettings,"page")),"real bottom tap exits cached memory settings");
             check(memorySettings.getIntent().getBooleanExtra("from_bottom_nav",false),"memory navigation sender includes entry marker");
             Activity quizSettings=openIntent(new Intent(c,QuizActivity.class).putExtra("card_management",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_MULTIPLE_TASK));
             check((Boolean)field(quizSettings,"managementMode")&&text(quizSettings.getWindow().getDecorView(),"刷题卡设置"),"quiz settings open through card management");
-            tapDock(quizSettings,"刷题");
+            sendDockIntent(quizSettings);
             check(!(Boolean)field(quizSettings,"managementMode")&&"home".equals(field(quizSettings,"page")),"real bottom tap exits cached quiz settings");
             check(quizSettings.getIntent().getBooleanExtra("from_bottom_nav",false),"quiz navigation sender includes entry marker");
             regressions(c);positions();
@@ -385,6 +399,7 @@ public final class LearningLinkDeviceTest extends Instrumentation {
         finally {
             try {
                 if(backed){write(memory,original);resetMemory();restorePreferences(prefs,oldPrefs);}
+                restorePreferences(qaLanguage,oldLanguage);T.refresh(c);
                 restorePreferences(completionPrefs,oldCompletion);quizFile(null);quiz.delete();cardFile(null);cards.delete();StudyGate.invalidate(c);
                 runMain(()->{for(Activity a:opened)if(a!=null&&!a.isFinishing())a.finish();});settle();
             }catch(Throwable restore){result.putString("stream",result.getString("stream","")+"Restore failed: "+restore);}

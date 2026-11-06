@@ -76,6 +76,16 @@ public final class MemoryStore {
         return LearningLink.memoryFromData(c, data(c));
     }
     public static synchronized String error() { return error; }
+    /** Browsing must not initialize today's learning plans or flashcard session. */
+    public static synchronized MemoryData readOnlySnapshot(Context c) {
+        return new MemoryData(data(c).db.toString());
+    }
+    static synchronized long cardDue(Context c, String id) {
+        JSONObject card=data(c).card(id); return card==null?0L:card.optLong("due");
+    }
+    static synchronized long cardLast(Context c,String id){
+        JSONObject card=data(c).card(id);return card==null?0L:card.optLong("last");
+    }
     public static synchronized MemoryData snapshot(Context c) {
         plans(c, System.currentTimeMillis()); return new MemoryData(data(c).db.toString());
     }

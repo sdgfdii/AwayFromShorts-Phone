@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.afs.plugin.fixture">
+
+    <uses-permission android:name="com.afs.guard.permission.PLUGIN_STATS_V1" />
+    <queries>
+        <package android:name="com.afs.guard" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:label="Fixture plugin"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity
+            android:name="com.afs.plugin.fixture.FixtureActivity"
+            android:exported="true"
+            android:permission="com.afs.guard.permission.PLUGIN_STATS_V1"
+            android:label="Fixture plugin" />
+        <service
+            android:name="com.afs.plugin.fixture.FixtureEndpointService"
+            android:exported="true"
+            android:permission="com.afs.guard.permission.PLUGIN_STATS_V1">
+            <intent-filter>
+                <action android:name="com.afs.guard.PLUGIN_V1" />
+            </intent-filter>
+            <meta-data
+                android:name="com.afs.guard.plugin.manifest"
+                android:resource="@xml/plugin_manifest" />
+        </service>
+        <service android:name="com.afs.plugin.fixture.ProbeService" android:exported="true"
+            android:permission="com.afs.guard.permission.PLUGIN_STATS_V1" />
+        <activity android:name="com.afs.plugin.fixture.AuthProbeActivity" android:exported="true"
+            android:permission="com.afs.guard.permission.PLUGIN_STATS_V1" />
+    </application>
+</manifest>

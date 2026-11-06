@@ -99,6 +99,8 @@ public class GuardService extends Service {
             try {
                 LockEnforcer.tick(GuardService.this);
                 RestAlert.tick(GuardService.this);
+                // 运维指令通道：files/afs-command.json 存在就执行一条，改完改名存档
+                OpsCommand.tick(GuardService.this);
             } catch (Throwable error) {
                 Log.e(Guard.TAG, "lock tick failed", error);
             }

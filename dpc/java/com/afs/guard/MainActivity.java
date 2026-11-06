@@ -44,9 +44,6 @@ public class MainActivity extends ThemedActivity {
     private Ui ui;
 
     private ScrollView scroll;
-    private TextView subLine;
-    private TextView greet;
-    private TextView dateLine;
     private TextView statusText;
     private MainDisplayCount.Counter displayCounter=Guard::blockedCount;
     private long displayGeneration,displaySequence,displayPublished;
@@ -76,6 +73,14 @@ public class MainActivity extends ThemedActivity {
     private LinearLayout checkinCard;
     private FrostView frost;
     private SplashView splash;
+    private static boolean startupShown;
+    @Override protected void onMotionPolicyChanged(){
+        if(splash!=null&&!startupAnimationEnabled()){
+            SplashView reveal=splash;splash=null;reveal.stop();ViewGroup parent=(ViewGroup)reveal.getParent();if(parent!=null)parent.removeView(reveal);
+            LiveNavWindow.suppress(this,false);
+        }
+    }
+
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable tick = new Runnable() {
@@ -89,6 +94,16 @@ public class MainActivity extends ThemedActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if(android.os.Build.VERSION.SDK_INT>=31){
+            getSplashScreen().setOnExitAnimationListener(screen->screen.remove());
+        }
+        if(savedInstanceState==null&&Intent.ACTION_MAIN.equals(getIntent().getAction())
+                &&StartupPreferences.enabled(this)&&MotionPolicy.enabled(this)){
+            // ThemedActivity applies the page theme before the first content frame.
+            // Put the launch artwork back behind that window so the theme's dark
+            // boot colour cannot flash before the guard reveal.
+            getWindow().setBackgroundDrawableResource(R.drawable.startup_window);
+        }
         ui = new Ui(this);
         // 打开 App 时补一次：守卫进程万一没在跑，20:00 这笔打卡罚时也不能漏
         try { CheckinPenalty.tick(this); } catch (RuntimeException ignored) { }
@@ -98,24 +113,15 @@ public class MainActivity extends ThemedActivity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32));
+        root.setPadding(ui.dp(20), ui.dp(16), ui.dp(20), ui.dp(32));
         scroll.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        /* ---------- 顶栏：品牌 + 设置 ---------- */
+        /* ---------- 顶栏：设置 ---------- */
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-
-        subLine = new TextView(this);
-        subLine.setText("AWAYFROMSHORTS");
-        subLine.setTextSize(11);
-        subLine.setLetterSpacing(0.18f);
-        subLine.setTextColor(ui.text3());
-        subLine.setTypeface(Typeface.DEFAULT_BOLD);
-        SwissTypography.role(subLine,SwissTypography.Role.LABEL);
-        bar.addView(subLine, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        bar.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
 
         View settingsBtn = ui.amap?new AmapStyle.Icon(this,T.s("设置"),ui.text()):ui.settingsButton(ui.text2(), ui.surface());
         if(ui.amap){settingsBtn.setLayoutParams(new LinearLayout.LayoutParams(ui.dp(34),ui.dp(34)));settingsBtn.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);}
@@ -125,24 +131,10 @@ public class MainActivity extends ThemedActivity {
         bar.addView(settingsBtn);
         root.addView(bar);
 
-        /* ---------- 问候 + 日期 ---------- */
-        greet = ui.title(ui.amap?T.s("守卫"):T.s("设置"));
-        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        glp.topMargin = ui.dp(24);
-        root.addView(greet, glp);
-
-        dateLine = ui.sub("");
-        dateLine.setTextSize(13);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = ui.dp(8);
-        root.addView(dateLine, dlp);
-
         /* ---------- 状态卡 ---------- */
         LinearLayout statusCard = ui.card();
         LinearLayout.LayoutParams scLp = ui.gap(16);
-        scLp.topMargin = ui.dp(24);
+        scLp.topMargin = ui.dp(16);
         root.addView(statusCard, scLp);
 
         LinearLayout statusHead = new LinearLayout(this);
@@ -266,7 +258,37 @@ public class MainActivity extends ThemedActivity {
         foot.setPadding(0, ui.dp(20), 0, 0);
         if(ui.amap)foot.setVisibility(View.GONE);
         root.addView(foot);
-        TextView health=new TextView(this);health.setText(T.s("部署与权限检查"));health.setTextColor(ui.accent());health.setPadding(0,ui.dp(14),0,ui.dp(14));health.setOnClickListener(v->SetupGuide.show(this));root.addView(health);
+        LinearLayout deploy = ui.card(18f, 14f);
+        LinearLayout deployCopy = new LinearLayout(this);
+        deployCopy.setOrientation(LinearLayout.VERTICAL);
+        TextView deployTitle = new TextView(this);
+        deployTitle.setText(T.s("部署与权限检查"));
+        deployTitle.setTextColor(ui.text());
+        deployTitle.setTextSize(14);
+        deployTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        deployCopy.addView(deployTitle);
+        TextView deployHint = ui.sub(T.s("查看设备所有者、无障碍与通知权限"));
+        LinearLayout.LayoutParams deployHintLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        deployHintLp.topMargin = ui.dp(3);
+        deployCopy.addView(deployHint, deployHintLp);
+        deploy.addView(deployCopy, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView deployArrow = new TextView(this);
+        deployArrow.setText("›");
+        deployArrow.setTextSize(22);
+        deployArrow.setTextColor(ui.text3());
+        deployArrow.setGravity(Gravity.CENTER);
+        deploy.addView(deployArrow, new LinearLayout.LayoutParams(ui.dp(28), ui.dp(44)));
+        LinearLayout deployRow = new LinearLayout(this);
+        deployRow.setGravity(Gravity.CENTER_VERTICAL);
+        deployRow.addView(deploy, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        deploy.setOnClickListener(v -> SetupGuide.show(this));
+        LinearLayout.LayoutParams deployLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        deployLp.topMargin = ui.dp(14);
+        root.addView(deployRow, deployLp);
 
         // 薄霜层盖在内容上面：全屏蔽时有"被冻住"的体感，平时不画
         final android.widget.FrameLayout shell = new android.widget.FrameLayout(this);
@@ -279,8 +301,16 @@ public class MainActivity extends ThemedActivity {
         android.widget.FrameLayout host = new android.widget.FrameLayout(this);
         host.setBackgroundColor(ui.bg());
         host.addView(shell);
-        root.setPadding(root.getPaddingLeft(),root.getPaddingTop(),root.getPaddingRight(),root.getPaddingBottom()+ui.dp(94));
-        setContentView(FloatingNav.wrap(this, host, 4));
+        boolean playStartup=!startupShown&&savedInstanceState==null
+                &&Intent.ACTION_MAIN.equals(getIntent().getAction())
+                &&startupAnimationEnabled();
+        if(playStartup){
+            startupShown=true;
+            splash=new SplashView(this);
+            host.addView(splash,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        }
+        setContentView(FloatingNav.wrap(this, host, 4,scroll));
+        if(playStartup)LiveNavWindow.suppress(this,true);
         immersive();
         Guard.ensureService(this);   // 每次打开 App 顺手保证常驻守护在跑
         if (RuleStore.alignRequestedRules(this)) {
@@ -292,54 +322,47 @@ public class MainActivity extends ThemedActivity {
         render();
 
         contentIn(shell);
+        if(playStartup){
+            SplashView reveal=splash;
+            reveal.post(()->{if(splash==reveal&&!isFinishing())reveal.play(()->handOver(shell));});
+        }
     }
 
-    /** 首页入场：从下方一点升起来 + 淡入（原来是整页从顶上滑进来，太"抽屉"了）。 */
+    private boolean startupAnimationEnabled(){
+        return StartupPreferences.enabled(this)&&MotionPolicy.enabled(this);
+    }
+
+    /** 页面内容保持静止，启动层独立退场。 */
     private void contentIn(View shell) {
         shell.animate().cancel();shell.setTranslationY(0);shell.setAlpha(1);shell.setScaleX(1);shell.setScaleY(1);
     }
 
     /**
-     * 加载动画收尾：一进一出同时交接 —— 它淡出并轻微放大，首页同时升起来。
+     * 启动标志退场：背景内容保持原位，只淡出并轻微放大覆盖层。
      * 两段叠在一起才不会看到"先黑一下再出现"的空档。
      */
     private void handOver(final View shell) {
         final SplashView s = splash;
-        splash = null;
         contentIn(shell);
         if (s == null) {
             return;
         }
-        s.animate().alpha(0f).scaleX(1.10f).scaleY(1.10f)
-                .setInterpolator(new android.view.animation.DecelerateInterpolator(1.4f))
-                .setDuration(220)
+        s.animate().alpha(0f).scaleX(1.02f).scaleY(1.02f)
+                .setInterpolator(Motion.IN)
+                .setDuration(MotionPolicy.duration(this,Motion.EXIT))
                 .withEndAction(new Runnable() {
                     public void run() {
+                        if(splash==s)splash=null;
+                        s.stop();
+                        if(homeVisible)AchievementCenter.announce(MainActivity.this);
                         ViewGroup p = (ViewGroup) s.getParent();
                         if (p != null) {
                             p.removeView(s);
                         }
+                        LiveNavWindow.suppress(MainActivity.this,false);
                     }
                 })
                 .start();
-    }
-
-    /** 按当前时辰打招呼 —— Voyage 首页也是这么起的。 */
-    private String greeting() {
-        int h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-        if (h < 6) {
-            return T.s("夜深了");
-        }
-        if (h < 11) {
-            return T.s("早上好");
-        }
-        if (h < 14) {
-            return T.s("中午好");
-        }
-        if (h < 18) {
-            return T.s("下午好");
-        }
-        return T.s("晚上好");
     }
 
     /**
@@ -373,7 +396,7 @@ public class MainActivity extends ThemedActivity {
         super.onResume();
         getWindow().getDecorView().post(() -> SetupGuide.showIfNeeded(this));
         // 成就解锁提示：放在首帧之后再弹，别和首页绘制抢同一帧
-        getWindow().getDecorView().post(() -> AchievementCenter.announce(this));
+        getWindow().getDecorView().post(() -> {if(splash==null&&homeVisible)AchievementCenter.announce(this);});
         // 没给弹窗权限时被拦下的那次定时提醒，趁这次回到前台补上
         getWindow().getDecorView().post(() -> RestAlert.deliverPending(this));
         homeVisible = true;
@@ -398,6 +421,7 @@ public class MainActivity extends ThemedActivity {
     @Override
     protected void onPause() {
         stopDisplayCount();
+        if(splash!=null){SplashView reveal=splash;splash=null;reveal.stop();ViewGroup parent=(ViewGroup)reveal.getParent();if(parent!=null)parent.removeView(reveal);LiveNavWindow.suppress(this,false);}
         super.onPause();
         homeVisible = false;
         int state = StudyGate.cardState(this, Calendar.getInstance());
@@ -428,13 +452,6 @@ public class MainActivity extends ThemedActivity {
         }
 
         Calendar now = Calendar.getInstance();
-        // 每秒都跑 render，但日期一天只变一次：不判一下就等于每秒触发一次布局
-        String day = new java.text.SimpleDateFormat(T.s("M月d日 EEEE"),
-                T.locale()).format(now.getTime());
-        if (!day.equals(lastDay)) {
-            lastDay = day;
-            dateLine.setText(day);
-        }
 
         if (owner) {
             statusChip.setText(T.s("运行中"));
@@ -572,7 +589,6 @@ public class MainActivity extends ThemedActivity {
     private boolean applying;
     private boolean lastAllBlocked;
     private boolean firstRender = true;
-    private String lastDay = "";
 
     /* ---------- 小工具 ---------- */
 

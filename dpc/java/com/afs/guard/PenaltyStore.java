@@ -31,15 +31,64 @@ final class PenaltyStore {
     }
     private static void save(Context c,JSONObject entries,SharedPreferences.Editor edit){long latest=0;Iterator<String> keys=entries.keys();while(keys.hasNext())latest=Math.max(latest,entries.optJSONObject(keys.next()).optLong("until"));if(!edit.putString(KEY,entries.toString()).putLong("hold_until",latest).putBoolean("penalty_schedule_v1",true).commit())throw new IllegalStateException(T.s("禁忌罚时未能保存"));}
     private static synchronized void migrate(Context c,long now){SharedPreferences p=c.getSharedPreferences(StudyGate.TABOO_SP,0);if(p.getBoolean("penalty_schedule_v1",false))return;long old=p.getLong("hold_until",0);JSONObject entries=new JSONObject();if(old>now)append(c,entries,old-now,now,SRC_TABOO);save(c,entries,p.edit().putLong("legacy_hold_until",old));}
-    private static void append(Context c,JSONObject entries,long amount,long now,int src){for(Map.Entry<String,Rule> rule:RuleStore.all(c).entrySet()){Rule r=rule.getValue();if(!r.gate)continue;JSONObject old=entries.optJSONObject(rule.getKey());long end=old==null?0:old.optLong("until");long start=end>now?old.optLong("from"):PenaltyTiming.release(r,now);if(start==0)continue;
-        // 打卡罚时只延长「今天这一段」：跨午夜、或下次放行已经不在今天的，都不加。
-        // ★ 已有的罚时格也要过这一关：禁忌卡可能在明天 06:00 挂了一格，
-        //   打卡这笔顺手叠上去，就等于把今天的账记到了明天。
-        if(src==SRC_CHECKIN&&!CheckinPenalty.withinToday(r,start,now))continue;
-        long base=end>now?end:start;int oldSrc=old==null?0:old.optInt("src",SRC_TABOO);JSONObject plan=new JSONObject();DailyQuotaData.put(plan,"from",start);DailyQuotaData.put(plan,"until",Math.addExact(base,amount));DailyQuotaData.put(plan,"src",oldSrc|src);DailyQuotaData.put(entries,rule.getKey(),plan);}}
+    private static void append(Context c,JSONObject entries,long amount,long now,int src){for(Map.Entry<String,Rule> rule:RuleStore.all(c).entrySet()){appendRule(entries,rule.getKey(),rule.getValue(),amount,now,src);}}
+    /**
+     * 给单个应用挂一笔延长。
+     *
+     * 禁忌卡只给联动(gate)应用挂；打卡罚时给「所有被冻结的应用」挂 —— 冻结时段结束后接着再冻 30 分钟。
+     */
+    private static void appendRule(JSONObject entries,String pkg,Rule r,long amount,long now,int src){
+        boolean applies=src==SRC_CHECKIN?(r.gate||r.freeze):r.gate;
+        if(!applies)return;
+        JSONObject old=entries.optJSONObject(pkg);long end=old==null?0:old.optLong("until");long start=end>now?old.optLong("from"):PenaltyTiming.release(r,now);if(start==0)return;
+        // 打卡罚时只延长当天还会结束的冻结；结束点跨到第二天的应用不安排。
+        if(src==SRC_CHECKIN&&start>0&&!CheckinPenalty.withinToday(r,start,now))return;
+        long base=end>now?end:start;int oldSrc=old==null?0:old.optInt("src",SRC_TABOO);JSONObject plan=new JSONObject();DailyQuotaData.put(plan,"from",start);DailyQuotaData.put(plan,"until",Math.addExact(base,amount));DailyQuotaData.put(plan,"src",oldSrc|src);DailyQuotaData.put(entries,pkg,plan);
+    }
+    /**
+     * 把今天这笔打卡罚时补齐到「所有被冻结的应用」。
+     *
+     * 口径从「只罚联动应用」改成「所有冻结应用」之后，当天已经入账的那一笔只有联动应用有，
+     * 这里补一次把其余冻结应用对齐；已经有了的（未过期且带打卡来源）跳过，幂等。
+     */
+    static synchronized void ensureCheckin(Context c,long amount,long now){
+        migrate(c,now);JSONObject entries=read(c);boolean changed=false;
+        for(Map.Entry<String,Rule> e:RuleStore.all(c).entrySet()){
+            JSONObject plan=entries.optJSONObject(e.getKey());
+            if(plan!=null&&plan.optLong("until")>now&&(plan.optInt("src",SRC_TABOO)&SRC_CHECKIN)!=0)continue;
+            String before=plan==null?"":plan.toString();
+            appendRule(entries,e.getKey(),e.getValue(),amount,now,SRC_CHECKIN);
+            JSONObject after=entries.optJSONObject(e.getKey());
+            if(after!=null&&!after.toString().equals(before))changed=true;
+        }
+        if(changed)save(c,entries,c.getSharedPreferences(StudyGate.TABOO_SP,0).edit());
+    }
     static synchronized void add(Context c,long amount,long now){add(c,amount,now,SRC_TABOO);}
     static synchronized void add(Context c,long amount,long now,int src){if(amount<=0)return;migrate(c,now);JSONObject entries=read(c);append(c,entries,amount,now,src);save(c,entries,c.getSharedPreferences(StudyGate.TABOO_SP,0).edit());}
     static synchronized boolean holding(Context c,String pkg,long now){migrate(c,now);JSONObject plan=entries(c).optJSONObject(pkg);return plan!=null&&PenaltyTiming.active(plan.optLong("from"),plan.optLong("until"),now);}
+    /**
+     * 这一格罚时是不是「打卡没完成」来的。
+     *
+     * 打卡罚时对**所有被冻结的应用**生效：它必须在「钥匙应用/非联动放行」之前挡一道，
+     * 否则非联动应用会被 keyApp 豁免直接放行，罚时条目就白记了。
+     */
+    static synchronized boolean checkinHolding(Context c,String pkg,long now){migrate(c,now);JSONObject plan=entries(c).optJSONObject(pkg);return plan!=null&&PenaltyTiming.active(plan.optLong("from"),plan.optLong("until"),now)&&(plan.optInt("src",SRC_TABOO)&SRC_CHECKIN)!=0;}
+    /** 20:00 打卡罚时当前或下一段接续的汇总；count=0 表示今天没有待执行项目。 */
+    static synchronized CheckinSummary checkinSummary(Context c,long now){
+        migrate(c,now);JSONObject entries=entries(c);int count=0,active=0;long first=Long.MAX_VALUE,last=0;
+        for(Map.Entry<String,Rule> e:RuleStore.all(c).entrySet()){
+            JSONObject p=entries.optJSONObject(e.getKey());
+            if(p==null||(p.optInt("src",SRC_TABOO)&SRC_CHECKIN)==0)continue;
+            long from=p.optLong("from"),until=p.optLong("until");
+            if(from<=0||until<=now)continue;
+            count++;first=Math.min(first,from);last=Math.max(last,until);if(from<=now)active++;
+        }
+        return new CheckinSummary(count,active,first==Long.MAX_VALUE?0:first,last);
+    }
+    static final class CheckinSummary{
+        final int count,active;final long first,last;
+        CheckinSummary(int count,int active,long first,long last){this.count=count;this.active=active;this.first=first;this.last=last;}
+    }
     static synchronized boolean any(Context c,long now){migrate(c,now);JSONObject entries=entries(c);boolean hit=false;for(Map.Entry<String,Rule> rule:RuleStore.all(c).entrySet()){if(!rule.getValue().gate)continue;JSONObject p=entries.optJSONObject(rule.getKey());if(p!=null&&PenaltyTiming.active(p.optLong("from"),p.optLong("until"),now)){hit=true;break;}}return hit;}
     static synchronized long until(Context c){migrate(c,GuardClock.now(c).getTimeInMillis());return c.getSharedPreferences(StudyGate.TABOO_SP,0).getLong("hold_until",0);}
     static synchronized long boundary(Context c,long now){migrate(c,now);long next=Long.MAX_VALUE;JSONObject entries=read(c);Iterator<String> keys=entries.keys();while(keys.hasNext()){JSONObject p=entries.optJSONObject(keys.next());long start=p.optLong("from"),end=p.optLong("until");if(start>now)next=Math.min(next,start);if(end>now)next=Math.min(next,end);}return next;}

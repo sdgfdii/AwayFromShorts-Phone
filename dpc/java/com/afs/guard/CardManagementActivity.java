@@ -3,6 +3,8 @@ package com.afs.guard;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.*;
 import android.widget.*;
 import org.json.*;
@@ -14,9 +16,21 @@ public class CardManagementActivity extends ThemedActivity {
     public static final String EXTRA_MANAGE="card_management";
     private Ui ui;private LinearLayout body;private String category="",renderedCategory;
     private Bundle categoryScroll=new Bundle();private boolean resumedOnce;
+    private boolean resumed;
+    private TextView linkageState,linkageElapsed;
+    private final Handler linkageHandler=new Handler(Looper.getMainLooper());
+    private final Runnable linkageTick=new Runnable(){
+        public void run(){
+            if(!resumed||!category.isEmpty()||linkageState==null)return;
+            refreshLinkageSummary();
+            linkageHandler.postDelayed(this,1000L);
+        }
+    };
     @Override protected void onCreate(Bundle saved){if(Ui.isDark(this))setTheme(getResources().getIdentifier("NavThemeDark","style",getPackageName()));super.onCreate(saved);if(saved!=null&&saved.getBundle("category_scroll")!=null)categoryScroll=saved.getBundle("category_scroll");ui=new Ui(this);category=saved==null?getIntent().getStringExtra("category"):saved.getString("category","");if(category==null)category="";render();}
     @Override protected void onSaveInstanceState(Bundle out){if(renderedCategory!=null)categoryScroll.putBundle(renderedCategory,PageScrollState.capture(this));out.putBundle("category_scroll",categoryScroll);out.putString("category",category);super.onSaveInstanceState(out);}
-    @Override protected void onResume(){super.onResume();if(ui!=null&&ui.dark!=Ui.isDark(this)){recreate();return;}if(!resumedOnce){resumedOnce=true;return;}if(ui!=null)render();}
+    @Override protected void onResume(){resumed=true;super.onResume();if(ui!=null&&ui.dark!=Ui.isDark(this)){recreate();return;}if(!resumedOnce){resumedOnce=true;startLinkageRefresh();return;}if(ui!=null)render();}
+    @Override protected void onPause(){resumed=false;stopLinkageRefresh();super.onPause();}
+    @Override protected void onDestroy(){stopLinkageRefresh();super.onDestroy();}
     @Override public void onBackPressed(){if(category.isEmpty())super.onBackPressed();else{category="";render();}}
     private void base(String title){
         ScrollView scroll=new ScrollView(this);ui.page(scroll);scroll.setFillViewport(true);
@@ -33,18 +47,23 @@ public class CardManagementActivity extends ThemedActivity {
         box.addView(t,ui.gap(10));t.setOnClickListener(v->{try{action.run();}catch(RuntimeException e){toast(e.getMessage());}});return t;
     }
     private void toast(String value){Toast.makeText(this,value==null?T.s("请稍后重试"):value,Toast.LENGTH_SHORT).show();}
-    private void render(){if(renderedCategory!=null)categoryScroll.putBundle(renderedCategory,PageScrollState.capture(this));try{if("love".equals(category))love();else if("summary".equals(category))summary();else if("checkin".equals(category))checkinSettings();else home();}catch(RuntimeException e){base(T.s("卡管理"));hint(body,e.getMessage());}renderedCategory=category;PageScrollState.restore(this,categoryScroll.getBundle(category));}
+    private void render(){
+        stopLinkageRefresh();
+        if(renderedCategory!=null)categoryScroll.putBundle(renderedCategory,PageScrollState.capture(this));
+        try{if("love".equals(category))love();else if("summary".equals(category))summary();else if("checkin".equals(category))checkinSettings();else home();}
+        catch(RuntimeException e){base(T.s("卡管理"));hint(body,e.getMessage());}
+        renderedCategory=category;PageScrollState.restore(this,categoryScroll.getBundle(category));
+        if(resumed&&category.isEmpty())startLinkageRefresh();
+    }
     private void home(){
         category="";base(T.s("卡管理"));hint(body,T.s("统一管理卡片、学习联动和奖励。"));
         CardData data=CardStore.snapshot(this);LinearLayout balance=card();balance.addView(ui.title(minutes(data.balanceMillis())));hint(balance,T.s("热爱奖励余额 · 跨天累计 · 自动抵扣定时冻结"));
         long until=data.rewardUntil(System.currentTimeMillis());if(until>0)hint(balance,T.s("本次减免剩余 ")+minutes(until-System.currentTimeMillis()));
         LinearLayout linkage=card();linkage.addView(ui.title(T.s("学习联动罚时")));
-        hint(linkage,T.s("每日20:00检查；未完成则在各应用自身冻结结束后接续，持续至任务完成，不设固定分钟数。正在放行的应用接在下一段冻结之后，不提前打断放行。待接续跨零点保留；完成任务解除。热爱奖励不抵扣。"));
-        long now=System.currentTimeMillis();String reason=StudyGate.holdReason(this,Calendar.getInstance());
-        hint(linkage,reason.isEmpty()?T.s("当前无额外冻结"):reason);
-        if(reason.startsWith("学习联动")){Calendar start=Calendar.getInstance();start.set(Calendar.HOUR_OF_DAY,20);start.set(Calendar.MINUTE,0);start.set(Calendar.SECOND,0);start.set(Calendar.MILLISECOND,0);
-            CycleSummary.Period pending=data.summary(now).pending(now);long since=pending!=null&&pending.holds(now)?pending.dueAt:start.getTimeInMillis();
-            hint(linkage,T.s("距本次检查已过 ")+minutes(Math.max(0,now-since))+T.s(" · 完成后解除"));}
+        hint(linkage,T.s("20:00 检查未完成任务，只在当天结束的冻结后接续，持续至任务完成。跨午夜、次日才结束的冻结不参与学习联动。正在放行的应用不提前打断。完成任务解除联动，热爱奖励不抵扣。"));
+        linkageState=dynamicHint(linkage,"learning_linkage_state");
+        linkageElapsed=dynamicHint(linkage,"learning_linkage_elapsed");
+        refreshLinkageSummary();
         row(T.s("打卡设置"),T.s("外观 · 字体 · 同步 · 上传"),()->{category="checkin";render();});
         row(T.s("热爱卡"),T.s("完成热爱，积累冻结减免"),()->{category="love";render();});
         row(T.s("记忆卡"),T.s("抽取、学习计划、学科与卡片"),()->startActivity(new Intent(this,MemoryActivity.class).putExtra(EXTRA_MANAGE,true)));
@@ -52,6 +71,39 @@ public class CardManagementActivity extends ThemedActivity {
         row(T.s("目标卡"),T.s("创建目标、默认完成量与卡面设置"),()->startActivity(new Intent(this,CheckinActivity.class).putExtra(CheckinActivity.EXTRA_OPEN,"manage").putExtra(EXTRA_MANAGE,true)));
         row(T.s("禁忌卡"),T.s("禁忌内容与惩罚时长"),()->startActivity(new Intent(this,CheckinActivity.class).putExtra(CheckinActivity.EXTRA_OPEN,"taboo").putExtra(EXTRA_MANAGE,true)));
         row(T.s("总结卡"),data.summary(System.currentTimeMillis()).activeLabels()+T.s(" · 周期末必须完成"),()->{category="summary";render();});
+    }
+    private TextView dynamicHint(LinearLayout box,String tag){
+        TextView t=ui.sub("");t.setPadding(0,ui.dp(8),0,ui.dp(10));t.setTag(tag);box.addView(t);return t;
+    }
+    private void startLinkageRefresh(){
+        linkageHandler.removeCallbacks(linkageTick);
+        if(!resumed||!category.isEmpty()||linkageState==null)return;
+        refreshLinkageSummary();
+        linkageHandler.postDelayed(linkageTick,1000L);
+    }
+    private void stopLinkageRefresh(){linkageHandler.removeCallbacks(linkageTick);}
+    private void refreshLinkageSummary(){refreshLinkageSummary(GuardClock.now(this));}
+    void refreshLinkageSummary(Calendar now){
+        if(linkageState==null||linkageElapsed==null||!category.isEmpty())return;
+        String reason=StudyGate.holdReason(this,now);
+        long origin=StudyGate.learningElapsedSince(this,now);
+        LinkageSummary summary=linkageSummary(reason,origin,now.getTimeInMillis());
+        setTextIfChanged(linkageState,summary.reason);
+        setTextIfChanged(linkageElapsed,summary.elapsed);
+        setVisibilityIfChanged(linkageElapsed,summary.elapsed.isEmpty()?View.GONE:View.VISIBLE);
+    }
+    private static void setTextIfChanged(TextView view,String value){if(!value.contentEquals(view.getText()))view.setText(value);}
+    private static void setVisibilityIfChanged(View view,int visibility){if(view.getVisibility()!=visibility)view.setVisibility(visibility);}
+    static final class LinkageSummary{
+        final String reason,elapsed;
+        LinkageSummary(String reason,String elapsed){this.reason=reason;this.elapsed=elapsed;}
+    }
+    static LinkageSummary linkageSummary(String reason,long origin,long now){
+        String state=reason==null||reason.trim().isEmpty()?T.s("当前无额外冻结"):reason.trim();
+        String elapsed=origin>0L&&now>=origin
+                ?T.s("距本次检查已过 ")+minutes(now-origin)+T.s(" · 完成后解除")
+                :"";
+        return new LinkageSummary(state,elapsed);
     }
     private void checkinSettings(){base(T.s("打卡设置"));
         row(T.s("打卡外观"),T.s("背景图片与亚克力"),()->startActivity(new Intent(this,CheckinActivity.class).putExtra(CheckinActivity.EXTRA_OPEN,"appearance")));

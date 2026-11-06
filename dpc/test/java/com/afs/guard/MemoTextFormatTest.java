@@ -58,6 +58,11 @@ public final class MemoTextFormatTest {
         check(MemoTextFormat.continueList("- [ ] task\n",10)==null,"task line is not auto-numbered");
         check(MemoTextFormat.continueList("```\n1. code\n",11)==null,"fenced code never continued");
         eq("\none",MemoTextFormat.continueList("1.\none",2).body,"bare marker counts as empty item");
+        eq("> note",MemoTextFormat.quote("note",0,4).body,"quote selected paragraph");
+        eq("note",MemoTextFormat.quote("> note",0,6).body,"quote toggles off");
+        eq("note",MemoTextFormat.heading("> note",0,6,0).body,"body removes quote");
+        eq("```\ncode\n```",MemoTextFormat.quote("```\ncode\n```",0,12).body,"quote skips fenced code");
+        eq("- [x] done",MemoTextFormat.quote("- [x] done",0,10).body,"quote preserves task completion");
         System.out.println("Memo text format: "+checks+" checks passed");
     }
 }

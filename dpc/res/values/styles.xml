@@ -16,6 +16,10 @@
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowDisablePreview">true</item>
     </style>
+    <style name="StartupTheme" parent="NavTheme">
+        <item name="android:windowDisablePreview">false</item>
+        <item name="android:windowBackground">@drawable/startup_window</item>
+    </style>
     <style name="NavThemeDark" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/boot_bg</item>
         <item name="android:windowFullscreen">true</item>

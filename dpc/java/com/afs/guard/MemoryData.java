@@ -360,12 +360,18 @@ public final class MemoryData {
         applyRating(c, rating, now, p, true);
         MemoryFlashcards.complete(this, id, now);
     }
-    private boolean applyRating(JSONObject c, int rating, long now, JSONObject p, boolean flashcard) {
-        String id = c.optString("id");
+    /** Derives a new state without generating a plan, log, queue, or touching the card. */
+    public MemoryScheduler.State previewRating(String id, int rating, long now) {
+        JSONObject c = card(id);
+        if (c == null || deleted(c.optString("deck"))) throw new IllegalArgumentException("Unknown or deleted memory card");
         JSONObject d = deck(c.optString("deck"));
+        if (d == null) throw new IllegalArgumentException("Unknown memory subject");
         MemoryScheduler.State n = MemoryScheduler.next(state(c), rating, now, retention(d), maxInterval(d));
-        boolean inPlan = p != null && contains(p.optJSONArray("ids"), id);
-        if (inPlan) put(p, "started", true);
+        // The three-button UI treats "vague" as needing another recall today.
+        // Keep the FSRS state update, but use its existing 15-minute hard relearning step.
+        if (rating == 2 && n.state == MemoryScheduler.REVIEW) {
+            n.state = MemoryScheduler.RELEARNING; n.step = 0; n.due = now + 900000L;
+        }
         if (n.state == MemoryScheduler.REVIEW) {
             // Day-based reviews become available at local midnight; minute-based steps keep exact times.
             Calendar day = Calendar.getInstance(); day.setTimeInMillis(now);
@@ -374,10 +380,17 @@ public final class MemoryData {
             day.set(Calendar.HOUR_OF_DAY, 0); day.set(Calendar.MINUTE, 0); day.set(Calendar.SECOND, 0); day.set(Calendar.MILLISECOND, 0);
             n.due = day.getTimeInMillis();
         }
+        return n;
+    }
+    private boolean applyRating(JSONObject c, int rating, long now, JSONObject p, boolean flashcard) {
+        String id = c.optString("id");
+        MemoryScheduler.State n = previewRating(id, rating, now);
+        boolean inPlan = p != null && contains(p.optJSONArray("ids"), id);
+        if (inPlan) put(p, "started", true);
         put(c, "stability", n.stability); put(c, "difficulty", n.difficulty);
         put(c, "state", n.state); put(c, "step", n.step); put(c, "reps", n.reps);
         put(c, "lapses", n.lapses); put(c, "last", n.last); put(c, "due", n.due);
-        boolean credit = rating >= 2 && n.state == MemoryScheduler.REVIEW;
+        boolean credit = rating >= 3 && n.state == MemoryScheduler.REVIEW;
         if (credit && inPlan && !contains(p.optJSONArray("passed"), id)) p.optJSONArray("passed").put(id);
         JSONObject log = new JSONObject(); put(log, "card", id); put(log, "deck", c.optString("deck"));
         put(log, "ts", now); put(log, "rating", rating); put(log, "credit", credit);

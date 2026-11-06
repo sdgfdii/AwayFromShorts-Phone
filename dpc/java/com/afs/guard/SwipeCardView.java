@@ -10,15 +10,18 @@ import android.widget.FrameLayout;
 
 /**
  * Container that turns a vertical drag over one flashcard into a direction callback.
- * Up = remembered, down = forgot. It never grades: the listener persists from MemoryActivity,
- * so swipe and buttons share one path. Math lives in {@link MemorySwipe}; this class does pixels,
- * touch and motion only.
+ * Up = known, down = forgot; a plain tap (no drag) is reported separately.
+ * It never grades: the listener persists from MemoryActivity, so gesture and tap share one path.
+ * Math lives in {@link MemorySwipe}; this class does pixels, touch and motion only.
  *
  * 卡片区域接管竖向手势（评分解锁后），页面本身仍可拖动卡片以外的区域滚动。
+ * 点按与滑动分开报告：拖动距离没到阈值才算点，所以上滑/下滑不会误触「点卡片」。
  */
 public final class SwipeCardView extends FrameLayout {
     public interface Listener { void onSwipe(int direction); }
-    private static final int FLY_OUT_MS = 140, SNAP_BACK_MS = 120;
+    /** 没有位移的轻点（不含子控件自己消费掉的手势，比如输入框）。 */
+    public interface TapListener { void onTap(); }
+    private TapListener tapListener;
     private static final float MIN_DY_DP = 10f, AXIS_MIN_DP = 24f, COMMIT_DP = 72f, COMMIT_VELOCITY_DP = 800f;
 
     private final float minDy, axisMinPx, commitMinPx, commitVelocity;
@@ -36,7 +39,7 @@ public final class SwipeCardView extends FrameLayout {
     private boolean enabled, allowUp = true, allowDown = true;
     private boolean tracking, dragging, armed, parentLocked;
     private int pointerId = -1;
-    private float downX, downY, dx, dy;
+    private float downX, downY, dx, dy, dragOriginY;
 
     public SwipeCardView(Context c) {
         super(c);
@@ -48,6 +51,7 @@ public final class SwipeCardView extends FrameLayout {
         commitVelocity = ui.dp(COMMIT_VELOCITY_DP);
     }
     public void setListener(Listener l) { listener = l; }
+    public void setTapListener(TapListener l) { tapListener = l; }
     /** Swipe only arms after the answer is revealed. */
     public void setSwipeEnabled(boolean value) {
         enabled = value;
@@ -63,23 +67,23 @@ public final class SwipeCardView extends FrameLayout {
         if (direction == MemorySwipe.NONE) { reset(); return; }
         float target = direction * Math.max(getHeight(), 1) * 1.2f;
         if (!motion()) { setTranslationY(target); setAlpha(0); return; }
-        animate().translationY(target).alpha(0).setDuration(FLY_OUT_MS).start();
+        animate().translationY(target).alpha(0).setDuration(MotionPolicy.duration(getContext(),Motion.EXIT)).setInterpolator(Motion.IN).start();
     }
     /** 下滑之后的消散：原地淡出并轻微缩小，替代整块滑走。 */
     public void dissolve() {
         if (!motion()) { setAlpha(0); return; }
-        animate().alpha(0f).scaleX(.96f).scaleY(.96f).setDuration(FLY_OUT_MS + 60).start();
+        animate().alpha(0f).scaleX(.96f).scaleY(.96f).setDuration(MotionPolicy.duration(getContext(),Motion.EXIT)).setInterpolator(Motion.IN).start();
     }
     public void flyOut(int direction,Runnable done) {
-        visual(direction*Math.max(getHeight(),1)*1.2f,1,FLY_OUT_MS,done);
+        visual(direction*Math.max(getHeight(),1)*1.2f,1,Motion.EXIT,done);
     }
-    public void dissolve(Runnable done) { visual(getTranslationY(),.96f,FLY_OUT_MS+60,done); }
+    public void dissolve(Runnable done) { visual(getTranslationY(),.96f,Motion.EXIT,done); }
     private void visual(float target,float scale,long duration,Runnable done) {
         final long token=++visualToken;visualDone=done;
         animate().withEndAction(null).cancel();
         if(!motion()){setTranslationY(target);setAlpha(0);completeVisual(token);return;}
         animate().translationY(target).alpha(0).scaleX(scale).scaleY(scale)
-            .setDuration(duration).withEndAction(()->completeVisual(token)).start();
+            .setDuration(MotionPolicy.duration(getContext(),duration)).setInterpolator(Motion.IN).withEndAction(()->completeVisual(token)).start();
     }
     /** Instant snap back; returns whether the card had actually moved. */
     public boolean reset() {
@@ -92,13 +96,15 @@ public final class SwipeCardView extends FrameLayout {
     public void settle() {
         armed = false; dragging = false;
         if (!motion()) { setTranslationY(0); setAlpha(1); return; }
-        animate().translationY(0).alpha(1f).setDuration(SNAP_BACK_MS).start();
+        animate().translationY(0).alpha(1f).setDuration(MotionPolicy.duration(getContext(),Motion.TAP)).setInterpolator(Motion.OUT_SOFT).start();
     }
 
     @Override public boolean onInterceptTouchEvent(MotionEvent e) {
         int action = e.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
-            if (!enabled) return false;
+            if (!enabled || visualDone!=null) return false;
+            animate().withEndAction(null).cancel();
+            dragOriginY=getTranslationY();
             downX = e.getRawX(); downY = e.getRawY(); dx = 0; dy = 0;
             pointerId = e.getPointerId(0); tracking = true;
             lockParent();
@@ -121,7 +127,9 @@ public final class SwipeCardView extends FrameLayout {
             return false;
         }
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-            tracking = false; lockParent(); recycleVelocity();
+            // 手势是子控件消费掉的（比如输入框被点中）时走不到 onTouchEvent，
+            // 这里必须把「禁止父级拦截」还回去，否则整页从此滚不动。
+            tracking = false; unlockParent(); recycleVelocity();
         }
         return false;
     }
@@ -151,9 +159,14 @@ public final class SwipeCardView extends FrameLayout {
         float velocityY = 0;
         if (velocity != null) { velocity.computeCurrentVelocity(1000); velocityY = velocity.getYVelocity(pointerId); }
         int direction = MemorySwipe.decide(dx, dy, velocityY, minDy, commitDy(), commitVelocity, allowUp, allowDown);
+        boolean dragged = dragging;
         tracking = false; dragging = false; unlockParent(); recycleVelocity();
         performClick();
-        if (direction == MemorySwipe.NONE) { snapBack(); return; }
+        if (direction == MemorySwipe.NONE) {
+            // 只有「没拖动过」的抬手才算点卡片；拖了但没到位是回弹，不是点击。
+            if (!dragged && tapListener != null) { snapBack(); tapListener.onTap(); return; }
+            snapBack(); return;
+        }
         if (listener != null) listener.onSwipe(direction);
     }
     public void cancelVisual() { cancelGesture(); }
@@ -163,7 +176,7 @@ public final class SwipeCardView extends FrameLayout {
     }
     private void applyDrag(float value) {
         float limit = Math.max(1f, getHeight());
-        setTranslationY(Math.max(-limit, Math.min(limit, value)));
+        setTranslationY(Math.max(-limit, Math.min(limit, value+dragOriginY)));
         float cd = Math.max(1f, commitDy());
         setAlpha(1f - Math.min(.5f, Math.abs(value) / (2f * cd)));
         boolean nowArmed = Math.abs(value) >= cd;
@@ -173,7 +186,7 @@ public final class SwipeCardView extends FrameLayout {
     private void snapBack() {
         armed = false;
         if (!motion()) { setTranslationY(0); setAlpha(1); return; }
-        animate().translationY(0).alpha(1).setDuration(SNAP_BACK_MS).start();
+        animate().translationY(0).alpha(1).setDuration(MotionPolicy.duration(getContext(),Motion.TAP)).setInterpolator(Motion.OUT_SOFT).start();
     }
     private float commitDy() { return Math.max(commitMinPx, getHeight() * 0.18f); }
     private void lockParent() {

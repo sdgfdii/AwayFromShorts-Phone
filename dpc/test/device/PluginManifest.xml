@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.pluginqa">
+<application android:label="AFS Plugin QA" />
+<instrumentation android:name="com.afs.host.plugins.PluginDeviceTest" android:targetPackage="com.afs.guard" android:functionalTest="true" />
+<instrumentation android:name="com.afs.guard.PluginBaselineDataTest" android:targetPackage="com.afs.guard" android:functionalTest="true" />
+</manifest>

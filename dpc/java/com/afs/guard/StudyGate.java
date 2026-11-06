@@ -34,7 +34,7 @@ import java.util.Locale;
  *
  * 生效条件（全部满足才延长冻结）：
  *   enabled(PC 下发) && 数据有效 && date 是今天 && checkedAt 未超龄
- *   && 本地时间已到当天 20:00 && !allDone（还有目标没打卡）
+ *   && !allDone（还有目标没打卡）
  *
  * fail-open 与 PC 端同一套约定：没拉到过 / JSON 损坏 / 日期不是今天 /
  * 超过 {@link #STALE_MS} 没更新 —— 一律放行。宁可不生效，也不锁死。
@@ -255,7 +255,7 @@ public final class StudyGate {
      * 纯判定：此刻是否应该延长冻结。
      * 数据不可信、开关关、已全部打卡 → false（放行）。
      *
-     * 每天本地时间 20:00 才检查当天打卡；未完成时延长受联动应用的冻结，
+     * 当天还有目标没打卡时延长受联动应用的冻结；从应用自身冻结结束点接续，
      * 完成后立即恢复原时间表。startMin/endMin 只作 PC 配置展示。
      */
     public static boolean shouldHold(Snapshot snap, Calendar now) {
@@ -269,10 +269,10 @@ public final class StudyGate {
         if (!snap.enabled || snap.allDone) {
             return false;
         }
-        return now.get(Calendar.HOUR_OF_DAY) >= 20;
+        return true;
     }
 
-    /** 下一个学习联动边界：当天 20:00，或次日 00:00 重置。 */
+    /** 下一次服务复查边界：当天 20:00 复查打卡罚时，或次日 00:00 更新学习日。 */
     static long nextCheckBoundaryMillis(Calendar now) {
         Calendar next = (Calendar) now.clone();
         next.set(Calendar.SECOND, 0);
@@ -387,6 +387,7 @@ public final class StudyGate {
         localModeAt = 0L;
         localWholeAt = 0L;
         linkedAt = 0L;
+        holdingAt = 0L;
     }
 
     private static volatile long linkedAt;
@@ -397,8 +398,8 @@ public final class StudyGate {
         if (linkedAt == 0L || now < linkedAt || now - linkedAt >= 2000L) {
             LearningLink.Progress memory = LearningLink.memory(c);
             LearningLink.Progress quiz = LearningLink.quiz(c);
-            linkedPending = LearningPolicy.holds(memory.available, memory.selected, memory.target, memory.done, 20)
-                    || LearningPolicy.holds(quiz.available, quiz.selected, quiz.target, quiz.done, 20);
+            linkedPending = LearningPolicy.holds(memory.available, memory.selected, memory.target, memory.done)
+                    || LearningPolicy.holds(quiz.available, quiz.selected, quiz.target, quiz.done);
             linkedAt = now;
         }
         return linkedPending;
@@ -553,16 +554,28 @@ public final class StudyGate {
         return learningSince(c,now)>0;
     }
     static synchronized long learningSince(Context c,Calendar now){
-        SharedPreferences prefs=c.getSharedPreferences("afs_learning_link",0);long old=prefs.getLong("extension_origin",0);
-        boolean unfinished=linkedPending(c)||(cached!=null&&cached.valid&&cached.enabled&&!cached.allDone&&cached.trustworthy(CycleSummary.day(now.getTimeInMillis()),now.getTimeInMillis()));
-        Calendar check=(Calendar)now.clone();check.set(Calendar.HOUR_OF_DAY,20);check.set(Calendar.MINUTE,0);check.set(Calendar.SECOND,0);check.set(Calendar.MILLISECOND,0);
-        long daily=unfinished&&(old>0||now.get(Calendar.HOUR_OF_DAY)>=20)?(old>0?old:check.getTimeInMillis()):0;
-        if(old!=daily){SharedPreferences.Editor edit=prefs.edit();if(daily==0)edit.remove("extension_origin");else edit.putLong("extension_origin",daily);if(!edit.commit())throw new IllegalStateException("学习联动接续时间未能保存");}
+        long daily=dailyLearningOrigin(c,now);
         long since=daily>0?daily:Long.MAX_VALUE;for(CycleSummary.Period period:CardStore.summariesPending(c,now.getTimeInMillis()))if(period.holds(now.getTimeInMillis()))since=Math.min(since,period.dueAt);
         return since==Long.MAX_VALUE?0:since;
     }
-    static boolean learningFor(Context c,Rule rule,Calendar now){long origin=learningSince(c,now);if(origin==0)return false;long release=PenaltyTiming.release(rule,origin);return release>0&&now.getTimeInMillis()>=release;}
-    static String extensionStatus(Context c,String pkg){Calendar now=GuardClock.now(c);String taboo=PenaltyStore.status(c,pkg,now.getTimeInMillis());Rule rule=RuleStore.all(c).get(pkg);String learning="";if(rule!=null&&rule.gate&&learningPending(c,now)){long start=PenaltyTiming.release(rule,learningSince(c,now));if(start>0)learning="学习联动："+new SimpleDateFormat("MM-dd HH:mm",Locale.CHINA).format(new Date(start))+"起接续，至任务完成"+(now.getTimeInMillis()<start?"（待接续）":"（生效中）");}return taboo+(taboo.isEmpty()||learning.isEmpty()?"":"\n")+learning;}
+    private static synchronized long dailyLearningOrigin(Context c,Calendar now){
+        SharedPreferences prefs=c.getSharedPreferences("afs_learning_link",0);long old=prefs.getLong("extension_origin",0);
+        boolean unfinished=linkedPending(c)||(cached!=null&&cached.valid&&cached.enabled&&!cached.allDone&&cached.trustworthy(CycleSummary.day(now.getTimeInMillis()),now.getTimeInMillis()));
+        long daily=LearningPolicy.dailyOrigin(now,old,unfinished);
+        if(old!=daily){SharedPreferences.Editor edit=prefs.edit();if(daily==0)edit.remove("extension_origin");else edit.putLong("extension_origin",daily);if(!edit.commit())throw new IllegalStateException("学习联动接续时间未能保存");}
+        return daily;
+    }
+    static boolean learningFor(Context c,Rule rule,Calendar now){long origin=learningSince(c,now);if(origin==0)return false;long release=LearningPolicy.learningRelease(rule,origin);return release>0&&now.getTimeInMillis()>=release;}
+    /** 卡片上的计时从真正接上冻结的那次应用冻结结束开始，不从零点或打卡操作时间算。 */
+    static synchronized long learningElapsedSince(Context c,Calendar now){
+        long since=Long.MAX_VALUE,at=now.getTimeInMillis(),origin=learningSince(c,now);
+        if(origin>0)for(Rule rule:RuleStore.all(c).values()){
+            long release=LearningPolicy.learningRelease(rule,origin);
+            if(release>0L&&release<=at)since=Math.min(since,release);
+        }
+        return since==Long.MAX_VALUE?0L:since;
+    }
+    static String extensionStatus(Context c,String pkg){Calendar now=GuardClock.now(c);String taboo=PenaltyStore.status(c,pkg,now.getTimeInMillis());Rule rule=RuleStore.all(c).get(pkg);String learning="";if(rule!=null&&rule.gate&&learningPending(c,now)){long start=LearningPolicy.learningRelease(rule,learningSince(c,now));if(start>0)learning="学习联动："+new SimpleDateFormat("MM-dd HH:mm",Locale.CHINA).format(new Date(start))+"起接续，至任务完成"+(now.getTimeInMillis()<start?"（待接续）":"（生效中）");}return taboo+(taboo.isEmpty()||learning.isEmpty()?"":"\n")+learning;}
 
     /** 本机今天还没打卡的学习目标数（0 = 打完）。 */
     public static int studyPending(Context c) {
@@ -583,26 +596,63 @@ public final class StudyGate {
      * 包括用户启用的记忆/刷题目标，以及周期结束前必须完成的总结。
      */
     public static String holdReason(Context c, Calendar now) {
-        if (now.get(Calendar.HOUR_OF_DAY) >= 20) {
-            int study = studyPending(c);
-            if (study > 0) return "学习联动：今日打卡还有 " + study + " 个目标";
-            LearningLink.Progress memory = LearningLink.memory(c);
-            if (memory.available && memory.target > 0 && !memory.complete())
-                return "学习联动：记忆目标 " + memory.done + "/" + memory.target;
-            LearningLink.Progress quiz = LearningLink.quiz(c);
-            if (quiz.available && quiz.target > 0 && !quiz.complete())
-                return "学习联动：刷题目标 " + quiz.done + "/" + quiz.target;
-            init(c);
-            if (shouldHold(cached, now)) return "学习联动：今天的学习目标还没完成";
-        }
+        String checkinPenalty = CheckinPenalty.linkageStatus(c, now);
+        int study = studyPending(c);
+        if (study > 0) return withCheckinPenalty(studyHoldReason(c, now,
+                "学习联动：今日打卡还有 " + study + " 个目标", true), checkinPenalty);
+        LearningLink.Progress memory = LearningLink.memory(c);
+        if (memory.available && memory.target > 0 && !memory.complete())
+            return withCheckinPenalty(studyHoldReason(c, now,
+                    "学习联动：记忆目标 " + memory.done + "/" + memory.target, true), checkinPenalty);
+        LearningLink.Progress quiz = LearningLink.quiz(c);
+        if (quiz.available && quiz.target > 0 && !quiz.complete())
+            return withCheckinPenalty(studyHoldReason(c, now,
+                    "学习联动：刷题目标 " + quiz.done + "/" + quiz.target, true), checkinPenalty);
+        init(c);
+        if (shouldHold(cached, now))
+            return withCheckinPenalty(studyHoldReason(c, now,
+                    "学习联动：今天的学习目标还没完成", true), checkinPenalty);
         CycleSummary.Period summary=CardStore.summaryPending(c,now.getTimeInMillis());
-        if(summary!=null&&summary.holds(now.getTimeInMillis()))return "学习联动："+summary.cycleLabel+"总结（"+summary.start+" 至 "+summary.through+"）尚未完成";
+        if(summary!=null&&summary.holds(now.getTimeInMillis()))
+            return withCheckinPenalty(studyHoldReason(c, now,
+                    "学习联动："+summary.cycleLabel+"总结（"+summary.start+" 至 "+summary.through+"）尚未完成",
+                    false), checkinPenalty);
+        if (!checkinPenalty.isEmpty()) return checkinPenalty;
         long until = tabooUntil(c);
         if (PenaltyStore.any(c,now.getTimeInMillis())) {
             return T.s("罚时还没到点：继续冻结到 ")
                     + new SimpleDateFormat("HH:mm", Locale.US).format(new Date(until));
         }
-        return learningPending(c,now)?"学习联动：待完成目标，将在各应用自身冻结结束后接续":"";
+        return learningPending(c,now)
+                ? studyHoldReason(c, now, "学习联动：待完成目标", true)
+                : "";
+    }
+
+    private static String withCheckinPenalty(String learning, String checkinPenalty) {
+        return checkinPenalty.isEmpty() ? learning : learning + "\n" + checkinPenalty;
+    }
+
+    /**
+     * 给学习联动摘要补上执行阶段：原冻结还没结束时是待接续；
+     * 任一受管应用已结束原冻结、学习闸门已经真正接上时，界面必须明确显示这一点。
+     */
+    private static String studyHoldReason(Context c,Calendar now,String reason,boolean waiting){
+        long origin=learningSince(c,now);
+        boolean active=false;
+        if(origin>0L){
+            long at=now.getTimeInMillis();
+            for(Rule rule:RuleStore.all(c).values()){
+                if(!rule.gate)continue;
+                long release=LearningPolicy.learningRelease(rule,origin);
+                if(release>0L&&at>=release){active=true;break;}
+            }
+        }
+        return learningActivityText(reason,active,waiting);
+    }
+
+    static String learningActivityText(String reason,boolean active,boolean waiting){
+        if(active)return reason+" · 原冻结结束后继续冻结中";
+        return waiting?reason+"，将在各应用自身冻结结束后接续":reason;
     }
 
     /* ==================== 禁忌卡（黑卡） ====================
@@ -934,7 +984,7 @@ public final class StudyGate {
             case ST_ACTIVE:
                 return "学习联动 · 生效中\n今天还有目标没打卡 · 相关应用直接延长冻结";
             case ST_PENDING:
-                return "学习联动\n今天还有目标没打卡 · 20:00 检查是否延长冻结";
+                return "学习联动\n今天还有目标没打卡 · 从应用冻结结束点继续冻结";
             default:
                 return "学习联动\n暂无数据 · 不参与冻结";
         }
@@ -946,7 +996,7 @@ public final class StudyGate {
         LearningLink.Progress progress = LearningLink.memory(c);
         int pending = progress.available && progress.selected && !progress.complete() ? 1 : 0;
         return statusTextOf(cached, now) + (pending > 0 ? "\n记忆复习　还有 " + pending + " 个目标"
-                + (now.get(Calendar.HOUR_OF_DAY) >= 20 ? "（延长冻结中）" : "（20:00 检查）") : "");
+                + "（参与学习联动）" : "");
     }
 
     static String statusTextOf(Snapshot s, Calendar now) {
@@ -964,7 +1014,7 @@ public final class StudyGate {
             return "学习联动　今天还有目标没打卡（相关应用直接延长冻结）";
         }
         if (st == ST_PENDING) {
-            return "学习联动　20:00 检查今日打卡，未完成再延长冻结";
+            return "学习联动　今日打卡未完成（从应用冻结结束点继续冻结）";
         }
         return "学习联动　目标已打完（按时间表放行）";
     }
@@ -1045,7 +1095,7 @@ public final class StudyGate {
             return "⚠ 今天目标没完成 · 相关应用冻结中";
         }
         if (st == ST_PENDING) {
-            return "20:00 检查今日打卡";
+            return "今日打卡未完成 · 继续冻结";
         }
         if (st == ST_STALE) {
             return "⚠ 学习进度已过期，保护失效";

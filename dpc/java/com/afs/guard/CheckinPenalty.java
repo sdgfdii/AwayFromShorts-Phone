@@ -4,6 +4,9 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
+import java.text.SimpleDateFormat;
 
 /**
  * 打卡没完成 → 冻结时段延长 30 分钟。
@@ -19,8 +22,8 @@ import java.util.Calendar;
  *       一天下来能叠成十几个小时。</li>
  * </ul>
  *
- * <p>跨天的不加：冻结时段本身跨午夜（23:00-07:00 这类），或者下一次放行点已经不在今天，
- * 都没有「今天的这一段冻结」可以延长，硬加会把罚时甩到第二天。
+ * <p>罚时接在应用当天冻结结束的真实放行点；如果结束点已经跨到第二天，则不安排，
+ * 也不从认领时刻直接加在当前冻结中间。
  */
 final class CheckinPenalty {
 
@@ -56,17 +59,9 @@ final class CheckinPenalty {
         return lastHitAt > dueAt;
     }
 
-    /**
-     * 这次放行点还落在今天之内吗（跨午夜 / 明天才放行 → 不延长）。
-     *
-     * <p>只判两件事：规则本身有没有跨午夜的时段；放行点与当前是否同一天。
-     * 用「同一天」而不是「距离 24 小时内」，是因为罚时说的是「今天这一段的 30 分钟」。
-     */
+    /** 只延长当天结束的冻结；跨午夜的接续点不参与打卡罚时。 */
     static boolean withinToday(Rule rule, long release, long now) {
         if (rule == null || release <= 0) return false;
-        for (int i = 0; i < rule.windowCount(); i++) {
-            if (rule.crossMidnightAt(i)) return false;
-        }
         Calendar r = Calendar.getInstance();
         r.setTimeInMillis(release);
         Calendar n = Calendar.getInstance();
@@ -112,13 +107,14 @@ final class CheckinPenalty {
     static synchronized boolean tick(Context c) {
         Calendar now = GuardClock.now(c);
         if (!atDuePoint(now.get(Calendar.HOUR_OF_DAY))) return false;
-        if (armed(c)) return false;
+        if (armed(c)) { backfill(c, now); return false; }
         long due = dueAt(now);
-        int pending = StudyStore.pendingToday(c);
+        int pending = pendingCards(c);
         long last = StudyStore.lastHitToday(c);
         if (!missed(pending, last, due)) return false;
 
         PenaltyStore.add(c, EXTEND_MS, now.getTimeInMillis(), PenaltyStore.SRC_CHECKIN);
+        StudyGate.invalidate(c);
         boolean saved = sp(c).edit()
                 .putString(K_DATE, StudyStore.today())
                 .putLong(K_AT, now.getTimeInMillis())
@@ -129,19 +125,66 @@ final class CheckinPenalty {
         return true;
     }
 
+    /** 20:00 检查的是打卡页全部必做卡，不只目标卡。 */
+    private static int pendingCards(Context c) {
+        int pending = StudyStore.pendingToday(c);
+        LearningLink.Progress memory = LearningLink.memory(c);
+        if (memory.selected && memory.target > 0 && !memory.complete()) pending++;
+        LearningLink.Progress quiz = LearningLink.quiz(c);
+        if (quiz.selected && quiz.target > 0 && !quiz.complete()) pending++;
+        pending += CardStore.summariesPending(c, GuardClock.now(c).getTimeInMillis()).size();
+        return pending;
+    }
+
+    private static final String K_BACKFILL = "backfill_date";
+
+    /**
+     * 当天这笔罚时已经入账过，但口径升级成了「所有被冻结的应用」。
+     *
+     * 装上这一版之后的第一拍把其余冻结应用补齐一次，当天就能生效；
+     * 用 backfill_date 记一笔，避免每个节拍都去扫一遍规则表。
+     */
+    private static void backfill(Context c, Calendar now) {
+        String today = StudyStore.today();
+        SharedPreferences p = sp(c);
+        if (today.equals(p.getString(K_BACKFILL, ""))) return;
+        try {
+            PenaltyStore.ensureCheckin(c, EXTEND_MS, now.getTimeInMillis());
+        } catch (RuntimeException error) {
+            android.util.Log.w(Guard.TAG, "checkin penalty backfill failed: " + error.getClass().getSimpleName());
+            return;   // 不写标记，下一拍再试
+        }
+        p.edit().putString(K_BACKFILL, today).apply();
+    }
+
     /* ---------- 文案 ---------- */
 
     /** 设置页 / 打卡页那一行的说明：今天这笔到底在不在。 */
     static String describe(Context c) {
         Calendar now = GuardClock.now(c);
-        if (armed(c)) {
-            return T.s("今天 20:00 打卡没打完，各应用冻结已各延长 ")
-                    + (EXTEND_MS / 60000L) + T.s(" 分钟（补打也不撤销）");
-        }
+        String scheduled = linkageStatus(c, now);
+        if (!scheduled.isEmpty()) return scheduled;
+        if (armed(c)) return T.s("20:00 打卡罚时已登记，但当前没有可接续的冻结时段");
         if (!atDuePoint(now.get(Calendar.HOUR_OF_DAY))) {
-            return T.s("20:00 前打完卡就不延长；没打完，各应用本次冻结多 ")
+            return T.s("20:00 前打完卡就不延长；没打完，所有被冻结的应用本次冻结多 ")
                     + (EXTEND_MS / 60000L) + T.s(" 分钟");
         }
         return T.s("今天按时打完了卡，不延长");
+    }
+
+    /** 给学习联动摘要一行显示的短状态；没有待执行打卡罚时时返回空串。 */
+    static String linkageStatus(Context c, Calendar now) {
+        PenaltyStore.CheckinSummary s = PenaltyStore.checkinSummary(c, now.getTimeInMillis());
+        if (s.count == 0) return "";
+        String when = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(new Date(s.first));
+        String tail = new SimpleDateFormat("MM-dd HH:mm", Locale.CHINA).format(new Date(s.last));
+        if (s.active > 0) {
+            return T.s("20:00 打卡罚时已生效：")
+                    + s.count + T.s(" 个应用分别延长 ")
+                    + (EXTEND_MS / 60000L) + T.s(" 分钟，最后一笔到 ") + tail;
+        }
+        return T.s("20:00 打卡罚时已安排：")
+                + s.count + T.s(" 个应用从各自冻结结束点分别延长 ")
+                + (EXTEND_MS / 60000L) + T.s(" 分钟，最早 ") + when + T.s(" 接续");
     }
 }

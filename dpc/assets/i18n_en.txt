@@ -14,20 +14,24 @@
 \n\n现在统一设置冻结时间？之后也可以单独改。	\n\nSet freeze hours for them now? You can change them one by one later.
 \n\n长按应用可拖到其他冻结时段。	\n\nLong-press an app to drag it to another window.
 \n    目标打卡 123 · 今天继续	\n    Goal check-in 123 · continue today
-\n20:00 后学习打卡未完成，学习闸门正在延长冻结；完成后恢复原时段。	\nStudy goals are unmet after 20:00, so the study gate is extending freezes. Finish them to return to the normal windows.
-\n20:00 后打卡没完成，学习联动会一直冻到打完；打完还要走完那 30 分钟的打卡罚时。	\nAfter 20:00 an unfinished check-in keeps the study gate holding until it is done, and the 30-minute check-in penalty still has to run out.
+\n上滑＝认识，下滑＝忘了，点卡片＝完全不认识。评“忘了”会进入错题与重学计划。	\nSwipe up = known, swipe down = forgot, tap the card = no idea. “Forgot” adds the card to mistakes and relearning.
 \n下次切换 	\nNext switch 
 \n今日队列：复习 	\nToday's queue: review 
 \n先回忆再揭晓。每张闪卡复习后进入下一张；选择“忘了”会进入错题与重学计划。	\nRecall first, then reveal. Each card moves to the next; “forgot” adds it to mistakes and relearning.
 \n关键应用 	\nKey apps 
 \n冻结时段固定使用时区：	\nFreeze windows use a pinned timezone: 
+\n到期旧卡按遗忘风险排序，新卡按新学上限补位。	\nDue cards are ordered by forgetting risk; new cards fill in up to the daily limit.
 \n刷题：	\nQuiz: 
 \n周期末 20:00 后未完成会延长冻结，跨周期仍需补完。	\nUnfinished after 20:00 on the last day extends the freeze; it carries into the next cycle.
 \n填新数字保存；清空＝恢复自动建议。	\nEnter a new number to save; clear it to return to the suggestion.
+\n学习目标未完成，学习闸门从原冻结结束点接续；完成后恢复原时段。	\nStudy goals are unmet, so the study gate continues from the original freeze end. Finish them to return to the normal windows.
 \n学习联动：	\nStudy gate: 
+\n当天任务未完成，学习联动会从冻结结束点接续；完成后恢复原时段，独立打卡罚时仍按原规则执行。	\nWhile today's tasks are unfinished, the study gate continues from the freeze end. Completing them restores the normal windows; the separate check-in penalty still follows its existing rules.
+\n挂后台计时：	\nCounts in background: 
 \n提醒 	\nReminder 
 \n数据大小：	\nData size: 
 \n数量不足时按剩余可用卡片抽取。	\nIf there are fewer, it draws from what is left.
+\n显示答案后，点认识、模糊或忘记。未学稳的卡会在今日继续巩固，滑动与点卡片不评分。	\nShow the answer, then choose Know, Uncertain or Forgot. Unfinished cards return for consolidation today. Swiping and tapping the card never submit ratings.
 \n未授予使用情况访问权限时只保存额度，不计时、不冻结。	\nWithout usage access only the quota is saved; nothing is timed or frozen.
 \n此后每	\nThen every 
 \n禁忌卡认领后的延长冻结尚未结束。	\nA taboo penalty is still extending the freeze.
@@ -41,9 +45,12 @@
   ·点撤回	  · tap to undo
   认领禁忌：	  taboo claimed: 
  KB\n包含本机学习数据、附件与所选设置；不包含云端凭据。	 KB\nIncludes local study data, attachments and selected settings; never cloud credentials.
+ · 	 · 
+ ·  新学 	 · new 
  · 30 天	 · 30 days
  · ★ 已收藏	 · ★ starred
  · 不受学习闸门影响	 · not affected by the study gate
+ · 两端明细见下	 · details below
  · 云端 rev 	 · cloud rev 
  · 今日累计 	 · today's total 
  · 使用额度	 · usage quota
@@ -62,6 +69,7 @@
  · 已重新检测	 · re-checked
  · 待完成	 · pending
  · 总量 	 · total 
+ · 挑选今日卡片	 · Pick today's queue
  · 收藏 	 · saved 
  · 新学 	 · new 
  · 未到期	 · not due
@@ -77,8 +85,10 @@
  · 目标 	 · goal 
  · 第 	 · #
  · 认领再加 	 · claiming adds 
+ · 跨设备	 · Shared
  · 错题	 · wrong answers
  · 队列 	 · queue 
+ · 需要重新确认	 · Confirmation required
  不能为负数	 cannot be negative
  个	\e
  个 · 	 · 
@@ -92,7 +102,9 @@
  个屏蔽中，跳过）	 in block windows, skipped)
  个应用	 apps
  个应用 · 	 apps · 
+ 个应用从各自冻结结束点分别延长 	 apps, each extended after its own freeze by 
  个应用共用	 apps share it
+ 个应用分别延长 	 apps, each extended by 
  个应用加入已超过 10 分钟，按「只进不出」不能移出冻结应用	 apps have been here over 10 minutes, so “add-only” keeps them frozen.
  个应用套用	 apps
  个应用，	 apps, 
@@ -106,13 +118,15 @@
  冻结	 frozen
  分	 min
  分 	 min 
- 分钟	 min
+ 分钟	 minutes longer
  分钟 · 点此修改	 min · tap to change
  分钟/日	 min/day
  分钟一轮，做完再休息	 min a round, then rest
  分钟（叠加）。	 minutes (stacks).
  分钟（可叠加）。	 minutes (stacks).
- 分钟（补打也不撤销）	 min (finishing later does not undo it)
+ 分钟（补打也不撤销）	 minutes longer at today's release point (finishing later does not undo it)
+ 分钟，最后一笔到 	 minutes; the last one ends at 
+ 分钟，最早 	 minutes; the first continuation starts at 
  天	 days
  天 	 d 
  天 · 	 days · 
@@ -123,6 +137,7 @@
  天）  ▸	 days)  ▸
  天，从 	 days, from 
  天，最长连续 	 days, best streak 
+ 天：	 days: 
  天；本月日记 	 days; journal this month: 
  字	 chars
  字 · 返回或完成时保存	 chars · saved on back or done
@@ -137,16 +152,19 @@
  已选择	 selected
  应为 	 should be 
  张	\e
+ 张/天	 cards/day
  张。	.
  张卡片	 cards
  张卡片 · 今日有效复习 	 cards · valid reviews today 
  张可学	 to learn
  张待确认	 pending
  张次（每天每张计一次）	 card-times (each card counts once a day)
+ 张，请用搜索缩小范围）	, narrow the search)
  张，跳过重复 	 cards, skipped 
  必须是整数	 must be a whole number
  必须是文字	 must be text
  截止	 due
+ 接续	 to continue
  条	\e
  条回收站记录。现有内容保留，冲突记录另存副本。	 trash entries. Existing content is kept and conflicting records are saved as copies.
  条笔记和 	 notes and 
@@ -178,6 +196,7 @@
  页	\e
  项	 done
  项待办？	 to-dos?
+ 项，最高 	 points, peak 
  题	\e
  题   /   累计 	 / all time 
  题   /   累计正确率 	 / overall accuracy 
@@ -226,8 +245,11 @@
 .　	. 
 0 分	0 min
 00:00（零点）	00:00 (midnight)
-20:00 前打完卡就不延长；没打完，各应用本次冻结多 	Finish check-in before 20:00 and nothing is added; miss it and each app's freeze gets 
-20:00 后打卡没完成，学习联动会一直冻到打完；打完还要走完打卡罚时。	After 20:00 an unfinished check-in keeps the study link frozen until done, then the check-in penalty still applies.
+15 秒后自动消失	Auto-dismiss after 15s
+20:00 前打完卡就不延长；没打完，所有被冻结的应用本次冻结多 	Finish before 20:00 and nothing is added; otherwise every frozen app stays frozen 
+20:00 打卡罚时已安排：	The 20:00 check-in penalty is scheduled for 
+20:00 打卡罚时已生效：	The 20:00 check-in penalty is active for 
+20:00 打卡罚时已登记，但当前没有可接续的冻结时段	The 20:00 check-in penalty is recorded, but no scheduled freeze can continue right now
 24小时冻结时间条，	24-hour freeze bar, 
 25 分钟一轮 · 专注时锁住屏幕	25 minutes a round, screen locked while focusing
 4 秒吸气 · 4 秒屏息 · 4 秒呼气 · 4 秒停留。屏息不舒服就跳过，别硬撑。	Inhale 4 · hold 4 · exhale 4 · rest 4. Skip the hold if it feels bad — don't force it.
@@ -273,6 +295,7 @@ Excel 文本项目过多	Too many Excel shared strings
 Excel 最多 5000 题	Excel supports at most 5000 questions
 Excel 没有题目	Excel contains no questions
 Excel 解压后过大，请另存为 CSV	The Excel file is too large unpacked; save it as CSV
+FSRS稳定性分布	FSRS stability distribution
 FlClash	FlClash
 Gist ID 无效	Invalid Gist ID
 Gist ID（与电脑端一致）	Gist ID (same as on the PC)
@@ -325,10 +348,13 @@ yyyy年M月d日	MMM d, yyyy
 · 不收集设备标识，不上报崩溃，没有广告或统计 SDK。\n	· No device identifiers, no crash reporting, no ads, no analytics SDK.\n
 · 使用时长只取自系统使用记录，在本机算，不上传。\n\n	· Usage time comes from system usage records and is computed on-device. It is never uploaded.\n\n
 · 只有你主动开启同步时，才把打卡与目标推到你自己配置的 Gist。\n	· Only when you enable sync yourself are check-ins and goals pushed to the Gist you configured.\n
+· 已同步的电脑应用时长（日、月和累计汇总）\n	· Read already synced PC app durations for today, this month and all time\n
 · 打卡目标、笔记、记忆卡、题库、额度与冻结规则，全部在本机应用私有目录。\n	· Goals, notes, memory cards, question banks, quotas and freeze rules all live in this app's private directory.\n
 · 检查更新会在你点按钮时去发布页取一份版本清单，只读不写，也不带任何本机信息。\n\n	· Checking for updates fetches a version list from the release page when you tap the button; it only reads, and sends nothing about this device.\n\n
 · 检查更新会在你点按钮时访问更新源，只读取版本号。\n\n	· Checking for updates contacts the update source when you tap the button, and reads only the version number.\n\n
 · 检查更新只在你点按钮时去发布页取一份版本清单（官方源连不上会换镜像），只读不写，也不带任何本机信息。\n\n	· Checking for updates only fetches a version list from the release page when you tap the button (a mirror is used when the official source is unreachable); it only reads, and sends nothing about this device.\n\n
+· 读取宿主聚合的应用名称与时长（最多 40 排行 + 7 天趋势）\n	· Read aggregated app names and durations (up to 40 ranking rows and seven trend days)\n
+· 通过宿主授权页前往系统「使用情况访问」设置\n\n	· Open system usage access settings through the host authorization page\n\n
 —（没添加应用）	— (no apps added)
 “全部卡片”包含尚未到复习日期的卡片；“仅到期卡片”只抽今天到期的卡片，按到期时间从早到晚。每张卡在今日闪卡中只出现一次。\n保存后重新抽取今日尚未复习的卡片，已完成记录保留。	“All cards” includes cards whose due date has not arrived; “Due only” draws today's due cards, earliest first. Each card appears once in today's flashcards.\nSaving redraws today's unreviewed cards; finished records are kept.
 ‹  冻结应用	‹  Frozen apps
@@ -340,8 +366,13 @@ yyyy年M月d日	MMM d, yyyy
 ‹ 前30天	‹ Previous 30 days
 ‹ 返回	‹ Back
 ← 松手，看上一个	← Release to see the previous one
+↑ 上滑＝记住　·　↓ 下滑＝忘了	↑ swipe up = remembered   ·   ↓ swipe down = forgot
 ↑ 做了    ↓ 没做	↑ Did it    ↓ Skipped
 ↑ 做了   ↓ 没做	↑ Did it   ↓ Skipped
+⇄ 与电脑共享这份额度	⇄ Share this bucket with the PC
+⇄ 设为跨设备共享	⇄ Share with PC
+⇄ 跨设备 · 未连上电脑，暂按本机计	⇄ Shared · PC offline, counting this phone only
+⇄ 跨设备设置	⇄ Shared quota settings
 ⏱ 批量设时段	⏱ Set hours in bulk
 ★ 已收藏	★ Saved
 ☆ 收藏本题	☆ Save this question
@@ -359,6 +390,8 @@ yyyy年M月d日	MMM d, yyyy
 「%s」不把页面文字交给系统，所以微信视频号 / 朋友圈这两条是按窗口类名（plugin.finder.ui.* / plugin.sns.ui.*）认页面的；进到这两个页面会被盖住并送回桌面。	“%s” never exposes page text to the system, so the WeChat Channels / Moments rules recognise pages by window class (plugin.finder.ui.* / plugin.sns.ui.*). Entering those pages shows the mask and sends you back to the home screen.
 「%s」今天已用的时间会保留；重新添加同一只应用会接着累计。原有冻结规则仍然生效。	Time “%s” used today is kept; re-adding the same app continues from there. Existing freeze rules still apply.
 「%s」的成员会并进「%s」，共用每天 %d 分钟（取两者较小值）。今天各自已用的分钟数照常累加进这个格子。	Members of “%s” move into “%s”, sharing %d min per day (the smaller of the two). Minutes each has used today still add up into this slot.
+「挂后台也计时」：勾中的应用切到后台后，只要还在跑（音乐播放、画中画这类前台服务在运行）就继续计时，关掉就停；锁屏、灭屏也不打断。不勾的应用维持只计前台。	“Counts in background”: once a flagged app leaves the foreground, its clock keeps running while it is still active — music playback, picture-in-picture and other foreground services — even with the screen off or locked, and it stops the moment the app closes. Unflagged apps keep counting foreground time only.
+「挂后台也计时」：勾中的应用切到后台后，只要还在跑（音乐播放、画中画这类前台服务在运行）就继续计时，关掉就停；锁屏、灭屏也不打断。切走闲置、应用已关闭都不计。不勾的应用维持只计前台。	“Counts in background”: after a flagged app leaves the foreground, its clock keeps running while it is still active — music playback, picture-in-picture and other foreground services — even with the screen off or locked. It stops the moment the app closes. Idle or closed apps never count. Unflagged apps keep counting foreground time only.
 」	”
 」 · 	” · 
 」· 各应用冻结结束后追加 	” · queued after each app's freeze: 
@@ -407,6 +440,7 @@ yyyy年M月d日	MMM d, yyyy
 上滑＝今天做了 · 下滑＝今天没做	Up = did it today · down = skipped today
 上移	Move up
 下一处	Next
+下一张	Next card
 下一期	Next
 下一步	Next
 下一页	Next
@@ -415,12 +449,15 @@ yyyy年M月d日	MMM d, yyyy
 下划线	Underline
 下午好	Good afternoon
 下次切换　	Next switch  
+下次复习：	Next review: 
 下移	Move down
 不会做的事\n	What this app never does\n
 不会抢你的代理：检测到代理正占着 VPN 通道时，断网会让路（状态显示「被代理占用（不抢）」），代理关掉后几秒内自动接管。	Your proxy is never taken over: when a proxy holds the VPN slot, blocking stands down (the status says “the proxy holds the VPN slot (not stolen)”) and takes over again within seconds after the proxy is turned off.
 不会拦截任何应用	No apps are blocked
 不允许的偏好设置	A preference is not allowed
 不受学习闸门延长；自身时段和额度仍然生效	Not extended by the study gate; its own schedule and allowance still apply
+不可信 	Untrusted 
+不可用插件	Unavailable plugin
 不支持外部 XML 实体	External XML entities are not supported
 不支持外部工作表	External worksheets are not supported
 不支持的云端类型	Unsupported cloud type
@@ -430,6 +467,8 @@ yyyy年M月d日	MMM d, yyyy
 不是有效的 XLSX 文件	Not a valid XLSX file
 不是有效的备份文件，现有数据没动	Not a valid backup file; existing data untouched
 不能限制守卫自身	Guard cannot limit itself
+不认识	Don't know
+不认识\n揭晓前点“不认识”会记一次遗忘并显示答案。看完后点“下一张”，不会再评分；旋转屏幕仍保留这次结果。	Don't know\nBefore revealing, Don't know records one forgetting rating and shows the answer. Tap Next after reading; this never submits another rating. The result is preserved across screen rotation.
 不限期	No deadline
 与旧版默认一致	Same as the old default
 与电脑共享 · 剩 %d 分钟	Shared with the PC · %d min left
@@ -472,8 +511,9 @@ yyyy年M月d日	MMM d, yyyy
 仅到期卡片（按记忆曲线）	Due cards only (by memory curve)
 今天	Today
 今天 	Today 
-今天 20:00 打卡没打完，各应用冻结已各延长 	Check-in was unfinished at 20:00, so each app's freeze is extended by 
+今天 20:00 打卡没打完，所有被冻结的应用在今日放行点后各延长 	Today's 20:00 check-in was unfinished, so every frozen app stays frozen 
 今天做了什么，哪里卡住了。可以不写。	What you did, where you got stuck. Optional.
+今天含已逾期 %d 张；后面几天是 FSRS 排出来的到期日。柱太高就说明那天会积压。	%d due today including overdue; later bars are the FSRS due dates. A tall bar means a backlog that day.
 今天已完成	Done today
 今天已完成一张热爱卡	You already completed one passion card today
 今天已正念 	Mindfulness today: 
@@ -489,29 +529,40 @@ yyyy年M月d日	MMM d, yyyy
 今天没做 · 明天照常出现	Skipped today · back tomorrow as usual
 今天没有到期卡片	No cards due today
 今天没有待学卡片	No cards to learn today
+今天没有该复习的卡片	No cards due today
 今天的卡都处理完了	All cards handled for today
 今天的卡都处理完了 · 已存本机	All cards handled · saved on this device
 今天的热爱奖励已领取	Today's passion reward is already claimed
 今天的额度用完了	Today's quota is used up
 今天第 %d 次	#%d today
+今天约%d分钟后	About %d minutes from now
 今天还可完成一张热爱卡，在打卡页面上滑完成。	You can still finish one passion card today. Swipe up on the check-in page.
 今天还未确认	Not confirmed yet today
 今天还没有完成一轮	No completed round today
+今天还没有用量	No usage today
 今天进度	Today
+今日 	Today 
 今日作答  ·  正确率 	Answered today  ·  accuracy 
 今日刷题目标	Today's quiz goal
 今日学习	Learn today
+今日已复习 %d 张 · 连续 %d 天	%d reviewed today · %d-day streak
 今日已用	Used today
 今日怎样抽卡\n“全部卡片”可抽新卡和未到期卡；“仅到期卡片”仅抽已学习且今天结束前到期的卡，优先较早到期的卡，不包含从未学习的新卡。随机模式从全部池随机抽取；顺序模式跨天接续。仅到期池始终按到期时间排序。	How cards are drawn today\n“All cards” includes new and not-yet-due cards. “Due only” draws learned cards that come due before today ends, earliest first, and never brand-new cards. Random mode picks from the whole pool; sequential mode continues across days. The due-only pool is always ordered by due time.
+今日怎样抽卡\n到期旧卡先来，按可提取率（此刻还记得的概率）从低到高排；新卡只在旧卡之后补位，数量受每天新学上限约束。旧规则（随机 / 顺序 / 全部池 / 仅到期池）已删除，抽取范围只剩学科选择。	How today's cards are picked\nDue cards come first, sorted by retrievability (the chance you still remember them) from low to high; new cards only fill in afterwards, capped by the daily new-card allowance. The old rules (random / sequential / all-pool / due-only pool) are gone; only the subject scope remains.
 今日有效复习 	Reviewed today 
 今日目标 	Today's goal 
 今日目标已完成 · 20:00 那笔罚时还要等满	Today's goals are done · the 20:00 penalty still has to run out
 今日目标已完成，学习联动已解冻	Today's goals are complete; the study gate is released
 今日禁忌	Today's taboos
 今日记忆目标	Today's memory goal
+今日评分 %d 次 · 连续 %d 天	%d ratings today · %d-day streak
 今日进度	Today's progress
 今日闪卡设置	Today's card settings
+今日队列	Today’s queue
+今日队列尚未生成；进入记忆学习时再生成。	Today’s queue has not been created. It will be created when you start learning.
 今日队列已完成	Today's queue is done
+今日队列已开始答题，挑选对下一次生效	Today's queue is already in progress; picking applies to the next one
+今日队列已更新 · 复习 	Today's queue updated · review 
 从 	Since 
 从几点开始	Starts at
 从完整备份恢复	Restore from a full backup
@@ -552,13 +603,16 @@ yyyy年M月d日	MMM d, yyyy
 保存后移动	Move on save
 保存备忘录后生效。系统省电可能让提醒稍有延迟。	Takes effect once the note is saved. Battery saving may delay it slightly.
 保存失败	Save failed
+保存失败，当前会话已阻断，请重试	Could not save. Current access is blocked; retry saving.
 保存失败，未确认本次学习进度	Save failed; this study progress was not confirmed
 保存失败，本次操作尚未记录	Save failed; this change was not recorded
 保存失败，请保留当前内容后重试	Save failed. Keep the current content and retry.
 保存失败，请保留画布后重试	Save failed; keep the canvas and try again
 保存并抽取	Save and draw
+保存并重排	Save and re-queue
 保存总结周期	Save summary cycle
 保存配置	Save config
+保存队列	Save queue
 保存（已选 	Save (
 修改  ›	Edit  ›
 修改只在调整时段 %s 开放	Changes are available only during %s
@@ -570,6 +624,7 @@ yyyy年M月d日	MMM d, yyyy
 俯卧撑	Push-ups
 停下	Stop
 停用同步	Turn off sync
+停用插件	Disable plugin
 停留	Rest
 先休息一下。到期后自动显示下一张，重复翻看不增加完成量。	Take a short break. The next card appears when due; flipping through again adds no progress.
 先停下再换节律	Stop first, then change the rhythm
@@ -579,6 +634,7 @@ yyyy年M月d日	MMM d, yyyy
 先写下段落，再进行块编辑	Write a paragraph first, then edit blocks
 先启用并生成密钥	Enable it and generate a secret first
 先回忆再揭晓。新卡需要完成学习步骤；选择“忘了”不计完成，稍后会再次出现。	Recall first, then reveal. New cards need their learning steps; “forgot” adds no progress and the card returns later.
+先回忆，再显示答案并选择记忆程度	Recall first, then show the answer and rate your recall
 先在使用额度里建一个额度格子	Create a quota bucket first, under usage quota
 先在纸上演算，也可以在下方记录思路。数学表达式由你核对，不作字符串判分。	Work it out on paper, or note your reasoning below. Maths expressions are yours to check; they are not string-graded.
 先填电脑地址和令牌	Fill in the PC address and token first
@@ -587,12 +643,16 @@ yyyy年M月d日	MMM d, yyyy
 先暂停再改时长	Pause before changing the length
 先添加卡片；开始答题后新增的卡片将进入明天的计划。	Add cards first; anything added after you start goes into tomorrow's plan.
 先画一些内容再保存	Draw something before saving
+先给这个格子选好应用，再挑谁挂后台也计时	Add apps to this cell first, then choose which ones count in background
 先输入你的答案	Type your answer first
 先选中需要高亮的文字	Select the text to highlight first
 先选应用	Pick apps first
+先选择应用，再挑谁挂后台也计时	Pick the apps first, then choose which ones count in background
 先选要断网的应用	Pick the apps to cut off first
 光谱	Spectrum
 入门示例	Starter sample
+入队 %d / 上限 %d · 新学上限 %d · 全库到期 %d	Queued %d / Limit %d · New limit %d · All due %d
+入队 %d / 上限 %d · 新学上限 %d · 所选学科到期 %d	Queued %d / Limit %d · New limit %d · Selected subjects due %d
 全天	All day
 全天冻结	Freeze all day
 全天限额 · 	All-day quota · 
@@ -600,7 +660,9 @@ yyyy年M月d日	MMM d, yyyy
 全选	Select all
 全选当前	Select all shown
 全部	All
+全部冻结	🧊 All frozen
 全部卡片（含未到期）	All cards (including not due)
+全部学科	All subjects
 全部完成	Complete all
 全部应用	All apps
 全部应用都在屏蔽中，等某一应用进入自己的放行时段再加	Every app is in its block window. Wait until one enters its allowed hours.
@@ -611,6 +673,9 @@ yyyy年M月d日	MMM d, yyyy
 全部笔记	All notes
 六位十六进制颜色	Six-digit hex colour
 共 	Total 
+共 %d 张 · 第 %d 页	%d cards · Page %d
+共 %d 张，最近 7 天 %d 张。红线是当天的记住率（评“认识”的占比），没有复习的日子不画点。	%d in total, %d in the last 7 days. The red line is that day's recall rate (share of “known” ratings); days without reviews get no dot.
+共 %d 张，最近 7 天 %d 张。红线是当天的记住率（评分“记住/轻松”占比），没有复习的日子不画点。	%d in total, %d in the last 7 days. The red line is that day's recall rate (share of Good/Easy ratings); days without reviews get no dot.
 共 0 条	0 notes
 共享	Shared
 共享 	Shared 
@@ -627,6 +692,7 @@ yyyy年M月d日	MMM d, yyyy
 关键应用　	Key apps    
 关键应用不受学习闸门延长；自身冻结时段和每日额度仍然生效。	Key apps skip the study-gate extension, but their own windows and daily quotas still apply.
 关键应用名单	Key apps
+关键应用名单 · 	🔒 Key apps · 
 关键应用名单要等调整时段 %s 才能改	The key-app list can be changed only inside the adjustment window %s
 关键应用已更新 · %d 个	Key apps updated · %d
 关键应用白名单	Always allowed
@@ -634,8 +700,8 @@ yyyy年M月d日	MMM d, yyyy
 关键词与视频号拦截要用，本版本还没内置	Needed for keyword blocking; not built in yet
 关闭	Close
 关闭选色器	Close the colour picker
-关闭限额要等调整时段 %s	Turning quotas off waits for the adjustment window %s
 关闭限额要等每天 22:00–23:00	Turning the quota off waits for 22:00–23:00
+关闭限额要等调整时段 %s	Turning quotas off waits for the adjustment window %s
 其他云端目标（占位）：WebDAV / GitHub 私有仓库 / Git 仓库 只保存配置，尚未实现传输，不影响上面的个人同步。	Other cloud targets (placeholder): WebDAV / private GitHub repo / Git repo. Config is saved only; transfer is not implemented and does not affect personal sync above.
 内容包含控制字符	Content contains control characters
 内容导入与导出	Import and export
@@ -653,6 +719,7 @@ yyyy年M月d日	MMM d, yyyy
 冻结	Freeze
 冻结 	Freeze 
 冻结与锁机的基础能力	Required for freeze and lock
+冻结中 	🧊 Frozen 
 冻结失败：	Freeze failed: 
 冻结安排	Freeze plan
 冻结已延长至 	Freeze extended to 
@@ -670,6 +737,7 @@ yyyy年M月d日	MMM d, yyyy
 冻结星期 	Freeze days 
 冻结星期（未选中的日子不定时冻结）	Freeze days (unselected days have no scheduled freeze)
 冻结结束时间	Freeze end time
+冻结被系统拒绝	Freeze refused by the system
 冻结规则	Freeze rule
 冻结设置	Freeze settings
 冻结（学习闸门）	Frozen (study gate)
@@ -721,11 +789,15 @@ yyyy年M月d日	MMM d, yyyy
 到 %s 结束，还剩 %s	Ends at %s, %s left
 到几点结束	Ends at
 到守卫 → 卡管理添加卡片	Go to Guard → Cards to add cards
+到期旧卡按遗忘风险排序，新卡按新学上限补位。	Due cards are ordered by forgetting risk; new cards fill in up to the daily limit.
+到期的旧卡已经清完，今天的新学额度也用完了（每天新学 %d 张）。可在抽取设置里调整上限，或明天继续。	Due reviews are done and today's new-card allowance is used up (%d per day). Raise the limit in draw settings, or continue tomorrow.
 到点弹出提醒页面，关闭后返回原界面。灭屏、正在锁机、放行期里都不打扰。	A reminder page appears when due. Dismiss it to return. No interruptions when the screen is off, locked, or during a pass.
 到点自动断网	Blocks automatically on schedule
 到点自己开，不用手动解	Unlocks itself when time is up
 制作 / 导入卡片	Create / import cards
 制卡预览	Card preview
+刷新	Refresh
+刷新目录	Refresh plugins
 刷题	Quiz
 刷题 200	Quiz 200
 刷题卡	Quiz card
@@ -733,8 +805,10 @@ yyyy年M月d日	MMM d, yyyy
 刷题卡设置	Quiz settings
 刷题数据格式不正确	The quiz data format is invalid
 刷题目标	Quiz goal
+刷题设置	Quiz settings
 前台服务状态与提醒	Foreground status and reminders
 前往守卫的卡管理添加卡片 →	Go to Guard → Cards to add cards →
+前往宿主授权页（usage.access.request）	Request system access (usage.access.request)
 剩 %d 分钟	%d min left
 剩余	Left
 副标题	Subheading
@@ -750,6 +824,8 @@ yyyy年M月d日	MMM d, yyyy
 包名格式不正确	Invalid package name format
 医学	Medicine
 半月不息	Half a month
+协议	Protocol
+协议：	Protocol: 
 单个附件最多20MB，附件总计最多100MB	Up to 20MB per attachment and 100MB in total
 单个附件超过 20 MB	A single attachment exceeds 20 MB
 单位（篇 / 小时 / 个）	Unit (papers / hours / items)
@@ -765,17 +841,19 @@ yyyy年M月d日	MMM d, yyyy
 单次最多导入 10000 张	At most 10000 cards per import
 单独	Single
 单独额度只放一只应用	A solo allowance holds one app
-单独额度只有一只应用，换应用要等调整时段 %s	A solo allowance holds one app; swapping waits for the adjustment window %s
 单独额度只有一只应用，换应用要等每天 22:00–23:00	A single allowance holds one app; swapping waits for 22:00–23:00
+单独额度只有一只应用，换应用要等调整时段 %s	A solo allowance holds one app; swapping waits for the adjustment window %s
 单独额度只能放一只应用	A single quota holds only one app
 单独额度：只锁一只应用，额度用完就冻结。	Single quota: one app only, frozen when the allowance runs out.
 单色	Monochrome
 单词	Word
 单选题	Single choice
 卡片	Cards
+卡片 %d 张 · 已学 %d 张 · 今天到期 %d 张	%d cards · %d learned · %d due today
 卡片 · 奖励 · 周期	Cards & rewards
 卡片尚未到复习时间	This card is not due yet
 卡片标识或卡组无效	Invalid card id or deck
+卡片管理	Card management
 卡片设置位于守卫 → 卡管理 → 记忆卡。	Card settings live in Guard → Cards → Memory.
 卡管理	Cards
 卡管理保存失败，本次操作未确认	Failed to save card data; this change was not confirmed
@@ -794,10 +872,14 @@ yyyy年M月d日	MMM d, yyyy
 参与学习联动	Include in study gate
 参与学习闸门（只有关键应用可豁免）	Include study gate (only key apps are exempt)
 参考答案：	Reference answer: 
+发布者	Publisher
+发布者：	Publisher: 
 发现新版本 	New version available 
 发送	Send
 发送至你的 AI 服务？	Send to your AI service?
 取消	Cancel
+取消或调小额度要等调整时段 %s	Cancelling or lowering a quota waits for the adjustment window %s
+取消挂后台计时要等调整时段 %s	Turning background counting off must wait for the adjust window %s
 取消提醒	Cancel reminder
 取消置顶	Unpin
 只发一条通知，不拦人。灭屏、正在锁机、放行期里都不打扰。	Just a notification, nothing gets blocked. Stays quiet when the screen is off, while a lock is running, or during an unlock pass.
@@ -806,7 +888,7 @@ yyyy年M月d日	MMM d, yyyy
 只接管选中的应用，别的应用照常上网。用系统 VPN 通道实现，所以和代理、公司内网、加速器互斥。	Only the selected apps go through the tunnel; everything else keeps its network. It uses the system VPN slot, so it excludes proxies, corporate networks and accelerators.
 只提示不处理	Only warn, do nothing
 只放一个应用，单独计时，用完就冻	One app, timed alone, frozen when used up
-只有关键应用不受学习闸门影响；其他应用在 20:00 检查后可能延长冻结。	Only key apps skip the study gate. Other apps may be frozen longer after the 20:00 check.
+只有关键应用不受学习闸门影响；其他应用在当天任务未完成时，从自身冻结结束点继续冻结。	Only key apps skip the study gate. Other apps continue frozen from their own freeze end while today's goals remain unfinished.
 只监控选中的应用；一个都不选就是全部	Only the apps you pick are watched; none means all
 只算屏幕亮着的时间：灭屏、正在锁着的那几分钟都不累计。累计满一轮就锁一次，锁完从零开始算。	Only counts time with the screen on: screen-off and the locked minutes are not counted. Each full round triggers one lock, then the count restarts.
 只练未做题	Unseen only
@@ -817,12 +899,14 @@ yyyy年M月d日	MMM d, yyyy
 只记录哪个应用、哪个词、第几次。	Only the app, the keyword and the count are recorded.
 只进不出：加入后不能移出（刚加的 10 分钟内除外）。	Add-only: once added, an app cannot be removed (except within 10 minutes of adding).
 只进不出：已加入的应用不能移出冻结应用（刚加的 10 分钟内除外）	Add-only: apps already added cannot be removed (except within 10 minutes of adding).
+可以直接返回，或在插件管理中刷新后重试。	You can go back, or refresh in plugin management and try again.
 可使用	Allowed
 可拖入／拖回	Drag in or back
 可用余额 	Balance 
 可用奖励余额	Reward balance
 可选功能；离线学习和冻结无需配置。\n连接后同步本机目标、打卡、冻结配置及使用统计。请使用自己创建的 Gist；新空间可先放一个 README 文件。	Optional. Offline study and freezing need no setup.\nOnce connected, it syncs goals, check-ins, freeze settings and usage stats. Use a Gist you created yourself; a new gist can start with a README file.
 可选，可与自定义天数叠加。	Optional; stacks with the custom day count.
+各学科今天到期	Due today by subject
 合并	Merge
 合并后笔记本超过 100 个，未导入	Merging would exceed 100 notebooks; nothing imported
 合并后超过容量，未导入任何内容	Merging would exceed capacity; nothing was imported
@@ -851,12 +935,16 @@ yyyy年M月d日	MMM d, yyyy
 否则后台守卫生存时间会被压缩	Otherwise the background guard gets killed
 听网课	Lecture
 启用	Enabled
+启用 	Enable 
+启用后该插件可以：\n	Once enabled, this plugin can:\n
+启用并授权	Enable and authorize
 启用开关、使用情况权限、删除额度	Toggle, usage access, delete a quota
 启用每日限额	Enable daily quota
 启用自定义天数	Enable custom day count
 启用解锁码	Unlock code
 吸气	Inhale
 周	 wk
+周 · 近12周	Weekly · Last 12 weeks
 周一	Mon
 周三	Wed
 周二	Tue
@@ -881,6 +969,7 @@ yyyy年M月d日	MMM d, yyyy
 和「每隔 45 分钟锁 5 分钟」不一样：不按钟点走，摸鱼少的日子不会照样被锁，盯屏久的下午会锁得更勤。	Unlike "lock 5 minutes every 45 minutes", this does not follow the clock: light days are not locked anyway, heavy afternoons get locked more.
 和上面的定时锁机是两回事：锁机是硬拦，这个是轻提醒，可以只开一个。	Separate from the scheduled lock above: the lock blocks, this one only nudges. Either can run on its own.
 和按钟点的锁机不一样：不看几点，只看这一轮亮屏累计了多久。摸鱼少的日子不会被照常锁，盯屏久的下午会锁得更勤。	Unlike a clock-based lock this ignores the hour and only looks at how much screen-on time has piled up in this round: a light day never gets locked for nothing, a screen-heavy afternoon gets locked more often.
+和电脑合成一个额度池子	Charge one pool together with the PC
 回到刷题	Back to quiz
 回到本月	This month
 回到桌面	Go home
@@ -898,6 +987,8 @@ yyyy年M月d日	MMM d, yyyy
 图片遮挡编辑器，拖动框选需要隐藏的标注	Image mask editor; drag to box the areas to hide
 图片题请先选图，再拖动框选标注。	For image cards, pick the image first, then drag to mask areas.
 图片题需要图片和至少一块遮挡区域	An image card needs an image and at least one mask
+图表，共 	Chart, 
+圆点符号	Bulleted list
 在「%s」里挡住了「%s」	Blocked in "%s": "%s"
 在「%s」里看到「%s」	Saw "%s" in %s
 在哪个应用里拦这个页面	Which app should this page be blocked in
@@ -962,13 +1053,19 @@ yyyy年M月d日	MMM d, yyyy
 备注与解释	Notes and explanation
 备注：	Notes: 
 复习 	Reviews 
+复习 %d 次 · 遗忘 %d 次	%d reviews · %d lapses
+复习候选 · 今天到期	Review · due today
+复习候选按到期先后，新学候选按入库顺序；每段最多显示 200 张，搜不到就缩小关键词。勾选即进今日队列，不受每日上限约束；开始答题后队列固定。	Review candidates run earliest-due first, new candidates follow import order; each section shows up to 200 rows, narrow the search if something is missing. Ticked cards join today's queue regardless of daily limits; the queue locks once you start answering.
 复习参数无效	Invalid review parameters
 复习成习	Review habit
 复习方案	Review plan
 复习状态无效	Invalid review state
 复习记录已保存，明天按抽取设置生成新的闪卡。	Review saved. New cards are generated tomorrow according to your draw settings.
+复习记录已保存，明天按遗忘曲线重新排队。	Progress saved; tomorrow's queue is rebuilt from the forgetting curve.
 复习进度已保存。放行仍遵守原时间表和其他学习目标。	Review progress saved. Allowed hours still follow the schedule and other goals.
+复习量、记住率与遗忘曲线。	Reviews, recall rate and the forgetting curve.
 复习错题	Review mistakes
+复习阶段共 %d 张；以下五档互不重叠。	%d review cards; the five bands do not overlap.
 复制	Copy
 复制代理拦截规则	Copy proxy rules
 复制段落	Copy paragraph
@@ -1000,6 +1097,7 @@ yyyy年M月d日	MMM d, yyyy
 存在手机里的\n	Stored on the phone\n
 存在无效或重复的备忘录编号	Duplicate or invalid note numbers
 学习冻结期间不能修改同步	Sync cannot be changed while a study freeze is active
+学习情况	Learning activity
 学习数据保存在本机应用私有目录。完整备份包含目标、打卡、记忆与图片、题库与答题记录、卡片、笔记与附件、冻结规则；不包含密码、token、AI 密钥和设备管理授权。备份为未加密 ZIP，请存放在自己的安全位置。当前设备安全上限：解压后 	Study data lives in this app's private directory. A full backup holds goals, check-ins, memory cards and images, quizzes and answers, cards, notes and attachments, and freeze rules. It never holds passwords, tokens, AI keys or device-admin grants. Backups are unencrypted ZIPs, so keep them somewhere safe. Current device ceiling: 
 学习目标	Study goals
 学习联动 · 每日 	Study gate · daily 
@@ -1019,6 +1117,7 @@ yyyy年M月d日	MMM d, yyyy
 学科名称请填写 1 至 40 个字，不能包含换行	Subject name must be 1 to 40 characters with no line breaks
 学科回收站	Subject trash
 学科回收站 · 	Subject trash · 
+学科已移入回收站	This subject is in the trash
 学科已移入回收站，请先恢复	The subject is in the trash; restore it first
 孩子这边只验证、不显示码，验过一次放行 10 分钟，可以提前结束锁机。	This device only verifies and never shows a code. One valid code opens a 10-minute pass and can end a lock early.
 它已经在冻结应用里	It is already a frozen app
@@ -1026,6 +1125,7 @@ yyyy年M月d日	MMM d, yyyy
 它防的是「手上没有别人手机时的一时冲动」，不是防技术破解。	It guards against impulse when the other person is not around — not against a determined user.
 守卫	Guard
 守护运行时约每5秒检查额度。后台、锁屏、灭屏不计时；额度耗尽会立刻冻结对应格子的应用，热爱奖励不抵扣。未授予使用情况访问权限时额度照常保存，但暂不计时、不冻结。	The guard checks every ~5 seconds while running. Background, locked screen and screen-off time do not count. When a quota runs out, the apps in that quota are frozen immediately; passion rewards do not offset it. Without usage access the quota is still saved, but nothing is timed or frozen.
+守护运行时约每5秒检查额度。默认只计前台，锁屏、灭屏不计时；勾了「挂后台计时」的应用，切到后台只要还在跑（前台服务在运行）就照计，关掉就停。额度耗尽会立刻冻结对应格子的应用，热爱奖励不抵扣。未授予使用情况访问权限时额度照常保存，但暂不计时、不冻结。	The guard checks allowances about every 5 seconds. By default only foreground time counts; locked or off-screen minutes are free. Apps flagged “counts in background” keep counting while a foreground service is still running after they leave the foreground, and stop once closed. When an allowance is spent the apps in that cell freeze at once; love rewards do not cover it. Without usage access the settings are still saved but nothing is counted or frozen.
 完成	Done
 完成 	Done 
 完成 12 次周期总结	Complete 12 cycle reviews
@@ -1042,6 +1142,7 @@ yyyy年M月d日	MMM d, yyyy
 完整覆盖恢复仅限未启用设备管理或首次配置期。日常内容导入请使用下方各模块入口。	Full overwrite restore is only allowed before device management is enabled, or during first-time setup. For everyday imports, use the module entries below.
 完整覆盖恢复？	Full overwrite restore?
 官方源没响应，正在试镜像…	Official source did not answer, trying a mirror…
+官方签名 	Official signature 
 定位编辑	Edit here
 定时提醒：每隔一段时间提醒你起来休息	Rest reminder: nudges you to take a break every so often
 实测「%s」把页面内容对无障碍隐藏了（一屏读到 0 个字），所以「微信视频号」「微信朋友圈」这两条在它那儿不会命中。想限住它只能用整应用冻结或每日限额。	Measured: %s hides its page content from accessibility (0 characters read on a full screen), so the Channels and Moments rules never match inside it. Only whole-app freezing or a daily limit can hold it back.
@@ -1089,6 +1190,8 @@ yyyy年M月d日	MMM d, yyyy
 尚未配置；保存不会连接服务器	Not configured; saving will not contact the server
 就到这里，随时可以重来	Stopping here; start again whenever
 就是今天	It is today
+屏幕使用统计	Screen usage statistics
+屏幕使用统计以独立 APK 提供，安装后默认停用。启用后可分别管理统计读取权和前往系统授权页的权限。已有系统授权时，仅授予读取权即可查看统计。	Screen statistics is a separate APK and starts disabled. Reading statistics and requesting system access are separate permissions. If system access is already enabled, only the read permission is needed.
 屏幕内容只在本机比对，没有上传。	Screen content was matched on-device and never uploaded.
 屏幕统计	Stats
 屏息	Hold
@@ -1102,13 +1205,16 @@ yyyy年M月d日	MMM d, yyyy
 已上传 	Uploaded 
 已保存	Saved
 已保存 %d 个词	Saved %d keyword(s)
+已保存挂后台计时设置	Background-counting settings saved
 已保存的 API 密钥也会删除。	The saved API key is deleted too.
 已保存配置；尚未执行云端传输	Settings saved; no cloud transfer has run yet
+已停用	Disabled
 已停用同步，本机数据保留	Sync turned off; local data kept
 已允许	Allowed
 已关掉背景	Background turned off
 已关闭	Off
 已冻结	Frozen
+已冻结（隐藏）	Frozen (hidden)
 已准备恢复，请完全重启应用：	Ready to restore. Fully restart the app: 
 已创建：	Created: 
 已删掉	Deleted
@@ -1127,11 +1233,14 @@ yyyy年M月d日	MMM d, yyyy
 已复制。粘到代理 App 的覆写/配置 rules: 里（放在 MATCH 之前），断网就由代理完成；本 App 仍显示「被占用」是正常的。	Copied. Paste it into the proxy app's override / config rules: (before MATCH); the proxy then does the blocking, and the app keeping “VPN slot taken” is expected.
 已套用：	Applied: 
 已存在同名笔记本	A notebook with that name already exists
+已学卡的复习\n“忘记”：约 10 分钟后重学；“模糊”：约 15 分钟后再次回忆；认识后恢复按天复习。沿用 FSRS 状态计算，三按钮模式额外将复习卡的“模糊”安排到今日巩固。这是本程序公开的规则，不是墨墨的专有算法。	Reviewing learned cards\nForgot: relearn in about 10 minutes. Uncertain: recall again in about 15 minutes. Know returns to day-based review. FSRS state calculations are retained, with an extra same-day consolidation step for uncertain review cards. This is this app's published rule, not Momo's proprietary algorithm.
+已学卡的复习\n按天复习时评“忘了”，约 10 分钟后进入重学；重学中仍然“忘了”，再等约 10 分钟；认识后恢复按天复习。按天间隔根据评分动态计算，并从到期日零点开放，不是一律等满 24 小时。	Reviews for learned cards\nRating “forgot” in a day-based review starts relearning in about 10 minutes; forgetting again during relearning adds another 10. Becoming “known” returns the card to day-based reviews. Day intervals are computed from ratings and open at the start of the due day, not after a full 24 hours.
 已学卡的复习\n按天复习时选“忘了”，约 10 分钟后进入重学；重学中仍忘记，再等约 10 分钟；重学中“费力想起”约 15 分钟后再学，记住后恢复按天复习。按天间隔根据评分动态计算，并从到期日零点开放，不是一律等满 24 小时。	Reviews for learned cards\nChoosing “forgot” in a day-based review starts relearning in about 10 minutes; forgetting again adds another 10. Choosing “hard” during relearning schedules the next step in about 15 minutes, and remembering returns to day-based reviews. Day intervals are computed from ratings and open at the start of the due day, not after a full 24 hours.
 已安排在各应用冻结结束后追加 · 长按可再认一次	Queued after each app's freeze ends · long-press to claim again
 已安排待接续罚时，各应用时间见冻结页	Queued a continuing penalty; see the freeze page for each app's time
 已安装字体	Installed fonts
 已完成	Completed
+已完成 %d / %d · 待巩固 %d	Finished %d / %d · To consolidate %d
 已完成的总结	Finished summaries
 已完成的总结  ›	Finished summaries  ›
 已导入 	Imported 
@@ -1151,6 +1260,7 @@ yyyy年M月d日	MMM d, yyyy
 已打卡 	Checked in 
 已打卡 · 左右推换目标	Checked in · left/right to switch goals
 已换成内置亚克力底	Switched to the built-in acrylic
+已授予 · 点击撤销	Granted · Tap to revoke
 已撤销 	Undone: 
 已改为全天累计，额度和已用时间保留	Switched to all-day counting; quota and used time are kept
 已改回零点重置	Reset time back to midnight
@@ -1184,6 +1294,7 @@ yyyy年M月d日	MMM d, yyyy
 已解锁	Unlocked
 已解锁。	Unlocked.
 已认领 · 左右推换卡	Claimed · left/right to switch cards
+已记为遗忘 · 下次复习：	Recorded as forgotten · Next review: 
 已达成	Unlocked
 已达标（%d 分钟）	Reached (%d min)
 已迁到「	Moved to “
@@ -1215,13 +1326,15 @@ yyyy年M月d日	MMM d, yyyy
 应用还没装也可以先加：装上之后它会被自动冻结。\n包名必须完全一致，填错了这条规则不会匹配任何东西。	You can add an app before it is installed; it will be frozen once installed.\nThe package name must match exactly, or the rule matches nothing.
 底栏	Bottom bar
 度	°
+延长冻结	Extended freeze
 建立 50 张记忆卡	Create 50 memory cards
 开	On
 开启动画效果	Animations on
-开启后，打卡页显示刷题卡；在刷题页面完成每日题数。20:00 未完成时参与学习联动。	When on, the quiz card appears on the check-in page; finish the daily count here. Unfinished at 20:00 feeds the study gate.
-开启后，打卡页显示记忆卡；在记忆页完成目标。20:00 时目标未完成会参与学习联动。\n开始答题后修改设置，次日生效。到期复习积压超过上限时，暂停新增卡片。	When on, memory cards appear on the check-in page and goals are completed on the memory page. Unfinished goals at 20:00 join the study gate.\nChanges after a session starts apply the next day. When overdue reviews exceed the cap, new cards pause.
+开启后，打卡页显示刷题卡；在刷题页面完成每日题数。当天未完成时参与学习联动，从应用冻结结束点继续冻结。	When on, the quiz card appears on the check-in page; finish the daily count here. While today's goal remains unfinished, the study gate continues after the app's freeze ends.
+开启后，打卡页显示记忆卡；在记忆页完成目标。目标未完成时会参与学习联动，从应用冻结结束点继续冻结。\n开始答题后修改设置，次日生效。到期复习积压超过上限时，暂停新增卡片。	When on, memory cards appear on the check-in page and goals are completed on the memory page. While today's goals remain unfinished, the study gate continues after the app's freeze ends.\nChanges after a session starts apply the next day. When overdue reviews exceed the cap, new cards pause.
 开启拦截	Keyword blocking
 开启提醒	Reminders
+始终开启 · 不可关闭	Always on · cannot be turned off
 开启断网	Cut network
 开启钥匙闸门	Key-app gate
 开启页面拦截	Block these pages
@@ -1231,6 +1344,8 @@ yyyy年M月d日	MMM d, yyyy
 开始学习 · 	Start · 
 开始新的练习？	Start a new session?
 开始新练习	Start new
+开屏动画已关闭	Splash animation disabled
+开屏动画已开启	Splash animation enabled
 开张	First step
 开源组件与许可证	Open-source components and licences
 开源说明	Open-source notice
@@ -1261,6 +1376,8 @@ yyyy年M月d日	MMM d, yyyy
 当前系统版本不需要单独授权	This Android version does not need it
 当前连续	Streak now
 当前：	Current: 
+当天任务未完成时，从各应用自身冻结结束后接续，持续至任务完成，不设固定分钟数。正在放行的应用接在下一段冻结之后，不提前打断放行。待接续跨零点保留；完成任务解除。热爱奖励不抵扣。	While today's tasks remain unfinished, the gate continues after each app's own freeze ends and lasts until tasks are complete, with no fixed minutes. Apps currently allowed are not interrupted; the gate continues after their next freeze. Pending gates survive midnight and clear when tasks are finished. Passion rewards do not offset this.
+当天任务未完成，学习联动已从原冻结结束点接续；完成后恢复原时段。	While today's tasks are unfinished, the study gate continues from the original freeze end and clears when they are completed.
 当天已用时间会保留。重新添加相同应用会继续累计；原有冻结规则仍然生效。	Time already used today is kept. Re-adding the same apps continues from it; existing freeze rules still apply.
 当天无必做卡片	No required cards that day
 当天的打卡可点记录撤回；昨天及更早的记录已锁定。红色是认领禁忌	Today's check-ins can be undone by tapping them; yesterday and older are locked. Red marks a taboo claim.
@@ -1269,8 +1386,10 @@ yyyy年M月d日	MMM d, yyyy
 彻底删除（不可恢复）	Delete permanently (cannot be undone)
 待办	To-do
 待办 	To-do 
+待办事项	Checklist
 待办管理	To-do management
 待办管理 · 所选 	To-dos · selected 
+待复习 %d · 待新学 %d · 已处理 %d	Review %d · New %d · Processed %d
 待安排	Unassigned
 待完成	To do
 待完成：	Pending: 
@@ -1281,6 +1400,8 @@ yyyy年M月d日	MMM d, yyyy
 微信视频号	WeChat Channels
 必做卡片已完成	All required cards completed
 忘了	Forgot
+忘了后：	Forgotten: 
+忘记	Forgot
 忽略电池优化	Ignore battery optimisation
 总结	Summarise
 总结 · 	Summary · 
@@ -1330,9 +1451,14 @@ yyyy年M月d日	MMM d, yyyy
 所有应用都已经在这个额度里了	Every app is already in this allowance
 所绑时段限额 · 	Bound-hours quota · 
 所绑时段额度	Quota within bound hours
+所选区间评分 %d 次 · 各周期去重卡数合计 %d 张	%d ratings · %d cards counted once per period
 所选学科的卡片今天已经复习过。可以调整学科范围，或明天继续。	Cards in the selected subjects are already reviewed today. Change the subject scope or continue tomorrow.
+所选学科里没有卡片。可在守卫 → 卡管理 → 记忆卡中添加学科、制作或导入卡片。	The selected subjects have no cards. Add a subject or import cards under Guard → Cards → Memory.
+所选范围还没有评分记录。	No ratings in this range yet.
 手动上传最新本机台账	Manually upload the latest local ledger
+手势与评分\n第一次上滑＝认识，评完直接翻下一张；下滑＝忘了，点卡片＝完全不认识，这两条会先揭晓答案，之后只能上滑进入下一张。输入题填了答案再点卡片就是核对：答对算认识，答错算忘了。整个流程只有“认识”和“忘了”两档评分，原来“费力 / 轻松”按钮已删除。今日闪卡每张每天只复习一次；评了“忘了”会记录到错题和重学计划，不会在今日闪卡里反复出现。	Gestures and ratings\nOn the first pass, swipe up for “known” (the card moves straight on), swipe down for “forgot”, or tap the card for “no idea”; the last two reveal the answer, after which only an upward swipe moves on. For typed cards, tapping after typing runs the check: a match counts as known, a mismatch as forgot. Only the “known” and “forgot” ratings exist now — the old “hard / easy” buttons are gone. Each flashcard is reviewed once a day; “forgot” logs a mistake and a relearning item, and the card never repeats in today's set.
 手指绘制 · 白色画纸	Draw with a finger · white paper
+手机这一份：	Phone side: 
 打不开设置页，请在系统设置里手动搜索「使用情况访问」	Cannot open that page; search for usage access manually in system settings
 打卡	Check-in
 打卡 + 禁忌追加：	Check-in + taboo extension: 
@@ -1358,6 +1484,7 @@ yyyy年M月d日	MMM d, yyyy
 打卡追加：	Check-in extension: 
 打卡页背景	Check-in background
 打开代理 App	Open the proxy app
+打开插件管理	Open plugin management
 扩写	Expand
 批量导入	Bulk import
 批量导入文本 / TSV	Bulk import text / TSV
@@ -1366,6 +1493,7 @@ yyyy年M月d日	MMM d, yyyy
 把它放进已有的时间格	Place it in an existing time slot
 把手机上某一个额度格子接到电脑上：两边各记各的用量，合起来算一个池子，任一边用完另一边也停。只在家里 WiFi 下生效；连不上时退回各自记账，不会把人锁在外面。	Binds one phone bucket to the PC: both sides report their own usage into one pool, and either side running dry stops both. Home wifi only; when the PC is unreachable each side falls back to its own ledger instead of locking you out.
 把电话、导航、备忘录这类放进白名单，锁机不会把它们一起挡住。	Put phone, maps or notes here so a lock never blocks them.
+把这一格设成跨设备共享？	Share this bucket with the PC?
 折合 	That's 
 抽取、学习计划、学科与卡片	Draws, study plan, subjects and cards
 抽取学科（可多选）	Draw subjects (multi-select)
@@ -1376,19 +1504,31 @@ yyyy年M月d日	MMM d, yyyy
 抽取规则	Draw rule
 抽取规则无效	Invalid draw rule
 抽取设置  ·  	Draw settings  ·  
+抽取设置  ·  按遗忘曲线  ·  	Draw settings · forgetting curve · 
 抽奖 · 1–60 分钟	Draw · 1–60 min
 抽奖奖励 1–60 分钟 · 点击修改	Draw reward 1–60 min · tap to change
+拒绝原因：	Rejected: 
 拖入应用，放到这个时间里	Drag apps in to place them in this window
 拖动添加矩形遮挡。所有遮挡区域作为同一张卡复习。	Drag to add rectangle masks. All masked areas are reviewed as one card.
 拦什么页面	Which page to block
 拦截名单	Block list
 拿不到 DevicePolicyManager	DevicePolicyManager unavailable
 拿到部署包后按说明执行，应用会自动变成「设备所有者」，冻结和锁机才真正生效。\n\n	Run the deployment package as documented and the app becomes device owner, which is when freezing and locking actually work.\n\n
+挂后台也计时	Counts in background
+挂后台也计时 · %d 个应用	Counts in background · %d apps
+挂后台也计时（切到后台还在跑就照计）	Counts in background (keeps counting while it still runs)
+挂后台也计时：%d 个应用 · %s	Counts in background: %d apps · %s
+挂后台也计时：未开启（点这里选应用）	Counts in background: off (tap to pick apps)
+挂后台也计时：未开启（点这里选择应用）	Counts in background: off (tap to pick apps)
+挂后台计时的应用必须先在这个格子里	Background-counting apps must belong to this cell first
 按你的表现调整\n使用 FSRS-6，根据每次评分、距上次复习的时间、卡片稳定性和难度计算下一次复习，不固定为第 1、3、7 天。它是排程模型，不保证每个人都能达到同样的记忆效果。	Adjusted to your performance\nUses FSRS-6 to schedule the next review from each rating, time since the last review, card stability and difficulty. It is not a fixed 1-3-7 day ladder. It is a scheduling model and does not promise the same results for everyone.
 按包名添加	Add by package
 按包名添加到冻结应用	Add to frozen apps by package name
 按时间表工作	Working to the schedule
 按章节练习	Practise by chapter
+按钮与评分\n先回忆，再点“显示答案”，最后选择“认识 / 模糊 / 忘记”。滑动、点卡片和核对输入都不会自动评分。每个按钮显示本程序计算的下次复习时间；提交后直接进入下一张。	Buttons and ratings\nRecall, tap Show answer, then choose Know / Uncertain / Forgot. Swiping, tapping the card and checking typed answers never submit a rating. Each button shows this app's calculated next review time; submitting opens the next card immediately.
+挑选	Pick
+挑选今日卡片	Pick today's queue
 换	Replace
 换个源	Switch source
 换个词试试，再点 ⌕ 收起搜索	Try another word, then tap ⌕ to close search
@@ -1399,6 +1539,23 @@ yyyy年M月d日	MMM d, yyyy
 提醒	Reminder
 提醒 	Reminder 
 提醒时间已过，请重新设置或取消提醒	That time has passed. Set a new reminder or cancel it.
+插件不能读取原始事件、规则、笔记或凭据，也不能修改冻结规则。已授予的权限可分别撤销。	The plugin cannot read raw events, rules, notes or credentials, or change freeze rules. Each permission can be revoked separately.
+插件初始化失败	Plugin initialization failed.
+插件初始化超时	Plugin initialization timed out.
+插件安装或授权状态已变化，请重新确认	The plugin installation or permissions changed. Review and confirm again.
+插件安装状态已变化	The plugin installation changed.
+插件已停用或更新	The plugin was disabled or updated.
+插件服务已断开	The plugin service disconnected.
+插件服务身份不符	The plugin service identity does not match.
+插件服务连接中断	The plugin service disconnected.
+插件未启用或已更新，请在插件管理中刷新	The plugin is disabled or updated. Refresh it in Plugins.
+插件没有声明这个页面	This plugin does not declare this page.
+插件状态已变化，请重新操作	Plugin state changed. Refresh and try again.
+插件管理	Plugins
+插件身份或安装状态已变化，请刷新后重试	The plugin identity or installation changed. Refresh and try again.
+插件连接繁忙，请重试	Plugin connections are busy. Try again.
+插件页面不存在	The plugin page is missing.
+插件页面未受签名权限保护	The plugin page lacks signature protection.
 插入/更新	Insert/Update
 插入图片或附件	Insert image or attachment
 插入末尾	Append
@@ -1421,9 +1578,6 @@ yyyy年M月d日	MMM d, yyyy
 操作未完成	Action not completed
 支持格式与模板	Formats and templates
 收下	Take it
-调整时段	Adjustment window
-调整时段 · %s	Adjustment window · %s
-调整时段未能保存	Could not save the adjustment window
 收藏夹	Starred
 收藏夹 · 	Saved · 
 收起说明 ›	Hide details ›
@@ -1442,10 +1596,12 @@ yyyy年M月d日	MMM d, yyyy
 放行已结束	Pass ended
 数字不能是 NaN 或无穷大	Numbers cannot be NaN or infinite
 数字必须有限	Numbers must be finite
+数字符号	Numbered list
 数据与备份	Data and backup
 数据与备份 · 本地存储 / 云端配置	Data & backup · local / cloud
 数据保存在本机应用私有目录。此备份包含目标与打卡、记忆与图片、题库与答题、卡片文件、笔记与附件，以及冻结时段和额度。不包含全部设置或独立的禁忌认领罚时记录。ZIP 未加密，正文原样保存，请妥善保管。当前设备安全上限：解压后 	Data is stored privately on this device. This backup includes goals, check-ins, memory and images, quizzes, card files, notes and attachments, freeze windows and quotas. It excludes complete settings and separate taboo claim penalties. The ZIP is unencrypted and preserves content as-is. Current uncompressed size limit:
 数据来自电脑端学习台，PC 没在同步就会空着 ——\n点右上角「刷新」重试。	Data comes from the desktop study desk. It stays empty while the PC is not syncing —\ntap “Refresh” at the top right to retry.
+数据范围：	Data scope: 
 数据量超出导入上限	Data exceeds the import limit
 数量填个数字	Enter a number
 数量要大于 0	Amount must be greater than 0
@@ -1476,8 +1632,12 @@ yyyy年M月d日	MMM d, yyyy
 断网默认常开：除了调整时段 %s 内自动放开，其余时间一直断网；开关、名单和调整时段本身都只能在此时段内修改。	Network blocking stays on by default: it is released only inside the adjustment window %s, and the switch, the app list and this window itself can be changed only inside it.
 新加了 	Added 
 新卡 0–200，复习 1–1000，目标 1–1000；名称不能为空	New cards 0-200, reviews 1-1000, goal 1-1000; the name cannot be empty
+新卡的短期学习\n“忘了”：约 1 分钟后可重学；首次“认识”：约 10 分钟后再确认，再次认识后转入按天复习。分钟间隔表示重学计划的到期时间，不会让今日闪卡当天重复抽到该卡。	Short-term learning for new cards\n“Forgot”: relearn in about 1 minute. First “known”: confirm again in about 10 minutes, then move to day-based reviews. Those minute gaps are relearning due times and do not make the card reappear in today's set.
 新卡的短期学习\n“忘了”：约 1 分钟后可重学；首次“记住了”：约 10 分钟后再确认，再次记住后转入按天复习。“费力想起”：第一步约 5 分 30 秒，后续学习步约 10 分钟；“很轻松”可直接转入按天复习。分钟间隔表示重学计划的到期时间，不会让今日闪卡当天重复抽到该卡。	Short-term learning for new cards\n“Forgot”: relearn in about 1 minute. First “remembered”: confirm again in about 10 minutes, then move to day-based reviews. “Hard”: first step about 5 min 30 s, later steps about 10 minutes. “Easy” goes straight to day-based reviews. Those minute gaps are relearning due times and do not make the card reappear in today's set.
+新卡的短期学习\n“忘记”：约 1 分钟后重学；“模糊”：约 5.5–10 分钟后重学；首次“认识”：约 10 分钟后再确认，再次认识后转入按天复习。今日队列保留未学稳的卡，到期后再次出现；等待期间可以先学习其他卡。	Learning new cards\nForgot: relearn in about 1 minute. Uncertain: about 5.5–10 minutes. First Know: confirm in about 10 minutes, then enter day-based review after another Know. Unfinished cards stay in today's queue and return when due. Other ready cards can be studied while waiting.
 新增 	Added 
+新学上限请填写 0–1000	New-card limit must be between 0 and 1000
+新学候选 · 从未学过	New · never studied
 新建	New
 新建共享额度	New shared quota
 新建冻结时段	New freeze window
@@ -1497,6 +1657,7 @@ yyyy年M月d日	MMM d, yyyy
 无时段（整天冻结）	No window (all-day freeze)
 无标题	Untitled
 无法保存冻结时区	Failed to save the freeze timezone
+无法保存插件设置，当前访问已阻断。请重试保存停用，再重新启用。	Plugin settings could not be saved. Current access is blocked. Retry saving the disabled state before enabling it again.
 无法保存附件	Cannot save the attachment
 无法写入备份	Cannot write the backup
 无法写入文件	Cannot write the file
@@ -1504,6 +1665,7 @@ yyyy年M月d日	MMM d, yyyy
 无法创建临时目录	Cannot create the temp directory
 无法创建目录	Cannot create the directory
 无法创建附件目录	Cannot create the attachment directory
+无法启动插件页面	Could not open the plugin page.
 无法打开文件	Cannot open the file
 无法打开目标文件	Cannot open the target file
 无法打开附件，请检查文件是否存在或安装对应应用	Cannot open the attachment. Check that the file exists or install an app that handles it.
@@ -1513,6 +1675,8 @@ yyyy年M月d日	MMM d, yyyy
 无法暂存附件	Cannot stage the attachment
 无法替换旧文件	Cannot replace the old file
 无法清理未开始的恢复	Cannot clear an unstarted restore
+无法签发启动票据	Could not issue a page ticket.
+无法绑定插件服务	Could not bind to the plugin service.
 无法结束回滚	Cannot finish the rollback
 无法编码备份	Cannot encode the backup
 无法编码笔记本数据	Cannot encode notebook data
@@ -1527,6 +1691,7 @@ yyyy年M月d日	MMM d, yyyy
 无障碍	Accessibility
 无障碍服务	Accessibility service
 无障碍服务没开，不会生效	Accessibility off, so nothing happens
+日 · 近30天	Daily · Last 30 days
 日历	Calendar
 日期已更新，请从今日闪卡继续	The date changed; continue from today's flashcards
 日期来自当天记下的必做卡状态（打开 App 或守卫轮询时写入）；同一天多种卡只算一次。	Dates come from the required-card status recorded that day (written when you open the app or the guard polls); several card types on one day count once.
@@ -1554,6 +1719,7 @@ yyyy年M月d日	MMM d, yyyy
 暂停	Pause
 暂无可抽取的闪卡	No cards to draw
 暂无启用的总结周期	No summary cycle enabled
+暂无学科	No subjects yet
 暂无学科。请到守卫 → 卡管理 → 刷题卡添加学科、导入题库或恢复学科。	No subjects yet. Go to Guard → Cards → Quiz to add a subject, import questions or restore one.
 暂无学科，点击上方添加，或从回收站恢复。	No subjects yet. Add one above, or restore from trash.
 暂无已完成总结	No finished summaries yet
@@ -1582,8 +1748,10 @@ yyyy年M月d日	MMM d, yyyy
 最近流水  ▸	Recent entries  ▸
 最近流水  ▾	Recent entries  ▾
 最长连续	Best streak
+月 · 近12个月	Monthly · Last 12 months
 月视图、每天明细与打卡日记 ›	Month view, daily detail and journal ›
 有 %d 个词只有一个字，几乎一定会误拦，建议改成两三个字的词。	%d keyword(s) are a single character and will almost certainly misfire — use two or three.
+有卡片不属于这个学科，请重试	A card does not belong to this subject, please retry
 有序列表	Numbered list
 有效复习 +1，进度已保存	Valid review +1, progress saved
 服务器返回 	Server returned 
@@ -1591,6 +1759,8 @@ yyyy年M月d日	MMM d, yyyy
 未取得设备所有者权限	Device owner not granted
 未启用	Off
 未启用 · 本机照常保存，只是不往云端推	Off · saved locally as usual, just not pushed to the cloud
+未学 %d 张 · 学习中 %d 张 · 稳定度 ≤7 天 %d 张 · 稳定度 >7 天 %d 张	%d new · %d learning · %d with stability ≤7 days · %d above 7 days
+未学 %d 张 · 学习或重学中 %d 张	%d new cards · %d learning or relearning
 未安装	Not installed
 未完成卡日	Days with missing cards
 未完成卡片日期	Days with missing cards
@@ -1601,12 +1771,15 @@ yyyy年M月d日	MMM d, yyyy
 未找到匹配	No matches
 未找到可编辑表格，或包含不支持的竖线转义	No editable table found, or it uses an unsupported pipe escape
 未找到字体	No fonts found
+未授予 · 点击授予	Not granted · Tap to grant
 未授予使用情况权限，暂不计时	Usage access not granted, so timing is paused
 未授权	No access
 未授权或用量暂不可读，暂不计时	Not authorised or usage unreadable; timing paused
+未来 7 天到期	Due in the next 7 days
 未来倒计时	Countdown
 未知卡片类型	Unknown card type
 未知字段：	Unknown field: 
+未知应用	Unknown app
 未知设置类型	Unknown setting type
 未知题型 	Unknown question type 
 未设	Not set
@@ -1632,8 +1805,10 @@ yyyy年M月d日	MMM d, yyyy
 本期	This one
 本机备份	Local backup
 本次减免剩余 	Remaining offset 
+本轮回忆已结束，稍后继续巩固	Recall round finished; consolidate again shortly
 本轮完成	Session done
 本轮已完成 	Finished 
+本页只验证已启用插件的临时会话；不会把系统设置或宿主数据交给插件。	This page validates the temporary session of an enabled plugin. It does not delegate system settings or host storage to the plugin.
 本题已经记录，请进入下一题	Already recorded; move to the next question
 本题未提供解析。	No explanation was provided for this question.
 来源	Source
@@ -1655,7 +1830,10 @@ yyyy年M月d日	MMM d, yyyy
 查看总结	View summary
 查看本轮结果	See session results
 查看答案与解析	Show answer and analysis
+查看设备所有者、无障碍与通知权限	View device owner, accessibility and notification permissions
 查看重学倒计时	See relearning countdown
+柱为评分次数，折线为认识占比；每周期的卡片数分别去重，跨周期会再次计数。	Bars count ratings; the line shows remembered ratings. Cards are counted once per period and may appear in later periods.
+柱是这一档的复习次数，线是其中记住的比例。样本少于 3 次的档位不画点——一两张卡撑不起一条曲线。越往右掉得越快，说明间隔该缩短（把目标记忆率调高）。	Bars are review counts per gap bucket, the line is the share remembered. Buckets with fewer than 3 samples get no dot — one or two cards cannot make a curve. A steep drop on the right means intervals should be shorter (raise the target retention).
 标准	Standard
 标题	Title
 校验卡片	Validate cards
@@ -1679,20 +1857,25 @@ yyyy年M月d日	MMM d, yyyy
 模块备份与恢复	Module backup and restore
 模型名称	Model name
 模板 / 导出题库 / 格式说明	Template / export / format guide
+模糊	Uncertain
+横轴为FSRS稳定性天数，是模型估计；不代表保证记住的时长，也不是实测留存率。	The horizontal axis shows estimated FSRS stability in days, not a guarantee or measured retention.
 橙色	Orange
 次日 	next day 
 正在上传	Uploading
 正在准备恢复…	Preparing the restore…
 正在后台核验冻结状态，请稍候。	Checking freeze status in the background. Please wait.
 正在导出本地备份…	Exporting the local backup…
+正在打开统计插件…	Opening the stats plugin…
 正在校验本地备份…	Verifying the local backup…
 正在校验题目与重复项…	Checking questions and duplicates…
 正在检查…	Checking…
 正在检查状态	Checking status
 正在生成…	Generating…
 正在确认上一笔保存结果	Confirming the previous save
+正在读取卡片…	Loading cards…
 正在读取图片…	Reading image…
 正在读取字体…	Reading fonts…
+正在读取记忆统计…	Loading memory statistics…
 正在读系统使用数据…	Reading system usage data…
 正在转换文件，稍后显示导入预览…	Converting files; the preview appears shortly…
 正在连接电脑…	Connecting to the PC…
@@ -1704,6 +1887,7 @@ yyyy年M月d日	MMM d, yyyy
 正文已达到 2 万字上限	Body has reached the 20000-character limit
 正文超过2万字	Body exceeds 20000 characters
 正确 	Correct 
+正确率 	Accuracy 
 正确答案	Correct answer
 正面	Front
 此应用已加入断网名单	This app is on the network block list
@@ -1721,10 +1905,13 @@ yyyy年M月d日	MMM d, yyyy
 每天 10 分钟以内，间隔更长	Under 10 minutes a day, longer intervals
 每天 1–1440 分钟	1-1440 minutes per day
 每天1–1440分钟	1-1440 minutes per day
+每天上限（1–1000 张）	Daily cap (1–1000 cards)
 每天冻 21-23	Freeze 21-23 daily
 每天冻 22-23	Freeze 22-23 daily
 每天几点重置额度	Daily limit reset time
 每天总结	Daily summary
+每天新学上限（0–1000 张）	New cards per day (0–1000)
+每天早上 8 点	Every day at 8:00 am
 每天最多完成一张热爱卡，等概率抽取 1–60 分钟。余额自动抵扣后续定时冻结，学习联动和禁忌惩罚仍然有效。	One passion card per day. The reward is drawn evenly from 1-60 minutes. The balance auto-offsets later scheduled freezes; study-gate and taboo penalties still apply.
 每天核对每张卡，记录做了还是没做	Review every card daily: did it or did not
 每天每张卡只计一次。新卡和遗忘卡须完成学习步骤后才计数。\n今日目标最多为今日队列数量。开始答题后，当日计划固定，设置次日生效。	Each card counts once a day. New and forgotten cards count only after their learning steps are done.\nToday's goal cannot exceed today's queue. Once you start answering, the day's plan is fixed and settings apply tomorrow.
@@ -1732,7 +1919,6 @@ yyyy年M月d日	MMM d, yyyy
 每张卡片必须是对象	Each card must be an object
 每张热爱卡的奖励只能为 1–60 分钟	Each passion card rewards 1-60 minutes
 每日 %d:00	Daily at %d:00
-每日20:00检查；未完成则在各应用自身冻结结束后接续，持续至任务完成，不设固定分钟数。正在放行的应用接在下一段冻结之后，不提前打断放行。待接续跨零点保留；完成任务解除。热爱奖励不抵扣。	Checked daily at 20:00. If goals are unmet, the penalty continues after each app's own freeze ends and lasts until goals are done, with no fixed minutes. Apps currently allowed are not interrupted; the penalty starts after their next freeze. Pending penalties survive midnight and clear when goals are finished. Passion rewards do not offset this.
 每日分钟数（1–1440），0为取消	Minutes per day (1-1440); 0 cancels
 每日复习上限（1–1000）	Daily review cap (1-1000)
 每日完成记录无效	Invalid daily completion record
@@ -1771,10 +1957,12 @@ yyyy年M月d日	MMM d, yyyy
 氛围	Moody
 永久删除	Delete forever
 永久删除？	Delete forever?
+池子 %d 分钟 · 已用 %.1f 分钟 · 剩 %d 分钟	Pool %d min · used %.1f min · %d min left
 池子的分钟数由电脑端决定，手机上这个格子只负责记手机自己的用量。电脑端要先把那条规则标成共享，两边才是同一份额度。	The pool budget is decided on the PC; this bucket only contributes the phone's own usage. The PC rule must be flagged as shared for both sides to charge the same budget.
 没有 token	No token
 没有冻结时段 = 不定时冻结（学习闸门仍可生效）	No freeze hours = no scheduled freeze (the study gate still applies)
 没有匹配的应用	No matching app
+没有发现已安装的插件。请先通过系统安装器安装已签名的统计插件 APK，再回到这里刷新。	No installed plugins found. Install the signed statistics APK with the system installer, then refresh this page.
 没有可导入的新卡片（空内容或完全重复）	No new cards to import (empty or exact duplicates)
 没有可用的分享应用	No app available to share with
 没有可用的文件选择器	No file picker available
@@ -1782,6 +1970,7 @@ yyyy年M月d日	MMM d, yyyy
 没有应用	No apps
 没有找到备忘录	No notes found
 没有新题目	No new questions
+没有符合条件的卡片。	No matching cards.
 没有能打开这个链接的浏览器	No browser can open this link
 没有能选文件的程序	No app on this device can pick files
 没有要写的内容	Nothing to write
@@ -1790,6 +1979,7 @@ yyyy年M月d日	MMM d, yyyy
 没给 VPN 授权，断网开不了	No VPN permission, so the cut cannot start
 没能保存	Couldn't save
 没选应用（屏蔽中的会被跳过）	No apps selected (apps in block windows are skipped)
+注释	Quote
 浅底大标题 · 圆角白卡	Big titles · soft cards
 浅绿	Pale green
 浅色	Light
@@ -1799,6 +1989,7 @@ yyyy年M月d日	MMM d, yyyy
 涂鸦	Sketch
 涂鸦-	Sketch-
 涂鸦画布	Sketch canvas
+消失方式	Dismissal
 润色	Polish
 液态玻璃	Liquid glass
 液态玻璃 · 自定义配色	Liquid glass · custom colours
@@ -1812,6 +2003,7 @@ yyyy年M月d日	MMM d, yyyy
 添加颜色	Add colour
 清空	Clear
 清空画布？	Clear the canvas?
+清空选择	Clear picks
 清除	Clear
 清除 AI 设置？	Clear AI settings?
 清除拦截记录	Clear history
@@ -1822,6 +2014,7 @@ yyyy年M月d日	MMM d, yyyy
 满勤	Full days
 满勤 ×10	Perfect days ×10
 满勤 ×50	Perfect days ×50
+点一下才消失	Wait for a tap
 点一行改它的冻结时间。时段相同的一批应用会折成一张卡，点卡片展开明细。	Tap a row to change its freeze time. Apps sharing the same hours fold into one card; tap it for details.
 点一行改它的冻结时间，长按从冻结应用移除。	Tap a row to change its freeze time. Long-press to remove it.
 点下面去开：找到 AwayFromShorts，允许「使用情况访问」。	Tap below to open it: find AwayFromShorts and allow usage access.
@@ -1839,21 +2032,27 @@ yyyy年M月d日	MMM d, yyyy
 热爱奖励记录违反每日上限	A passion reward entry exceeds the daily cap
 热爱抽奖 · 	Passion draw · 
 热爱收藏	Reward collector
+版本	Version
+版本：	Version: 
 特粗 · 24	Extra · 24
 状态	Status
 现在 	now 
 现在只有「	Right now you only have 
 现在只能加 · 移除或减少要等 	Adding only · removing or lowering waits for 
-现在只能加分钟数，调小要等调整时段 %s	Minutes can only go up right now; lowering waits for the adjustment window %s
 现在只能加分钟数，调小要等每天 22:00–23:00	You can only add minutes now; lowering waits for 22:00–23:00
-现在只能加：勾上就进这个格子。想把应用拿出去，等调整时段 %s。	Add-only right now: tick apps to bring them in. Taking apps out waits for the adjustment window %s.
+现在只能加分钟数，调小要等调整时段 %s	Minutes can only go up right now; lowering waits for the adjustment window %s
 现在只能加：勾上就进这个格子。想把应用拿出去，等每天 22:00–23:00。	Adding only: tick an app to put it in. To take one out, come back at 22:00–23:00.
-现在只能加：把成员减到一只要等调整时段 %s	Add-only right now: shrinking to a single app waits for the adjustment window %s
+现在只能加：勾上就进这个格子。想把应用拿出去，等调整时段 %s。	Add-only right now: tick apps to bring them in. Taking apps out waits for the adjustment window %s.
 现在只能加：把成员减到一只要等每天 22:00–23:00	Adding only: trimming members down to one waits for 22:00–23:00
+现在只能加：把成员减到一只要等调整时段 %s	Add-only right now: shrinking to a single app waits for the adjustment window %s
 现在只能查看。名单、开关、时段和连接方式只在调整时段 %s 内开放。	View only right now. The list, switch, window and connection mode open only inside the adjustment window %s.
 现在可以使用	Available now
+现在可复习	Ready to review
+现在是「15 秒后自动消失」：不用管它，到点自己走；想提前关掉，点卡片外面或按返回。	Currently “auto-dismiss after 15s”: leave it alone and it goes away by itself; to close it early, tap outside the card or press back.
+现在是「点一下才消失」：卡片会一直留着，点它或按返回才关掉。	Currently “wait for a tap”: the card stays until you tap it or press back.
 现在每天 	Daily reset at 
 现在用的不是自定义图片	No custom image is in use right now
+现在的位置	Where you stand
 现在设	Set now
 现在默认记 	Defaults to 
 现在：	Now: 
@@ -1869,14 +2068,17 @@ yyyy年M月d日	MMM d, yyyy
 用量记录损坏，限额保护性冻结至次日	Usage ledger is corrupted; quota frozen until tomorrow as a safeguard
 用默认的	Use default
 电脑地址	PC address
+电脑地址、令牌和两端明细	PC address, token and both sides
 电脑端应用时长	Desktop app time
 电脑端设置里那一串	the string shown in the PC app
 电脑端返回 HTTP 	The PC app returned HTTP 
+电脑这一份：	PC side: 
 画笔粗细	Brush width
 画笔颜色	Brush colour
 界面语言已切换	Language switched
 界面风格	Interface style
 界面风格：	Interface style: 
+留存曲线 · 距离越久还记得吗	Retention curve · does it stick
 番茄钟	Pomodoro
 番茄钟 · 正念 · 倒计时	Pomodoro · mindful
 百日记	Hundred days
@@ -1908,6 +2110,7 @@ yyyy年M月d日	MMM d, yyyy
 确认入库	Confirm import
 确认删除	Delete
 确认后仅新增卡片，已有卡片和复习记录保留。复习独立于打卡。	Confirming only adds cards; existing cards and review history are kept. Reviews are separate from check-ins.
+确认启用	Enable plugin
 确认导入预览	Confirm import
 禁	No
 禁卸载	No uninstall
@@ -1920,7 +2123,6 @@ yyyy年M月d日	MMM d, yyyy
 禁忌卡列表	Taboo cards
 禁忌卡待确认 	Taboo cards pending 
 禁忌名称，如：吃辣、吃甜	Taboo name, e.g. spicy food, sweets
-禁忌延长冻结	Taboo extension
 禁忌惩罚到点自动解除，没有解除按钮	Taboo penalties expire on their own; there is no release button
 禁忌惩罚的延长冻结还没结束。	The taboo penalty's extended freeze is still active.
 禁忌罚时无法读取	The taboo penalty record cannot be read
@@ -1946,10 +2148,11 @@ yyyy年M月d日	MMM d, yyyy
 移动到笔记本	Move to notebook
 移除	Remove
 移除勾选框	Remove checkbox
-移除或减少要等调整时段 %s	Removals or reductions wait for the adjustment window %s
 移除或减少要等每天 22:00–23:00	Removing or lowering waits for 22:00–23:00
+移除或减少要等调整时段 %s	Removals or reductions wait for the adjustment window %s
 移除格子	Remove quota
 移除这个限额格子？	Remove this quota?
+稳定度是 FSRS 认为这张卡能撑多久。>7 天的越多，说明长期记忆越扎实。	Stability is how long FSRS expects a card to hold. More cards above 7 days means firmer long-term memory.
 空行	Blank line
 窗口类名	Window class
 立即应用	Apply now
@@ -1972,9 +2175,12 @@ yyyy年M月d日	MMM d, yyyy
 答对 150	Correct 150
 答案	Answer
 答案 answer 不能为空	answer cannot be empty
+答案不匹配，本次计为遗忘	Answer does not match; counted as forgotten
 答案不匹配，本次计为遗忘，稍后重学	Answer did not match; counted as forgotten and shown again later
+答案不匹配，请选择记忆程度	Answer differs; choose your recall rating
 答案与解析	Answer and analysis
 答案匹配	Answers match
+答案匹配，请选择记忆程度	Answer matches; choose your recall rating
 答案请填选项字母	Put option letters in the answer
 答案超出选项范围	The answer is outside the options
 答案（输入题可用 | 分隔可接受答案）	Answer (for typed questions, separate accepted answers with |)
@@ -2001,6 +2207,8 @@ yyyy年M月d日	MMM d, yyyy
 系统同一时间只允许一个 VPN：代理（FlClash 等）占着时隧道建不起来。选「改用冻结这些应用」后，时段外名单里的应用会被直接冻结（打不开，也就等于没网），时段内自动解冻；名单里别放必须用的应用。	Android allows only one VPN at a time: while a proxy (FlClash etc.) holds it, the tunnel cannot be built. With “Freeze these apps instead”, the listed apps are frozen outside the adjustment window (they cannot open, which also means no network) and released inside it. Do not put apps you must use in this list.
 系统同一时间只允许一个 VPN：开了它就要关掉代理，否则两边都用不了。	The system allows one VPN at a time: turn the proxy off first, or neither will work.
 系统应用设置	System app settings
+系统没有可用的语音引擎	This device has no speech engine available
+系统没有这个口音的语音包	This device has no voice pack for that accent
 系统设置	System Settings
 系统还没攒出本月数据（刚授权 / 刚开机）	The system has no data for this month yet (just granted / just booted)
 紫色	Purple
@@ -2035,7 +2243,11 @@ yyyy年M月d日	MMM d, yyyy
 统一管理卡片、学习联动和奖励。	Manage cards, study linkage and rewards in one place.
 统计	Stats
 统计中	Collecting…
+统计只读：不会改动卡片状态。曲线里的每一次评分都来自日志，删掉学科会一并从曲线里消失。	Read-only: card states are untouched. Every rating in these curves comes from the log, and deleting a subject removes it from the curves too.
 统计失败，稍后重试	Stats failed. Try again later.
+统计插件只显示应用名称和时长。读取系统使用情况需要你在系统设置里亲手开启「使用情况访问」；设备所有者也不能代替这一步。	Statistics displays app names and durations. You must enable usage access yourself in system settings; device-owner status cannot replace this consent.
+统计插件启动失败：	Stats plugin failed to start: 
+统计插件未安装或未启用。\n\n它现在是独立 APK，需要你在「插件管理」里确认数据范围并启用；停用单个插件不会回到旧统计页。	The stats plugin is not installed or not enabled.\n\nIt now ships as a separate APK. Confirm its data scope and enable it in “Plugin management”; disabling one plugin does not bring back the old stats page.
 统计要读系统的应用使用时长（按 Android 的规矩，这一项必须用户在系统设置里亲手开）。\n	Stats read system app usage time, which Android only allows if you turn it on yourself in system settings.\n
 继续	Resume
 继续 · 加入重学	Continue · add to relearning
@@ -2061,6 +2273,8 @@ yyyy年M月d日	MMM d, yyyy
 罚时还没到点：继续冻结到 	Penalty still running: frozen until 
 置顶	Pin
 置顶字段无效	Invalid pinned field
+美音	US
+美音朗读	Play US pronunciation
 翻译成中文	Translate to Chinese
 翻译成英文	Translate to English
 考前冲刺	Exam sprint
@@ -2088,6 +2302,7 @@ yyyy年M月d日	MMM d, yyyy
 色相	Hue
 节律 	Rhythm 
 英语单词	English words
+英音	UK
 草稿尚未保存	Draft not saved yet
 草稿未能恢复，原缓存已保留	The draft could not be restored; the original cache was kept
 草稿缓存失败，请尽快保存图片	Draft caching failed; save the image soon
@@ -2119,6 +2334,7 @@ yyyy年M月d日	MMM d, yyyy
 规则详情	Rule details
 视频号规则已经在里面了	The Channels rule is already there
 解不开这张图	Cannot decode this image
+解冻被系统拒绝	Unfreeze refused by the system
 解析	Analysis
 解答	Solution
 解答题	Free response
@@ -2127,6 +2343,8 @@ yyyy年M月d日	MMM d, yyyy
 解锁成就：	Achievement unlocked: 
 计时中 · 返回键已被拦住	Running · back key blocked
 认了	Claimed
+认识	Know
+认识后：	Remembered: 
 认页面靠窗口类名或页面文字：类名更准（视频号那种独立页面用 finder 就够），填文字方便但同样的字出现在别处也会被拦。	Pages are recognised by window class or on-screen text: class names are precise (finder is enough for Channels); text is easier to fill, but the same words elsewhere get blocked too.
 认页面靠页面文字或窗口类名。有些手机读不到窗口类名，所以文字才是主力：几个词用 + 连接，都出现才算，只填一个词很容易误拦。	A page is recognized by its text or by the window class name. Some phones can't report the window class, so text is the reliable one: join several words with + and all of them must appear — a single word blocks far too much.
 认领	Claim
@@ -2150,12 +2368,18 @@ yyyy年M月d日	MMM d, yyyy
 记忆备份	Memory backup
 记忆备份（含图片与复习记录）	Memory backup including images and review history
 记忆复习独立保存，不写入打卡	Memory reviews are stored separately and never written into check-ins
+记忆工具	Memory tools
 记忆库暂时不可用	The memory library is unavailable
 记忆库读取失败，已保留原文件。请恢复备份：	Failed to read the library; the original file was kept. Restore a backup: 
 记忆库超过 64MB，请先导出备份	The library exceeds 64MB; export a backup first
+记忆强度构成	Memory strength mix
 记忆数据格式不正确：	Malformed memory data: 
 记忆率更高，复习更密	Higher retention, denser reviews
+记忆统计	Memory stats
+记忆统计  ·  曲线	Memory stats · curves
 记忆规律与复习规则	How memory and reviews work
+设为共享	Share
+设为跨设备共享	Share with the PC
 设备所有者	Device owner
 设备所有者　	Device owner  
 设备所有者只能用部署包一次性授权，系统设置里没有这个开关。\n\n	Device owner can only be granted once by the deployment package; there is no switch for it in the system settings.\n\n
@@ -2178,6 +2402,7 @@ yyyy年M月d日	MMM d, yyyy
 语音输入	Voice input
 请从总结卡管理设置周期	Set the cycle from the summary card manager
 请使用 HTTPS 地址，Git 也支持 SSH 地址	Use an HTTPS address; Git also accepts SSH addresses
+请使用上方按钮	Use the buttons above
 请使用其他笔记本名称	Use a different notebook name
 请允许后台提醒弹窗	Allow background reminder popups
 请先在卡管理的记忆卡中添加学科	Add a subject in Cards → Memory first
@@ -2191,6 +2416,7 @@ yyyy年M月d日	MMM d, yyyy
 请在系统设置中允许悬浮窗	Allow display over other apps in system settings
 请在系统设置中打开本应用的通知权限	Allow notifications for this app in system settings
 请在记忆页面学习，完成后自动打卡	Study on the memory page; it checks in automatically when done
+请填写 0–1000 的整数	Enter an integer from 0 to 1000
 请填写 1–1000 的整数	Enter a whole number from 1 to 1000
 请填写 1–1000 的每日题数	Enter a daily count from 1 to 1000
 请填写 GitHub token	Enter a GitHub token
@@ -2219,9 +2445,13 @@ yyyy年M月d日	MMM d, yyyy
 读不到这张图	Cannot read this image
 读书	Read
 读取学习台账失败 HTTP 	Failed to read the study ledger, HTTP 
+读取聚合统计（usage.summary.read）	Read aggregated statistics (usage.summary.read)
 读取题库	Read questions
 调度核心适配自 java-fsrs\n版本 c561ee6c56239b621a0a45b16a6c2e688441eae5\nhttps://github.com/open-spaced-repetition/java-fsrs\n\n	Scheduling core adapted from java-fsrs\nVersion c561ee6c56239b621a0a45b16a6c2e688441eae5\nhttps://github.com/open-spaced-repetition/java-fsrs\n\n
 调整应用组合、名称和每日上限	Change apps, name and daily limit
+调整时段	Adjustment window
+调整时段 · %s	Adjustment window · %s
+调整时段未能保存	Could not save the adjustment window
 调整额度	Adjust allowance
 账号和密码请填写在单独字段中	Put the account and password in their own fields
 费力	Hard
@@ -2235,6 +2465,7 @@ yyyy年M月d日	MMM d, yyyy
 跨设备 · 	Shared · 
 跨设备 · 已用 %.1f / %d 分钟（电脑 %.1f + 手机 %.1f）	Shared · %.1f of %d min used (PC %.1f + phone %.1f)
 跨设备共享额度	Shared quota across devices
+跨设备设置	Shared quota settings
 跨设备额度 · 未连上电脑，暂按本机计	Shared quota · PC unreachable, counting locally for now
 转换后超过 4MB，请拆分题库	Converted size exceeds 4MB; split the bank
 轻松	Easy
@@ -2247,7 +2478,9 @@ yyyy年M月d日	MMM d, yyyy
 运动	Exercise
 运行中	Running
 运行状态	Status
+近 14 天复习量	Reviews, last 14 days
 近 7 天娱乐占比	Entertainment share, last 7 days
+近 7 天记住率 %.0f%%（%d 次评分里记住 %d 次）	%.0f%% recall over 7 days (%d remembered out of %d ratings)
 近30天 · 卡片类型	Last 30 days · card types
 返回	Back
 返回记忆首页	Back to memory
@@ -2291,8 +2524,8 @@ yyyy年M月d日	MMM d, yyyy
 还没配规则	No rules yet
 还要去系统设置里打开无障碍服务	Also turn on the accessibility service in system settings
 这一屏被拦下了	This screen was blocked
-这一步会减少额度，只在调整时段 %s 内开放	This lowers an allowance and opens only inside the adjustment window %s
 这一步会减少额度，只在每天 22:00–23:00 开放	This step lowers an allowance; it opens only at 22:00–23:00
+这一步会减少额度，只在调整时段 %s 内开放	This lowers an allowance and opens only inside the adjustment window %s
 这一轮	This round
 这一轮专注完成，休息一下	Round done. Take a break.
 这一轮还没走完	This round is not over yet
@@ -2301,13 +2534,14 @@ yyyy年M月d日	MMM d, yyyy
 这个学科的 %d 张卡片、复习记录和今日计划会一起删掉，删完找不回来。	This removes its %d cards, their review history and today's plan for good. There is no way back.
 这个应用	this app
 这个应用用得有点久	You have been here a while
+这个改动要减少额度，只在每天 22:00–23:00 开放	This change lowers an allowance; it opens only at 22:00–23:00
 这个改动要减少额度，只在调整时段 %s 内开放	This change lowers an allowance and opens only inside the adjustment window %s
 这个改动要减少额度，只在调整时段内开放	This change lowers an allowance and opens only inside the adjustment window
-这个改动要减少额度，只在每天 22:00–23:00 开放	This change lowers an allowance; it opens only at 22:00–23:00
 这个方向没有可换的卡了	No more cards that way
 这个日子已经过去了	This date has passed
 这个时段已不存在	That window no longer exists
 这个时段暂时没有同步记录	No synced records for this window yet
+这个格子的额度和电脑合成一个池子：电脑那边也要有一条格子标成跨设备，两边合计到上限就同时停。池子的分钟数以电脑那条为准。	This bucket and the PC charge one pool: the PC side must also flag a bucket as shared, and either side running dry stops both. The pool size follows the PC bucket.
 这个目标今天不用再打了	This goal needs no more check-ins today
 这个系统没有对应的设置页	This system has no such settings page
 这个系统没有无障碍设置页	This system has no accessibility settings page
@@ -2329,9 +2563,11 @@ yyyy年M月d日	MMM d, yyyy
 这次练习的记录已经保存在本机。	This session is saved on this device.
 这里还没有题目	No questions here yet
 这里还没有题目，可以切换科目、搜索条件，或导入题库。	No questions here. Switch subject, change the search, or import questions.
+进入系统设置	Open system settings
 进到指定页面就盖住并把人送回桌面，同一个应用里的其他页面不受影响。	Opening the chosen page covers it and sends you home; other pages in the same app are unaffected.
 进度 	Progress 
 进度怎样计算\n今日闪卡进度表示已复习的卡片数，包含选了“忘了”的卡，不代表全部记牢。学习联动以对应学科的学习目标为准：遗忘不计为有效完成；达到复习阶段的有效评分才可能增加完成量，同一计划内不重复计数。	How progress is counted\nToday's progress is the number of cards reviewed, including ones rated “forgot”; it does not mean they are all memorised. The study gate follows the subject's study goals: forgetting does not count, only valid ratings in the review stage can add progress, and one plan is never counted twice.
+进度怎样计算\n卡面进度表示已完成本日学习步骤的卡片数，待巩固的卡不算完成；“已处理”按卡片去重，统计中的评分次数可以包含同日重学。只有选“认识”并进入按天复习才计入学科目标，每张卡在同一计划内只计一次。模糊和忘记不增加有效完成量。	Progress\nCard progress counts cards that finished today's learning steps; cards awaiting consolidation are unfinished. Processed counts distinct cards; rating statistics can include repeated reviews today. Only Know leading to day-based review earns subject-goal credit, once per card per plan. Uncertain and Forgot earn no completion credit.
 连三	Three in a row
 连上了 · 池子 %d 分钟，电脑已用 %.1f，手机已用 %.1f	Connected · pool %d min, PC used %.1f, phone used %.1f
 连不上电脑：%s	Cannot reach the PC: %s
@@ -2418,6 +2654,7 @@ yyyy年M月d日	MMM d, yyyy
 重置时间已保存，将在当前额度日结束后生效	The reset time is saved and will take effect after the current quota day ends.
 重置，改格子不清空已用时间。加到格子里的操作随时都能做（加应用、加分钟数）；移出应用、调小分钟数、删格子只在每天 22:00–23:00 开放。学习联动与禁忌惩罚继续生效。	reset, and editing a cell keeps the time already spent. Adding is always open (new apps, more minutes); taking an app out, lowering minutes or deleting a cell opens only at 22:00–23:00. Study gating and penalty rules still apply.
 重置，改格子不清空已用时间。学习联动与禁忌惩罚继续生效。	 resets. Editing a quota does not clear time already used. Study-gate and taboo penalties still apply.
+重试保存停用	Retry saving disabled state
 钥匙应用	Key app
 钥匙应用未达标	Key app not enough yet
 钥匙应用的解锁条件还没达标。	The unlock condition for this key app has not been met.
@@ -2440,6 +2677,7 @@ yyyy年M月d日	MMM d, yyyy
 闪卡队列超出数量限制	The flashcard queue exceeds the limit
 问答	Q&A
 问答、输入与图片遮挡；点卡片可以编辑。	Q&A, typed answers and image masking; tap a card to edit it.
+队列按遗忘曲线排：到期的旧卡按「此刻还记得的概率」从低到高——忘得最厉害的先复习；旧卡不够时，用从没学过的新卡按入库顺序补位，每天最多补新学上限那么多张。\n没有随机、没有顺序规则，也没有「全部 / 仅到期」的池子：该复习什么由每张卡自己的 FSRS 到期时间决定。	The queue follows the forgetting curve: due cards go first, sorted by how likely you still remember them right now — the ones you have forgotten most come first. When due cards run out, never-studied cards fill in, in import order, up to the daily new-card allowance.\nThere is no random mode, no sequential mode and no all/due-only pool: what to review is decided by each card's own FSRS due date.
 附件	Attachments
 附件不存在	Attachment not found
 附件元数据异常	Attachment metadata corrupted
@@ -2465,11 +2703,13 @@ yyyy年M月d日	MMM d, yyyy
 随机	Random
 随机抽取	Random draw
 随机练习	Random
+难记	Difficult
+难记：累计遗忘至少3次；筛选不会改动学习计划。	Difficult means forgotten at least 3 times. Filtering does not change your plan.
 需要复习 · 已加入错题本	Needs review · added to mistakes
 需要开启无障碍服务（在系统设置 → 无障碍里打开）	Needs the accessibility service (turn it on in Settings → Accessibility)
 需要待够	Required
-需要调整时段 %s；刚加入的十分钟内可直接纠错	Requires adjustment window %s; corrections are allowed within ten minutes of adding
 需要设备所有者（要装部署包，系统设置里开不了）	Needs device owner (install the provisioning package; Settings has no switch for it)
+需要调整时段 %s；刚加入的十分钟内可直接纠错	Requires adjustment window %s; corrections are allowed within ten minutes of adding
 需要部署包授权，系统设置里开不了	Needs the provisioning package, not system settings
 非法恢复路径	Illegal restore path
 页	pages
@@ -2547,10 +2787,13 @@ yyyy年M月d日	MMM d, yyyy
 （导入 	 (imported 
 （导入）	 (imported)
 （屏蔽中，跳过）	 (in block window, skipped)
+（已隐藏）	 (hidden)
 （待接续）	 (queued)
 （所绑时段）	 (bound hours)
+（显示前 	 (showing first 
 （更新失败）	 (update failed)
 （生效中）	 (active)
+（离线估算，数字偏乐观）	(offline estimate, reads optimistic)
 （自动）	 (auto)
 （自定义）	 (custom)
 ）	)
@@ -2574,6 +2817,7 @@ yyyy年M月d日	MMM d, yyyy
 ，	, 
 ，发布后这里会直接告诉你有没有新版。	. Once a source is set, this tells you whether a newer build exists.
 ，可以升到 	, you can upgrade to 
+，含趋势线	 with a trend line
 ，完成 	, 
 ，已选	, selected
 ，显示前 100 张，请用搜索缩小范围	, showing the first 100; narrow it with search
@@ -2588,84 +2832,9 @@ yyyy年M月d日	MMM d, yyyy
 ：目标记忆率 	: target retention 
 ；	; 
 ？	?
+📊 	📊 
 📊 屏幕使用统计	📊 Screen time stats
-关键应用名单 · 	🔒 Key apps · 
-全部冻结	🧊 All frozen
-冻结中 	🧊 Frozen 
- · 跨设备	 · Shared
-⇄ 跨设备设置	⇄ Shared quota settings
-⇄ 设为跨设备共享	⇄ Share with PC
-把这一格设成跨设备共享？	Share this bucket with the PC?
-这个格子的额度和电脑合成一个池子：电脑那边也要有一条格子标成跨设备，两边合计到上限就同时停。池子的分钟数以电脑那条为准。	This bucket and the PC charge one pool: the PC side must also flag a bucket as shared, and either side running dry stops both. The pool size follows the PC bucket.
-设为共享	Share
-手机这一份：	Phone side: 
-电脑这一份：	PC side: 
- · 两端明细见下	 · details below
-池子 %d 分钟 · 已用 %.1f 分钟 · 剩 %d 分钟	Pool %d min · used %.1f min · %d min left
-（离线估算，数字偏乐观）	(offline estimate, reads optimistic)
-今天还没有用量	No usage today
-⇄ 与电脑共享这份额度	⇄ Share this bucket with the PC
-⇄ 跨设备 · 未连上电脑，暂按本机计	⇄ Shared · PC offline, counting this phone only
-跨设备设置	Shared quota settings
-设为跨设备共享	Share with the PC
-电脑地址、令牌和两端明细	PC address, token and both sides
-和电脑合成一个额度池子	Charge one pool together with the PC
-每天早上 8 点	Every day at 8:00 am
-取消或调小额度要等调整时段 %s	Cancelling or lowering a quota waits for the adjustment window %s
-注释	Quote
-圆点符号	Bulleted list
-数字符号	Numbered list
-待办事项	Checklist
-学科已移入回收站	This subject is in the trash
-挑选今日卡片	Pick today's queue
-今日队列已开始答题，挑选对下一次生效	Today's queue is already in progress; picking applies to the next one
-复习候选按到期先后，新学候选按入库顺序；每段最多显示 200 张，搜不到就缩小关键词。勾选即进今日队列，不受每日上限约束；开始答题后队列固定。	Review candidates run earliest-due first, new candidates follow import order; each section shows up to 200 rows, narrow the search if something is missing. Ticked cards join today's queue regardless of daily limits; the queue locks once you start answering.
-复习候选 · 今天到期	Review · due today
-新学候选 · 从未学过	New · never studied
- · 挑选今日卡片	 · Pick today's queue
-保存队列	Save queue
-清空选择	Clear picks
-今日队列已更新 · 复习 	Today's queue updated · review 
-（显示前 	 (showing first 
- 张，请用搜索缩小范围）	, narrow the search)
-有卡片不属于这个学科，请重试	A card does not belong to this subject, please retry
-挑选	Pick
-今天没有该复习的卡片	No cards due today
-复习记录已保存，明天按遗忘曲线重新排队。	Progress saved; tomorrow's queue is rebuilt from the forgetting curve.
-所选学科里没有卡片。可在守卫 → 卡管理 → 记忆卡中添加学科、制作或导入卡片。	The selected subjects have no cards. Add a subject or import cards under Guard → Cards → Memory.
-到期的旧卡已经清完，今天的新学额度也用完了（每天新学 %d 张）。可在抽取设置里调整上限，或明天继续。	Due reviews are done and today's new-card allowance is used up (%d per day). Raise the limit in draw settings, or continue tomorrow.
-每天上限（1–1000 张）	Daily cap (1–1000 cards)
-每天新学上限（0–1000 张）	New cards per day (0–1000)
-队列按遗忘曲线排：到期的旧卡按「此刻还记得的概率」从低到高——忘得最厉害的先复习；旧卡不够时，用从没学过的新卡按入库顺序补位，每天最多补新学上限那么多张。\n没有随机、没有顺序规则，也没有「全部 / 仅到期」的池子：该复习什么由每张卡自己的 FSRS 到期时间决定。	The queue follows the forgetting curve: due cards go first, sorted by how likely you still remember them right now — the ones you have forgotten most come first. When due cards run out, never-studied cards fill in, in import order, up to the daily new-card allowance.\nThere is no random mode, no sequential mode and no all/due-only pool: what to review is decided by each card's own FSRS due date.
-保存并重排	Save and re-queue
-请填写 0–1000 的整数	Enter an integer from 0 to 1000
-今日怎样抽卡\n到期旧卡先来，按可提取率（此刻还记得的概率）从低到高排；新卡只在旧卡之后补位，数量受每天新学上限约束。旧规则（随机 / 顺序 / 全部池 / 仅到期池）已删除，抽取范围只剩学科选择。	How today's cards are picked\nDue cards come first, sorted by retrievability (the chance you still remember them) from low to high; new cards only fill in afterwards, capped by the daily new-card allowance. The old rules (random / sequential / all-pool / due-only pool) are gone; only the subject scope remains.
-记忆统计	Memory stats
-复习量、记住率与遗忘曲线。	Reviews, recall rate and the forgetting curve.
-现在的位置	Where you stand
-卡片 %d 张 · 已学 %d 张 · 今天到期 %d 张	%d cards · %d learned · %d due today
-今日已复习 %d 张 · 连续 %d 天	%d reviewed today · %d-day streak
-近 7 天记住率 %.0f%%（%d 次评分里记住 %d 次）	%.0f%% recall over 7 days (%d remembered out of %d ratings)
-近 14 天复习量	Reviews, last 14 days
-共 %d 张，最近 7 天 %d 张。红线是当天的记住率（评分“记住/轻松”占比），没有复习的日子不画点。	%d in total, %d in the last 7 days. The red line is that day's recall rate (share of Good/Easy ratings); days without reviews get no dot.
-未来 7 天到期	Due in the next 7 days
-今天含已逾期 %d 张；后面几天是 FSRS 排出来的到期日。柱太高就说明那天会积压。	%d due today including overdue; later bars are the FSRS due dates. A tall bar means a backlog that day.
-留存曲线 · 距离越久还记得吗	Retention curve · does it stick
-柱是这一档的复习次数，线是其中记住的比例。样本少于 3 次的档位不画点——一两张卡撑不起一条曲线。越往右掉得越快，说明间隔该缩短（把目标记忆率调高）。	Bars are review counts per gap bucket, the line is the share remembered. Buckets with fewer than 3 samples get no dot — one or two cards cannot make a curve. A steep drop on the right means intervals should be shorter (raise the target retention).
-记忆强度构成	Memory strength mix
-未学 %d 张 · 学习中 %d 张 · 稳定度 ≤7 天 %d 张 · 稳定度 >7 天 %d 张	%d new · %d learning · %d with stability ≤7 days · %d above 7 days
-稳定度是 FSRS 认为这张卡能撑多久。>7 天的越多，说明长期记忆越扎实。	Stability is how long FSRS expects a card to hold. More cards above 7 days means firmer long-term memory.
-各学科今天到期	Due today by subject
-统计只读：不会改动卡片状态。曲线里的每一次评分都来自日志，删掉学科会一并从曲线里消失。	Read-only: card states are untouched. Every rating in these curves comes from the log, and deleting a subject removes it from the curves too.
-抽取设置  ·  按遗忘曲线  ·  	Draw settings · forgetting curve · 
- 张/天	 cards/day
- ·  新学 	 · new 
-到期旧卡按遗忘风险排序，新卡按新学上限补位。	Due cards are ordered by forgetting risk; new cards fill in up to the daily limit.
-记忆统计  ·  曲线	Memory stats · curves
- · 	 · 
-\n到期旧卡按遗忘风险排序，新卡按新学上限补位。	\nDue cards are ordered by forgetting risk; new cards fill in up to the daily limit.
-图表，共 	Chart, 
- 项，最高 	 points, peak 
-，含趋势线	 with a trend line
-新学上限请填写 0–1000	New-card limit must be between 0 and 1000
-↑ 上滑＝记住　·　↓ 下滑＝忘了	↑ swipe up = remembered   ·   ↓ swipe down = forgot
+
+20:00 检查未完成任务，只在当天结束的冻结后接续，持续至任务完成。跨午夜、次日才结束的冻结不参与学习联动。正在放行的应用不提前打断。完成任务解除联动，热爱奖励不抵扣。	Unfinished tasks are checked at 20:00. Learning holds continue only after freezes ending that day until tasks are complete. Overnight freezes ending the next day are excluded. Allowed apps are not interrupted. Completing tasks clears the learning hold; passion rewards do not offset it.
+
+不管选哪一种，前 15 秒都关不掉：返回键、点卡片外面都不理。提醒就是提醒，别一个手势划过去。开关只管「要不要提醒」，不管这一次能不能提前跳过。	Either way, the first 15 seconds cannot be closed — neither the back key nor a tap outside will do anything. The switch only controls whether reminders happen, not whether one can be skipped.

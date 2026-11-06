@@ -16,6 +16,11 @@ public final class MemoryImageView extends View {
     private final String imagePath;
     private int generation,sourceWidth,sourceHeight;
     private boolean failed,needsLoad=true;
+    private boolean pageActive=true;
+    void setPageActive(boolean active) {
+        pageActive=active;
+        if(!active)cancelLoad();else if(bitmap==null||needsLoad)loadImage();
+    }
     private LoadTask task;
     private static final android.os.Handler main=new android.os.Handler(android.os.Looper.getMainLooper());
     private static final java.util.concurrent.ThreadPoolExecutor decoder=new java.util.concurrent.ThreadPoolExecutor(1,1,15,java.util.concurrent.TimeUnit.SECONDS,
@@ -23,7 +28,7 @@ public final class MemoryImageView extends View {
     private final Runnable retry=this::loadImage;
     private void cancelLoad(){generation++;removeCallbacks(retry);if(task!=null){task.canceled=true;decoder.remove(task);task=null;}}
     private void loadImage(){
-        if(!isAttachedToWindow()||getWindowVisibility()!=VISIBLE||getWidth()<=0||getHeight()<=0)return;
+        if(!pageActive||!isAttachedToWindow()||getWindowVisibility()!=VISIBLE||getWidth()<=0||getHeight()<=0)return;
         cancelLoad();failed=false;LoadTask next=new LoadTask(this,imagePath,generation,getWidth(),getHeight());task=next;
         try{decoder.execute(next);}catch(java.util.concurrent.RejectedExecutionException busy){task=null;postDelayed(retry,150);}
     }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The system renders the guard before Application/Activity initialization. -->
+    <style name="StartupTheme" parent="NavTheme">
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/startup_nailong_system</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/startup_empty</item>
+        <item name="android:windowSplashScreenAnimationDuration">280</item>
+        <item name="android:windowSplashScreenBackground">#FFFFFFFF</item>
+        <item name="android:windowDisablePreview">false</item>
+        <item name="android:windowBackground">#FFFFFFFF</item>
+    </style>
+</resources>

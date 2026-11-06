@@ -31,6 +31,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.afs.host.plugins.HostPluginRouter;
+import com.afs.host.plugins.HostRuntime;
+import com.afs.host.plugins.PluginEntry;
+import com.afs.host.plugins.PluginManifestParser;
+import com.afs.pluginapi.PluginProtocol;
+
 /**
  * 打卡历史：连续天数、近 30 天格子、每个目标的进度、最近的打卡流水。
  *
@@ -45,6 +51,9 @@ public class HistoryActivity extends ThemedActivity {
     private Ui look;
     private int BG, SURFACE, TEXT, TEXT2, TEXT3, LINE, TRACK, ACCENT, GREEN, GREEN_DIM, RED;
 
+    private static final int REQUEST_PLUGIN_PAGE = 72;
+    private String pluginSignature = "";
+    private LinearLayout pluginSection;
     private Map<String,int[]> chartCounts=new HashMap<>();
     private int[] dayCounts(String day){int[] value=chartCounts.get(day);if(value==null){value=new int[6];chartCounts.put(day,value);}return value;}
     private void recentPies(LinearLayout parent,String today,List<StudyStore.Rec> recs,Map<String,java.util.Set<String>> taboo){
@@ -78,6 +87,17 @@ public class HistoryActivity extends ThemedActivity {
             getIntent().removeExtra(EXTRA_WEEKLY);
             showWeekly(0);
         }
+        if (look != null) refreshPluginDirectory();
+    }
+
+    private void refreshPluginDirectory() {
+        HostRuntime.get(this).registry().refreshAsync(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            String next = HostRuntime.get(this).registry().signature();
+            if (!next.equals(pluginSignature)) {
+                renderPluginEntries();
+            }
+        });
     }
 
     @Override
@@ -425,22 +445,11 @@ public class HistoryActivity extends ThemedActivity {
             }
         }
 
-        // ---- 屏幕使用统计入口：从主页搬过来，和打卡数据放一页（都是"看自己"的事）----
-        LinearLayout moreCard = card(body);
-        head(moreCard, T.s("更多"));
-        Button statsBtn = new Button(this);
-        statsBtn.setText(T.s("📊 屏幕使用统计"));
-        statsBtn.setAllCaps(false);
-        statsBtn.setTextSize(14);
-        statsBtn.setTextColor(TEXT);
-        statsBtn.setBackgroundColor(TRACK);
-        statsBtn.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                startActivity(new android.content.Intent(HistoryActivity.this, StatsActivity.class));
-            }
-        });
-        moreCard.addView(statsBtn, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        // Update only the contribution container when the installed directory changes.
+        pluginSection=new LinearLayout(this);
+        pluginSection.setOrientation(LinearLayout.VERTICAL);
+        body.addView(pluginSection);
+        renderPluginEntries();
 
         setContentView(sc);
         try {
@@ -450,6 +459,42 @@ public class HistoryActivity extends ThemedActivity {
                             & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         } catch (Throwable ignored) {
         }
+    }
+
+    private void renderPluginEntries() {
+        if(pluginSection==null)return;
+        pluginSignature=HostRuntime.get(this).registry().signature();
+        pluginSection.removeAllViews();
+        List<PluginEntry> plugins = HostRuntime.get(this).registry()
+                .enabledPages(PluginProtocol.SLOT_HISTORY_MORE);
+        if (!plugins.isEmpty()) {
+            LinearLayout moreCard = card(pluginSection);
+            head(moreCard, T.s("更多"));
+            for (final PluginEntry entry : plugins) {
+                for (final PluginManifestParser.Page page : entry.manifest.pages) {
+                    if (!PluginProtocol.SLOT_HISTORY_MORE.equals(page.slot)) continue;
+                    Button statsBtn = new Button(this);
+                    statsBtn.setText(pageTitle(entry, page));
+                    statsBtn.setAllCaps(false);
+                    statsBtn.setTextSize(14);
+                    statsBtn.setTextColor(TEXT);
+                    statsBtn.setBackgroundColor(TRACK);
+                    statsBtn.setOnClickListener(v -> HostPluginRouter.openPage(
+                            HistoryActivity.this, entry, page.id, REQUEST_PLUGIN_PAGE,
+                            message -> Toast.makeText(HistoryActivity.this, message,
+                                    Toast.LENGTH_LONG).show()));
+                    moreCard.addView(statsBtn, new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                }
+            }
+        }
+
+
+    }
+
+    private String pageTitle(PluginEntry entry, PluginManifestParser.Page page) {
+        if ("usage-stats".equals(entry.pluginId())) return T.s("📊 屏幕使用统计");
+        return T.s("📊 ") + entry.pluginId() + " · " + page.id;
     }
 
     /** 格子颜色：没打卡 = 轨道灰；1–2 笔 = 浅绿；3 笔以上 = 深绿。 */

@@ -17,3 +17,9 @@ __pycache__/
 /build/
 /archive/
 /*.png
+plugins/*/build/
+dpc/test/fixture-plugin/build/
+
+# 临时诊断包与运维指令文件
+/afs-diag.apk
+/afs-command.json

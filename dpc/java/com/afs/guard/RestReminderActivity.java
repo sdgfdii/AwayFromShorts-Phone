@@ -8,15 +8,21 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
-import android.view.Gravity;
-import android.view.ViewGroup;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.widget.ImageView;
+import android.graphics.BitmapFactory;
+import java.io.InputStream;
 import java.lang.ref.WeakReference;
 
 /** A dismissible reminder in its own task; never changes locking or learning state. */
 public final class RestReminderActivity extends Activity {
     private static WeakReference<RestReminderActivity> current = new WeakReference<>(null);
+    private ImageView artwork;
+    private int slide;
+    private final Handler timer = new Handler(Looper.getMainLooper());
+    /** 到点自己退场：这条是轻提醒，不该一直压在屏幕上等人点。 */
+    private final Runnable autoClose = () -> { if (!isFinishing()) RestAlert.clear(this); };
+    /** 这一次弹出来的时刻：15 秒内一律不给关（返回键、点外面都不理）。 */
+    private long openedAt;
 
     static Intent intent(Context c, int minutes) {
         return new Intent(c, RestReminderActivity.class).putExtra("minutes", minutes)
@@ -31,7 +37,9 @@ public final class RestReminderActivity extends Activity {
     static void dismissCurrent() {
         new Handler(Looper.getMainLooper()).post(() -> {
             RestReminderActivity activity = current.get();
-            if (activity != null) activity.finishAndRemoveTask();
+            // This task is already excluded from recents. finish() also works on API 24,
+            // whose window manager can crash when removing a reused reminder task.
+            if (activity != null && !activity.isFinishing()) activity.finish();
         });
     }
 
@@ -43,58 +51,80 @@ public final class RestReminderActivity extends Activity {
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         current = new WeakReference<>(this);
+        slide = saved == null ? ReminderStore.takeNextCard(this) : saved.getInt("rest_card", 0);
         ReminderStore.setPending(this, 0L);   // 页面真出来了，待补的那笔就算消化掉
-        setFinishOnTouchOutside(true);
+        // 点卡片外面不能关：这 15 秒是要人真的停一下的
+        setFinishOnTouchOutside(false);
         getWindow().setWindowAnimations(0);
+        openedAt = System.currentTimeMillis();
         render();
+        armAutoClose();
     }
 
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        slide = ReminderStore.takeNextCard(this);
+        openedAt = System.currentTimeMillis();
         render();
+        armAutoClose();   // 换了一张卡，倒计时重新开始
+    }
+
+    /** 15 秒的强制停留过完了没有。没到点就什么关闭路径都不生效。 */
+    private boolean dismissible() {
+        return System.currentTimeMillis() - openedAt >= ReminderStore.AUTO_DISMISS_MS;
+    }
+
+    /**
+     * 排上「15 秒后自己消失」。
+     *
+     * 选了「点一下才消失」就不排，卡片留在屏幕上等人确认（老行为）。
+     * 但两种模式都躲不开那 15 秒的强制停留 —— 见 {@link #dismissible()}。
+     * 每次都先清掉旧的，避免换卡时残留一个计到上一张卡上的回调。
+     */
+    private void armAutoClose() {
+        timer.removeCallbacks(autoClose);
+        if (!ReminderStore.confirm(this)) timer.postDelayed(autoClose, ReminderStore.AUTO_DISMISS_MS);
     }
 
     private void render() {
+        android.graphics.Bitmap bitmap;
+        try (InputStream input = getAssets().open("rest_cards/card_" + (slide + 1) + ".png")) {
+            bitmap = BitmapFactory.decodeStream(input);
+        } catch (java.io.IOException error) {
+            finish();
+            return;
+        }
+        if (bitmap == null) { finish(); return; }
         Ui ui = new Ui(this);
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(ui.dp(24),ui.dp(24),ui.dp(24),ui.dp(20));
-        card.setBackground(ui.round(ui.surface(),24));
-        TextView title = new TextView(this);
-        title.setText(T.s("该歇会儿了"));
-        title.setTextSize(24);
-        title.setTextColor(ui.text());
-        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        card.addView(title);
-        TextView message = new TextView(this);
-        int minutes = Math.max(1,Math.min(RestReminder.MAX_EVERY,getIntent().getIntExtra("minutes",45)));
-        message.setText(T.f("已经连续 %d 分钟没休息，站起来走走，看看远处。",minutes));
-        message.setTextColor(ui.text2());
-        message.setTextSize(16);
-        message.setLineSpacing(ui.dp(4),1);
-        LinearLayout.LayoutParams messageLp = new LinearLayout.LayoutParams(-1,-2);
-        messageLp.topMargin = ui.dp(16);
-        card.addView(message,messageLp);
-        TextView close = new TextView(this);
-        close.setText(T.s("知道了"));
-        close.setTextSize(16);
-        close.setTextColor(ui.accent());
-        close.setGravity(Gravity.CENTER);
-        close.setBackground(ui.round(ui.surface2(),14));
-        close.setOnClickListener(v -> { RestAlert.clear(this); finishAndRemoveTask(); });
-        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(-1,ui.dp(48));
-        closeLp.topMargin = ui.dp(24);
-        card.addView(close,closeLp);
+        int minutes = Math.max(1, Math.min(RestReminder.MAX_EVERY,
+                getIntent().getIntExtra("minutes", RestReminder.DEFAULT_EVERY)));
+        RestReminderCard card = new RestReminderCard(this, bitmap, slide,
+                T.f("已经连续 %d 分钟没休息，站起来走走，看看远处。", minutes),
+                ReminderStore.confirm(this),
+                () -> { if (dismissible()) RestAlert.clear(this); });
+        artwork = card.artwork;
         setContentView(card);
-        int width = Math.min(getResources().getDisplayMetrics().widthPixels-ui.dp(40),ui.dp(400));
-        getWindow().setLayout(width,ViewGroup.LayoutParams.WRAP_CONTENT);
-        ThemeStore.typography(card);
+        getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        getWindow().getDecorView().setPadding(0, 0, 0, 0);
+        android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
+        float ratio = bitmap.getWidth() / (float) bitmap.getHeight();
+        int width = Math.min(metrics.widthPixels - ui.dp(32), ui.dp(560));
+        width = Math.min(width, (int)((metrics.heightPixels - ui.dp(96)) * ratio));
+        getWindow().setLayout(width, Math.round(width / ratio));
     }
 
-    @Override public void onBackPressed() { RestAlert.clear(this); finishAndRemoveTask(); }
+    /** 15 秒内按返回不关：想走就得把这 15 秒走完。 */
+    @Override public void onBackPressed() { if (dismissible()) RestAlert.clear(this); }
+
+    @Override protected void onSaveInstanceState(Bundle out) {
+        out.putInt("rest_card", slide);
+        super.onSaveInstanceState(out);
+    }
 
     @Override protected void onDestroy() {
+        timer.removeCallbacks(autoClose);
+        if (artwork != null) artwork.setImageDrawable(null);
         if(current.get()==this) current.clear();
         super.onDestroy();
     }

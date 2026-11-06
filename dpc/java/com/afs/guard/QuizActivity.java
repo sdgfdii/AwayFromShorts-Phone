@@ -17,11 +17,20 @@ import java.util.*;
 public class QuizActivity extends ThemedActivity {
     private static final int IMPORT=71,EXPORT=72,TEMPLATE=73,TEMPLATE_CSV=74,TEMPLATE_TXT=75;
     private Ui ui; private QuizData data;
-    private LinearLayout body; private ScrollView scroll;
+    private LinearLayout body,stickyActions; private ScrollView scroll;
     private String page="home",subject=T.s("高数"),chapter="",mode="all",search="",importSubject=T.s("高数"),lastDeleted="";
     private EditText notes;
-    private boolean busy, draftDirty;
+    private boolean busy, draftDirty, pageActive;
+    private final ArrayList<Runnable> deferredUi=new ArrayList<>();
+    private void deliverUi(Runnable action){runOnUiThread(()->{
+        if(isFinishing()||isDestroyed())return;
+        if(pageActive)action.run();else deferredUi.add(action);
+    });}
     private boolean managementMode;
+    private long homeRevision=-1;
+    private String homeDate="";
+    private String homeLink="";
+    private String linkState(){return LearningLink.quizEnabled(this)+":"+LearningLink.quizTarget(this);}
     private ProgressDialog importProgress;
     private final Handler handler=new Handler();
     private final ArrayList<QuizMathView> mathViews=new ArrayList<>();
@@ -44,16 +53,25 @@ public class QuizActivity extends ThemedActivity {
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);
         if(intent.getBooleanExtra("from_bottom_nav",false)||intent.getBooleanExtra("open_learning",false)){
-            resetPageScroll();managementMode=false;handler.removeCallbacksAndMessages(null);home();
+            boolean reuse="home".equals(page)&&!managementMode&&homeRevision==QuizStore.revision()
+                &&homeDate.equals(date("yyyy-MM-dd"))&&homeLink.equals(linkState());
+            resetPageScroll();managementMode=false;handler.removeCallbacksAndMessages(null);if(!reuse)home();
         }else if(intent.getBooleanExtra(CardManagementActivity.EXTRA_MANAGE,false)){managementMode=true;home();}
     }
     @Override protected void onResume(){
         super.onResume();
         if(ui!=null && ui.dark!=Ui.isDark(this)){recreate();return;}
         FloatingNav.fullscreen(this);
+        pageActive=true;
+        if(busy&&importProgress!=null&&deferredUi.isEmpty())importProgress.show();
+        if("home".equals(page)&&(homeRevision!=QuizStore.revision()||!homeDate.equals(date("yyyy-MM-dd"))||!homeLink.equals(linkState()))){
+            try{if(!draftDirty)data=QuizStore.snapshot(this);home();}catch(Exception e){error(e);}
+        }
+        for(QuizMathView v:mathViews)v.setPageActive(true);
+        ArrayList<Runnable> ready=new ArrayList<>(deferredUi);deferredUi.clear();for(Runnable r:ready)r.run();
     }
-    @Override protected void onPause(){super.onPause();handler.removeCallbacks(saveDraft);if(data!=null && draftDirty)flushDraft();}
-    @Override protected void onDestroy(){handler.removeCallbacks(saveDraft);if(importProgress!=null)importProgress.dismiss();destroyMath();super.onDestroy();}
+    @Override protected void onPause(){pageActive=false;for(QuizMathView v:mathViews)v.setPageActive(false);if(importProgress!=null)importProgress.hide();super.onPause();handler.removeCallbacks(saveDraft);if(data!=null && draftDirty)flushDraft();}
+    @Override protected void onDestroy(){deferredUi.clear();handler.removeCallbacks(saveDraft);if(importProgress!=null)importProgress.dismiss();destroyMath();super.onDestroy();}
     @Override public void onBackPressed(){
         if(busy)return;
         if("home".equals(page)){super.onBackPressed();return;}
@@ -84,8 +102,18 @@ public class QuizActivity extends ThemedActivity {
         destroyMath();notes=null;
         scroll=new ScrollView(this);scroll.setFillViewport(true);ui.page(scroll);
         body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(ui.dp(20),ui.dp(24),ui.dp(20),ui.dp(32));scroll.addView(body);
-        setContentView(FloatingNav.wrap(this,scroll,managementMode?4:1));getWindow().setStatusBarColor(ui.bg());getWindow().setNavigationBarColor(ui.bg());
+        int topPad=("home".equals(page)&&!managementMode)?ui.dp(16):ui.dp(24);
+        body.setPadding(ui.dp(20),topPad,ui.dp(20),ui.dp(32));scroll.addView(body);
+        FrameLayout stage=new FrameLayout(this);
+        stage.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
+        stickyActions=new LinearLayout(this);stickyActions.setOrientation(LinearLayout.HORIZONTAL);
+        stickyActions.setGravity(Gravity.CENTER);int stickyPad=ui.dp(6);stickyActions.setPadding(stickyPad,stickyPad,stickyPad,stickyPad);
+        stickyActions.setBackground(ui.round(ui.surface(),20f,ui.mix(ui.line(),ui.surface(),.45f),.7f));
+        stickyActions.setElevation(ui.dp(8));stickyActions.setVisibility(View.GONE);
+        FrameLayout.LayoutParams stickyLp=new FrameLayout.LayoutParams(-1,-2);
+        stickyLp.gravity=Gravity.BOTTOM;stickyLp.setMargins(ui.dp(20),0,ui.dp(20),ui.dp(16));
+        stage.addView(stickyActions,stickyLp);
+        setContentView(NavPolicy.quizShowsNav(managementMode,page) ? FloatingNav.wrap(this,stage,1,scroll) : FloatingNav.plain(this,stage));getWindow().setStatusBarColor(ui.bg());getWindow().setNavigationBarColor(ui.bg());
         FloatingNav.fullscreen(this);
         if(!"home".equals(page)||managementMode){
         TextView back=text(managementMode&&"home".equals(page)?T.s("‹  卡管理"):T.s("‹  刷题"),14,ui.accent());
@@ -95,12 +123,40 @@ public class QuizActivity extends ThemedActivity {
     }
     private TextView text(String s,int size,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);t.setLineSpacing(ui.dp(3),1);return t;}
     private void hint(LinearLayout parent,String s){TextView t=text(s,13,ui.text2());t.setPadding(0,ui.dp(8),0,ui.dp(14));parent.addView(t);}
-    private TextView button(LinearLayout parent,String label,boolean primary,Runnable action){
+    private TextView actionButton(String label,boolean primary,Runnable action){
         TextView t=text(label,15,primary?ui.onAccent():ui.accent());t.setGravity(Gravity.CENTER);
         SwissTypography.role(t,SwissTypography.Role.BUTTON);
         t.setTypeface(Typeface.DEFAULT_BOLD);t.setMinHeight(ui.dp(48));t.setPadding(ui.dp(12),ui.dp(12),ui.dp(12),ui.dp(12));
         ActionFeedback.bind(t,ui,primary?ui.accent():ui.amap?ui.surface():ui.surface2(),ui.amap?99:13,primary?ui.onAccent():ui.accent());
-        LinearLayout.LayoutParams lp=ui.gap(8);parent.addView(t,lp);t.setOnClickListener(v->{if(!busy)act(action);});return t;
+        t.setOnClickListener(v->{if(!busy)act(action);});return t;
+    }
+    private TextView button(LinearLayout parent,String label,boolean primary,Runnable action){
+        TextView t=actionButton(label,primary,action);
+        parent.addView(t,ui.gap(8));return t;
+    }
+    private void revealStickyActions(){
+        if(stickyActions==null)return;
+        stickyActions.setVisibility(View.VISIBLE);stickyActions.setAlpha(0f);stickyActions.setTranslationY(ui.dp(12));
+        int duration=MotionPolicy.enabled(this)?180:0;
+        stickyActions.animate().alpha(1f).translationY(0f).setDuration(duration).start();
+        body.setPadding(ui.dp(20),ui.dp(24),ui.dp(20),ui.dp(104));
+    }
+    private void showStickyAction(String label,Runnable action){
+        if(stickyActions==null)return;
+        stickyActions.animate().cancel();stickyActions.removeAllViews();
+        TextView next=actionButton(label,true,action);
+        stickyActions.addView(next,new LinearLayout.LayoutParams(-1,ui.dp(52)));
+        revealStickyActions();
+    }
+    private void showStickyReviewActions(){
+        if(stickyActions==null)return;
+        stickyActions.animate().cancel();stickyActions.removeAllViews();
+        TextView correct=actionButton(T.s("核对后：做对了"),true,()->grade(true));
+        TextView review=actionButton(T.s("核对后：需复习"),false,()->grade(false));
+        LinearLayout.LayoutParams left=new LinearLayout.LayoutParams(0,ui.dp(52),1f);left.rightMargin=ui.dp(6);
+        LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,ui.dp(52),1f);
+        stickyActions.addView(correct,left);stickyActions.addView(review,right);
+        revealStickyActions();
     }
     private LinearLayout card(){LinearLayout c=ui.card();c.setElevation(ui.dp(3));body.addView(c,ui.gap(12));return c;}
     private void math(LinearLayout parent,String value){QuizMathView v=new QuizMathView(this,ui,value);mathViews.add(v);parent.addView(v);}
@@ -109,11 +165,13 @@ public class QuizActivity extends ThemedActivity {
     private void home(){
         if(!flushDraft())return;   // 先确认草稿已保存，再改变页面状态
         if(managementMode){settingsHome();return;}
-        page="home";
+        if(!draftDirty&&homeRevision!=QuizStore.revision())data=QuizStore.snapshot(this);
+        page="home";homeRevision=QuizStore.revision();homeDate=date("yyyy-MM-dd");homeLink=linkState();
         List<String> available=data.subjects();
         if(!available.contains(subject)){subject=available.isEmpty()?"":available.get(0);chapter="";}
         base(T.s("刷题"),T.s("自定义科目与题库，按自己的节奏练习。"));
         int[] today=data.stats(date("yyyy-MM-dd")),month=data.stats(date("yyyy-MM")),all=data.stats("");
+        homeHeader(subject,today);
         LinearLayout stats=card();TextView n=text(today[0]+T.s(" 题"),32,ui.text());n.setTypeface(Typeface.DEFAULT_BOLD);stats.addView(n);
         hint(stats,T.s("今日作答  ·  正确率 ")+accuracy(today));
         stats.addView(text(T.s("本月 ")+month[0]+T.s(" 题   /   累计 ")+all[0]+T.s(" 题   /   累计正确率 ")+accuracy(all),12,ui.text2()));
@@ -151,6 +209,46 @@ public class QuizActivity extends ThemedActivity {
         body.addView(subjectScroll,ui.gap(12));
         // 管理学科跟着页面走，放在最下面：不再占着首屏的固定位置
         hint(body,T.s("学科、题库与每日目标设置在守卫 → 卡管理 → 刷题卡。选择题自动判分；其他题目查看解析后自行核对。"));
+    }
+    private void homeHeader(String subject,int[] today){
+        LinearLayout head=new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.addView(new View(this),new LinearLayout.LayoutParams(0,1,1f));
+        TextView tools=ui.iconButton("•••",ui.text2(),ui.surface());
+        tools.setContentDescription(T.s("刷题设置"));
+        tools.setOnClickListener(v->settingsHome());
+        head.addView(tools,new LinearLayout.LayoutParams(ui.dp(44),ui.dp(44)));
+        LinearLayout.LayoutParams headLp=new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+        headLp.bottomMargin=ui.dp(8);
+        body.addView(head,headLp);
+
+        LinearLayout chips=new LinearLayout(this);
+        chips.setOrientation(LinearLayout.HORIZONTAL);
+        chips.setGravity(Gravity.CENTER_VERTICAL);
+        TextView current=ui.chip(subject.isEmpty()?T.s("暂无学科"):subject,
+                ui.accent(),(ui.accent()&0x00FFFFFF)|0x26000000);
+        TextView answered=ui.chip(T.s("今日 ")+today[0]+T.s(" 题"),
+                ui.text2(),ui.surface());
+        answered.setBackground(ui.round(ui.surface(),99f,
+                ui.mix(ui.line(),ui.surface(),.35f),.7f));
+        TextView rate=ui.chip(T.s("正确率 ")+accuracy(today),
+                ui.green(),(ui.green()&0x00FFFFFF)|0x1F000000);
+        chips.addView(current);
+        LinearLayout.LayoutParams chipLp=new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+        chipLp.leftMargin=ui.dp(8);
+        chips.addView(answered,chipLp);
+        LinearLayout.LayoutParams rateLp=new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+        rateLp.leftMargin=ui.dp(8);
+        chips.addView(rate,rateLp);
+        LinearLayout.LayoutParams chipsLp=new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT);
+        chipsLp.topMargin=ui.dp(6);
+        chipsLp.bottomMargin=ui.dp(14);
+        body.addView(chips,chipsLp);
     }
     private void settingsHome(){
         page="home";base(T.s("刷题卡设置"),T.s("每日目标、学习联动、学科与题库。"));
@@ -255,8 +353,8 @@ public class QuizActivity extends ThemedActivity {
             String solution=T.s("参考答案：")+q.optString("answer");
             if(QuizData.objective(q)&&graded)solution=T.s("你的答案：")+s.optString("selected")+"\n"+solution;
             solution+="\n\n"+(q.optString("analysis").isEmpty()?T.s("本题未提供解析。"):q.optString("analysis"));math(analysis,solution);
-            if(!graded){button(body,T.s("核对后：做对了"),true,()->grade(true));button(body,T.s("核对后：需复习"),false,()->grade(false));}
-            else button(body,s.optInt("index")+1==ids.length()?T.s("查看本轮结果"):T.s("下一题"),true,()->{data.next();save();practice();});
+            if(!graded)showStickyReviewActions();
+            else showStickyAction(s.optInt("index")+1==ids.length()?T.s("查看本轮结果"):T.s("下一题"),()->{data.next();save();practice();});
         }
         hint(body,T.s("本轮已完成 ")+s.optInt("done")+T.s(" 题 · 做对 ")+s.optInt("right")+T.s(" 题。返回后可继续。"));
     }
@@ -286,7 +384,7 @@ public class QuizActivity extends ThemedActivity {
         enabled.setTextColor(ui.text());enabled.setChecked(LearningLink.quizEnabled(this));box.addView(enabled);
         EditText target = new EditText(this);target.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         target.setText(String.valueOf(LearningLink.quizTarget(this)));target.setHint(T.s("每日题数（1–1000）"));box.addView(target);
-        hint(box,T.s("开启后，打卡页显示刷题卡；在刷题页面完成每日题数。20:00 未完成时参与学习联动。"));
+        hint(box,T.s("开启后，打卡页显示刷题卡；在刷题页面完成每日题数。当天未完成时参与学习联动，从应用冻结结束点继续冻结。"));
         AlertDialog dialog=ThemeStore.dialog(this).setTitle(T.s("刷题目标")).setView(box)
                 .setPositiveButton(T.s("保存"),null).setNegativeButton(T.s("取消"),null).create();
         dialog.setOnShowListener(ignored -> dialog.getButton(-1).setOnClickListener(v -> {
@@ -365,7 +463,7 @@ public class QuizActivity extends ThemedActivity {
             try{
                 final String converted=QuizImport.text(value,"",fallback);
                 QuizData.ImportResult result=snapshot.prepareImport(converted,fallback,T.s("导入题库"));
-                runOnUiThread(()->{progress.dismiss();busy=false;if(isFinishing()||isDestroyed())return;
+                deliverUi(()->{progress.dismiss();busy=false;if(isFinishing()||isDestroyed())return;
                     if(result.added==0){ThemeStore.dialog(this).setTitle(T.s("没有新题目")).setMessage(T.s("重复 ")+result.duplicates+T.s(" 题，现有进度已保留。")).setPositiveButton(T.s("知道了"),null).show();return;}
                     Map<String,Integer> counts=new LinkedHashMap<>();JSONArray qs=result.candidate.questions();StringBuilder example=new StringBuilder();
                     for(int i=data.questions().length();i<qs.length();i++){
@@ -380,7 +478,7 @@ public class QuizActivity extends ThemedActivity {
                             Toast.makeText(this,T.s("已导入 ")+latest.added+T.s(" 题"),Toast.LENGTH_SHORT).show();
                         })).show();
                 });
-            }catch(Exception e){runOnUiThread(()->{progress.dismiss();busy=false;if(!isFinishing()&&!isDestroyed())error(e);});}
+            }catch(Exception e){deliverUi(()->{progress.dismiss();busy=false;if(!isFinishing()&&!isDestroyed())error(e);});}
         },"afs-quiz-import").start();
     }
     private void toolsMenu(){
@@ -404,8 +502,8 @@ public class QuizActivity extends ThemedActivity {
             new Thread(()->{try{
                 List<String> files=new ArrayList<>();
                 for(Uri item:selected){String name=importFileName(item);try(InputStream in=getContentResolver().openInputStream(item)){files.add(QuizImport.read(in,name,fallback));}}
-                String value=QuizImport.combine(files);runOnUiThread(()->{progress.dismiss();busy=false;if(!isFinishing()&&!isDestroyed())preview(value);});
-            }catch(Exception e){runOnUiThread(()->{progress.dismiss();busy=false;if(!isFinishing()&&!isDestroyed())error(e);});}},"afs-quiz-read").start();
+                String value=QuizImport.combine(files);deliverUi(()->{progress.dismiss();busy=false;if(!isFinishing()&&!isDestroyed())preview(value);});
+            }catch(Exception e){deliverUi(()->{progress.dismiss();busy=false;if(!isFinishing()&&!isDestroyed())error(e);});}},"afs-quiz-read").start();
         }else if(request==EXPORT||request==TEMPLATE||request==TEMPLATE_CSV||request==TEMPLATE_TXT){
             if(uri==null)return;
             act(()->{try{

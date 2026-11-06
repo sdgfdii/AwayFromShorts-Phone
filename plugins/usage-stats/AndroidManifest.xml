@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.afs.plugin.usagestats">
+
+    <!-- The only permission requested: the host's signature-level IPC permission.
+         No INTERNET, QUERY_ALL_PACKAGES, PACKAGE_USAGE_STATS, device admin,
+         accessibility, VPN or boot permission. -->
+    <uses-permission android:name="com.afs.guard.permission.PLUGIN_STATS_V1" />
+
+    <!-- Package visibility only; this is not a runtime permission. It lets the
+         plugin verify and bind the explicit host component on Android 11+. -->
+    <queries>
+        <package android:name="com.afs.guard" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+
+        <activity
+            android:name=".UsageStatsActivity"
+            android:exported="true"
+            android:permission="com.afs.guard.permission.PLUGIN_STATS_V1"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode|locale|layoutDirection|fontScale"
+            android:label="@string/app_name" />
+
+        <service
+            android:name=".PluginEndpointService"
+            android:exported="true"
+            android:permission="com.afs.guard.permission.PLUGIN_STATS_V1">
+            <intent-filter>
+                <action android:name="com.afs.guard.PLUGIN_V1" />
+            </intent-filter>
+            <meta-data
+                android:name="com.afs.guard.plugin.manifest"
+                android:resource="@xml/plugin_manifest" />
+        </service>
+    </application>
+</manifest>

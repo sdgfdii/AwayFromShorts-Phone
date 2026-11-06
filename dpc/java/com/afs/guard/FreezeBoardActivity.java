@@ -65,6 +65,7 @@ public class FreezeBoardActivity extends ThemedActivity {
     private String reasonRevision="";
     private Map<String,Integer> reasonCache=java.util.Collections.emptyMap();
     private Map<String,Boolean> frozenCache=java.util.Collections.emptyMap();
+    private Map<String,Boolean> hiddenCache=java.util.Collections.emptyMap();
     private String reasonLabel(int reason){return reason<0?T.s("正在检查状态"):Guard.blockReasonText(reason);}
     private TextView gateNote;   // 学习联动还差什么（点一下跳到对应页面）
     private TextView netHint;    // 底部「断网应用设置」那行小字，运行状态会变，单独留个引用
@@ -213,14 +214,21 @@ public class FreezeBoardActivity extends ThemedActivity {
         ruleSnapshot = RuleStore.exportRules(this);
         dailySnapshot=DailyQuotaStore.snapshot(this).config.toString();
         screen = new LinearLayout(this); screen.setOrientation(LinearLayout.VERTICAL);
-        look.page(screen); screen.setPadding(dp(8), dp(24), dp(8), dp(16));
+        look.page(screen); screen.setPadding(dp(8), dp(20), dp(8), dp(16));
         LinearLayout top = new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = text(T.s("冻结应用"), 27, look.text()); title.setTypeface(Typeface.DEFAULT_BOLD);
-        SwissTypography.role(title,SwissTypography.Role.TITLE);
-        top.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        top.addView(action(T.s("设置"), v -> settings()));
-        TextView hint = text(T.s("蓝色表示定时冻结 · 学习联动另计"), 12, look.text2());
-        hint.setPadding(0, dp(5), 0, dp(4));
+        top.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        TextView running = look.chip(T.s("运行中"), look.green(),
+                look.dark ? 0xFF17342B : 0xFFE7F7EF);
+        LinearLayout.LayoutParams runningLp = new LinearLayout.LayoutParams(-2, -2);
+        runningLp.rightMargin = dp(10);
+        top.addView(running, runningLp);
+        View settingsButton = look.settingsButton(look.text2(), look.surface());
+        settingsButton.setContentDescription(T.s("冻结设置"));
+        settingsButton.setOnClickListener(v -> settings());
+        top.addView(settingsButton, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        LinearLayout.LayoutParams topLp = new LinearLayout.LayoutParams(-1, -2);
+        topLp.bottomMargin = dp(8);
+        screen.addView(top, topLp);
         // 只写「学习联动冻结」太含糊：这里直接写清是记忆闪卡还是打卡没完成，并且可点过去
         gateNote = text("", 12, look.red());
         gateNote.setPadding(dp(12), dp(9), dp(12), dp(9));
@@ -270,7 +278,7 @@ public class FreezeBoardActivity extends ThemedActivity {
     private LinearLayout slotCard(final FreezeSlotStore.Slot slot) {
         final LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16));
-        card.setBackground(slotBackground(false)); card.setElevation(dp(look.amap?2:7));
+        card.setBackground(slotBackground(false)); card.setElevation(dp(look.amap?2:3));
         card.setClipChildren(false); card.setClipToPadding(false);
         List<String> members = FreezeSlotStore.members(slot, rules);
         LinearLayout header = new LinearLayout(this); header.setGravity(Gravity.CENTER_VERTICAL);
@@ -358,6 +366,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         libraryHidden = getSharedPreferences(Ui.SP, 0).getBoolean("freeze_library_hidden", false);
         library = new LibrarySheet(); library.setOrientation(LinearLayout.VERTICAL);
         library.setPadding(dp(12), dp(5), dp(12), dp(7)); library.setBackground(look.round(look.surface(), 20));
+        library.setElevation(dp(4));
         libraryHandle = text("", 11, look.text3()); libraryHandle.setGravity(Gravity.CENTER);
         libraryHandle.setOnClickListener(v -> setLibraryHidden(!libraryHidden, true));
         libraryHandle.setContentDescription(T.s("展开或收起应用库"));
@@ -547,7 +556,7 @@ public class FreezeBoardActivity extends ThemedActivity {
         name.setSingleLine(true); name.setEllipsize(android.text.TextUtils.TruncateAt.END); labels.addView(name);
         if (compact) {
             LibraryApp visual = new LibraryApp(); visual.pkg = pkg; visual.tile = tile; visual.icon = icon; visual.name = name;
-            try { getPackageManager().getApplicationInfo(pkg, 0); visual.installed = true; } catch (Exception ignored) { }
+            visual.installed = Guard.installed(getPackageManager(), pkg);
             visual.detail = text("", 9, look.text3()); labels.addView(visual.detail);
             tile.setTag(visual); libraryApps.add(visual); updateLibraryApp(visual);
         }
@@ -595,7 +604,9 @@ public class FreezeBoardActivity extends ThemedActivity {
             TextView t = (TextView)view;
             // 文案没变就别 setText：setText 会给这个 TextView 判脏，整屏几十个一起改就是一次
             // 全页重新录制 display list（实测这类刷新帧 40ms+）。颜色同理。
-            CharSequence next = reasonLabel(reason)+quotaLabel + (statusKeys.contains(pkg) ? T.s(" · 关键") : "")+(limit>0?" · "+(FreezeSlotStore.unassigned(rules.get(pkg))?T.s("全天"):T.s("时段"))+T.s("额度 ")+limit+T.s("分/日"):"");
+            // 隐藏顶冻结（如 Google Play 这类挂不起的系统应用）额外标「已隐藏」，让人知道它确实被挡住了。
+            boolean hidden=Boolean.TRUE.equals(hiddenCache.get(pkg));
+            CharSequence next = reasonLabel(reason)+(hidden?T.s("（已隐藏）"):"")+quotaLabel + (statusKeys.contains(pkg) ? T.s(" · 关键") : "")+(limit>0?" · "+(FreezeSlotStore.unassigned(rules.get(pkg))?T.s("全天"):T.s("时段"))+T.s("额度 ")+limit+T.s("分/日"):"");
             if (!next.equals(t.getText())) t.setText(next);
             int color = blocked ? look.red() : look.green();
             if (t.getCurrentTextColor() != color) t.setTextColor(color);
@@ -615,17 +626,19 @@ public class FreezeBoardActivity extends ThemedActivity {
     private void statusSnapshot() {
         statusNow=GuardClock.now(this);statusKeys=RuleStore.keyApps(this);statusRules=Guard.enforcedRules(this);
         final String revision=RuleStore.exportRules(this)+DailyQuotaStore.snapshot(this).config.toString();
-        if(!revision.equals(reasonRevision)){reasonRevision=revision;reasonCache=java.util.Collections.emptyMap();frozenCache=java.util.Collections.emptyMap();}
+        if(!revision.equals(reasonRevision)){reasonRevision=revision;reasonCache=java.util.Collections.emptyMap();frozenCache=java.util.Collections.emptyMap();hiddenCache=java.util.Collections.emptyMap();}
         if(statusWorkerBusy||disposed)return;statusWorkerBusy=true;
         final Calendar now=(Calendar)statusNow.clone();final Map<String,Rule> snapshot=new java.util.LinkedHashMap<>(statusRules);final Set<String> keys=new LinkedHashSet<>(statusKeys);final Set<String> catalog=new LinkedHashSet<>();visibleStatusPackages(slotsView,catalog);for(LibraryApp app:libraryApps)catalog.add(app.pkg);
         if(catalog.isEmpty())for(String pkg:snapshot.keySet()){catalog.add(pkg);if(catalog.size()>=24)break;}
         catalogWorker.execute(()->{
-            Map<String,Integer> reasons=new java.util.HashMap<>();Map<String,Boolean> frozen=new java.util.HashMap<>();
+            Map<String,Integer> reasons=new java.util.HashMap<>();Map<String,Boolean> frozen=new java.util.HashMap<>();Map<String,Boolean> hidden=new java.util.HashMap<>();
             try{boolean hold=StudyGate.holding(this,now),taboo=StudyGate.tabooHolding(now.getTimeInMillis(),StudyGate.tabooUntil(this)),reward=CardStore.rewardUntil(this,now.getTimeInMillis())>0;
                 Set<String> packages=catalog;
-                for(String pkg:packages){reasons.put(pkg,Guard.blockReasonNow(this,pkg,now,snapshot,keys,hold,taboo,reward));try{frozen.put(pkg,(getPackageManager().getApplicationInfo(pkg,0).flags&android.content.pm.ApplicationInfo.FLAG_SUSPENDED)!=0);}catch(android.content.pm.PackageManager.NameNotFoundException ignored){frozen.put(pkg,false);}}
+                for(String pkg:packages){reasons.put(pkg,Guard.blockReasonNow(this,pkg,now,snapshot,keys,hold,taboo,reward));try{frozen.put(pkg,(getPackageManager().getApplicationInfo(pkg,0).flags&android.content.pm.ApplicationInfo.FLAG_SUSPENDED)!=0);}catch(android.content.pm.PackageManager.NameNotFoundException ignored){frozen.put(pkg,false);}
+                    // 隐藏顶冻结（ROM 不让挂起系统应用时的退路）：只有判定为冻结、却没真挂起时才去问，省 IPC。
+                    hidden.put(pkg,(reasons.get(pkg)!=null&&reasons.get(pkg)!=0&&!Boolean.TRUE.equals(frozen.get(pkg)))&&Guard.hiddenNow(this,pkg));}
             }catch(RuntimeException ignored){}
-            handler.post(()->{statusWorkerBusy=false;if(disposed)return;if(!revision.equals(reasonRevision)){statusSnapshot();return;}reasonCache=reasons;frozenCache=frozen;for(LibraryApp app:libraryApps)updateLibraryApp(app);refreshBadges(slotsView);});
+            handler.post(()->{statusWorkerBusy=false;if(disposed)return;if(!revision.equals(reasonRevision)){statusSnapshot();return;}reasonCache=reasons;frozenCache=frozen;hiddenCache=hidden;for(LibraryApp app:libraryApps)updateLibraryApp(app);refreshBadges(slotsView);});
         });
     }
     /** 写清「学习联动为什么还在冻」，点这一行直接跳到该补的那件事。 */
@@ -658,7 +671,9 @@ public class FreezeBoardActivity extends ThemedActivity {
         int reason = app.installed ? statusReason(app.pkg) : 0;
         // The library reflects the phone's current suspension state, not a future schedule.
         boolean frozen = Boolean.TRUE.equals(frozenCache.get(app.pkg));
-        boolean muted = frozen;
+        boolean hidden = Boolean.TRUE.equals(hiddenCache.get(app.pkg));
+        // 隐藏顶冻结也算「被挡住」：以前只看 FLAG_SUSPENDED，Google Play 这类会误显示成「可使用」。
+        boolean muted = frozen || hidden;
         if (muted) {
             android.graphics.ColorMatrix matrix = new android.graphics.ColorMatrix(); matrix.setSaturation(0);
             app.icon.setColorFilter(new android.graphics.ColorMatrixColorFilter(matrix));
@@ -674,7 +689,9 @@ public class FreezeBoardActivity extends ThemedActivity {
             app.detail.setTextColor(muted?look.text3():look.text2());
             return;
         }
-        app.detail.setText(!app.installed ? T.s("未安装") : frozen ? (reason == 0 ? T.s("已冻结") : reasonLabel(reason))
+        app.detail.setText(!app.installed ? T.s("未安装")
+                : hidden ? (reason == 0 ? T.s("已冻结（隐藏）") : reasonLabel(reason)+T.s("（已隐藏）"))
+                : frozen ? (reason == 0 ? T.s("已冻结") : reasonLabel(reason))
                 : reason<0?T.s("正在检查状态"): (!rules.containsKey(app.pkg) || FreezeSlotStore.unassigned(rules.get(app.pkg))) ? T.s("待安排") : T.s("可使用"));
         app.detail.setTextColor(muted ? look.text3() : look.text2());
     }
@@ -978,6 +995,11 @@ public class FreezeBoardActivity extends ThemedActivity {
         dailyBars.put(bar,group.optString("id"));
         card.setOnClickListener(v->quotaEditor(group,null,false));
         card.setOnLongClickListener(v->{quotaMenu(group);return true;});
+        // 挂后台也计时：卡片上直接显示谁在挂后台计时，点它进编辑对话框就能改，别让入口只藏在长按菜单里。
+        TextView bg=text(bgCardText(group),11,look.accent());
+        LinearLayout.LayoutParams bgLp=new LinearLayout.LayoutParams(-1,ViewGroup.LayoutParams.WRAP_CONTENT);bgLp.topMargin=dp(6);
+        bg.setOnClickListener(v->quotaEditor(group,null,false));
+        card.addView(bg,bgLp);
         card.setOnDragListener((v,e)->{
             switch(e.getAction()){
                 case DragEvent.ACTION_DRAG_STARTED: return validDrag(e);
@@ -1149,6 +1171,9 @@ public class FreezeBoardActivity extends ThemedActivity {
         if(preset!=null)chosen.add(preset);
         final boolean[] shared={draftChosen!=null?initialShared:original!=null?original.length()>1:initialShared};
         if(!shared[0]&&chosen.size()>1){String first=chosen.iterator().next();chosen.clear();chosen.add(first);}
+        // 挂后台也计时：只能是本格成员，随应用选择联动裁剪。
+        final Set<String> burning=new java.util.LinkedHashSet<>();
+        if(group!=null)for(String p:DailyQuotaData.backgroundApps(group))if(chosen.contains(p))burning.add(p);
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(22),dp(6),dp(22),0);
         final TextView single=text(T.s("单独"),13,look.text2()),share=text(T.s("共享"),13,look.text2());
         single.setGravity(Gravity.CENTER);share.setGravity(Gravity.CENTER);
@@ -1194,6 +1219,27 @@ public class FreezeBoardActivity extends ThemedActivity {
                             : T.s("单独额度只放一只应用"));
             startActivityForResult(intent,REQ_QUOTA);
         }));
+        // 挂后台也计时：从本格成员里挑谁切到后台还在跑（音乐播放等前台服务）也照计。
+        final TextView burnBtn=action(T.s("挂后台也计时"),v->{});
+        final Runnable burnLabel=()->burnBtn.setText(burning.isEmpty()
+                ? T.s("挂后台也计时：未开启（点这里选应用）")
+                : T.f("挂后台也计时：%d 个应用 · %s",burning.size(),memberSummary(burning)));
+        burnLabel.run();
+        burnBtn.setOnClickListener(v->{
+            if(chosen.isEmpty()){toast(T.s("先选择应用，再挑谁挂后台也计时"));return;}
+            List<String> apps=new ArrayList<>(chosen);boolean[] on=new boolean[apps.size()];
+            for(int i=0;i<apps.size();i++)on[i]=burning.contains(apps.get(i));
+            String[] labels=new String[apps.size()];for(int i=0;i<apps.size();i++)labels[i]=appLabel(apps.get(i));
+            ThemeStore.dialog(this).setTitle(T.s("挂后台也计时（切到后台还在跑就照计）"))
+                .setMultiChoiceItems(labels,on,(d,b,checked)->on[b]=checked).setNegativeButton(T.s("取消"),null)
+                .setPositiveButton(T.s("确定"),(d,b)->{
+                    Set<String> next=new java.util.LinkedHashSet<>();for(int i=0;i<apps.size();i++)if(on[i])next.add(apps.get(i));
+                    if(growOnly&&!next.containsAll(burning)){toast(T.f("取消挂后台计时要等调整时段 %s",TimeWindow.label(this)));return;}
+                    burning.clear();burning.addAll(next);burnLabel.run();
+                }).show();
+        });
+        box.addView(burnBtn);
+        box.addView(text(T.s("「挂后台也计时」：勾中的应用切到后台后，只要还在跑（音乐播放、画中画这类前台服务在运行）就继续计时，关掉就停；锁屏、灭屏也不打断。不勾的应用维持只计前台。"),11,look.text3()));
         final AlertDialog dialog=ThemeStore.dialog(this).setTitle(group==null?T.s("新建额度"):T.s("修改额度")).setView(box).setNegativeButton(T.s("取消"),null).setPositiveButton(T.s("保存"),null).create();
         holder[0]=dialog;
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
@@ -1208,7 +1254,10 @@ public class FreezeBoardActivity extends ThemedActivity {
                 org.json.JSONObject next=MemoryData.copy(DailyQuotaStore.snapshot(this).config);
                 String id=group==null?java.util.UUID.randomUUID().toString():group.optString("id");
                 org.json.JSONArray groups=DailyQuotaData.without(next,id);
-                groups.put(new org.json.JSONObject().put("id",id).put("name",label).put("minutes",limit).put("apps",new org.json.JSONArray(chosen)));
+                org.json.JSONObject built=new org.json.JSONObject().put("id",id).put("name",label).put("minutes",limit).put("apps",new org.json.JSONArray(chosen));
+                Set<String> bgKeep=new java.util.LinkedHashSet<>(burning);bgKeep.retainAll(chosen);
+                if(!bgKeep.isEmpty())built.put("background",new org.json.JSONArray(bgKeep));
+                groups.put(built);
                 DailyQuotaData.put(next,"groups",groups);
                 DailyQuotaData.put(next,"enabled",true);
                 DailyQuotaData.validate(next);
@@ -1221,6 +1270,13 @@ public class FreezeBoardActivity extends ThemedActivity {
     private String appLabel(String pkg){
         String cached=appNames.get(pkg);
         return cached!=null&&!cached.isEmpty()?cached:Guard.labelOf(getPackageManager(),pkg);
+    }
+    /** 额度卡上那一行「挂后台也计时」：直接告诉用户谁在挂后台计时，没开也提示可以点进去开。 */
+    private String bgCardText(org.json.JSONObject group){
+        Set<String> bg=DailyQuotaData.backgroundApps(group);
+        if(bg.isEmpty())return T.s("挂后台也计时：未开启（点这里选应用）");
+        StringBuilder named=new StringBuilder();for(String p:bg){if(named.length()>0)named.append(T.s("、"));named.append(appLabel(p));}
+        return T.f("挂后台也计时：%d 个应用 · %s",bg.size(),named.toString());
     }
     private String memberSummary(org.json.JSONObject group){
         List<String> apps=new ArrayList<>();org.json.JSONArray list=group.optJSONArray("apps");
@@ -1315,12 +1371,13 @@ public class FreezeBoardActivity extends ThemedActivity {
         statusBox.setOrientation(LinearLayout.VERTICAL);
         statusBox.setPadding(dp(14), dp(13), dp(14), dp(13));
         statusBox.setBackground(look.round((((reason<0?look.text3():reason == 0 ? look.green() : look.red()) & 0x00ffffff) | 0x14000000), 16f));
-        TextView statusTitle = text(reason == 0 ? T.s("现在可以使用") : reasonLabel(reason), 16,
+        boolean panelHidden = reason != 0 && Boolean.TRUE.equals(hiddenCache.get(pkg)) && !Boolean.TRUE.equals(frozenCache.get(pkg));
+        TextView statusTitle = text(reason == 0 ? T.s("现在可以使用") : reasonLabel(reason)+(panelHidden?T.s("（已隐藏）"):""), 16,
                 reason<0?look.text3():reason == 0 ? look.green() : look.red());
         statusTitle.setTypeface(Typeface.DEFAULT_BOLD);
         statusBox.addView(statusTitle);
         String why = reason<0?T.s("正在后台核验冻结状态，请稍候。") : reason == 1 ? T.s("当前正好落在自身设置的冻结时段里，过点会自动放开。")
-                : reason == 2 ? T.s("20:00 后打卡没完成，学习联动会一直冻到打完；打完还要走完打卡罚时。")
+                : reason == 2 ? T.s("当天任务未完成，学习联动已从原冻结结束点接续；完成后恢复原时段。")
                 : reason == 3 ? T.s("禁忌惩罚的延长冻结还没结束。")
                 : reason == 4 ? AppUsageQuota.status(this, pkg, rule, System.currentTimeMillis())
                 : reason == 5 ? DailyQuotaStore.status(this, pkg)

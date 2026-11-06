@@ -122,16 +122,6 @@ final class AchievementCenter {
         if (host == null || host.isFinishing()) return;
         final List<Achievement.Item> fresh = takeNew(host);
         if (fresh.isEmpty()) return;
-        StringBuilder text = new StringBuilder();
-        for (Achievement.Item item : fresh) {
-            if (text.length() > 0) text.append('\n');
-            text.append(item.glyph).append(' ').append(item.name)
-                    .append(T.s("　")).append(item.note);
-        }
-        ThemeStore.dialog(host)
-                .setTitle(fresh.size() == 1 ? T.s("解锁成就：") + fresh.get(0).name : T.s("解锁了 ") + fresh.size() + T.s(" 个成就"))
-                .setMessage(text.toString())
-                .setPositiveButton(T.s("收下"), null)
-                .show();
+        AchievementCelebration.show(host,fresh);
     }
 }

@@ -9,13 +9,11 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.Gravity;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
@@ -53,7 +51,7 @@ public class MemoryActivity extends ThemedActivity {
     private EditText front, answer, source, note, typed;
     private Spinner type;
     private MemoryImageView editorImage, studyImage;
-    private boolean revealed, submitting, incorrect;
+    private boolean revealed, submitting, graded;
     private boolean flashMode;
     private boolean motionResumed;
     private final java.util.ArrayList<Runnable> deferredUi=new java.util.ArrayList<>();
@@ -61,8 +59,31 @@ public class MemoryActivity extends ThemedActivity {
         if(editorImage!=null)editorImage.setPageActive(active);
         if(studyImage!=null)studyImage.setPageActive(active);
     }
-    private SwipeCardView activeSwipe;
+    private StudyCardSurface activeStudyCard;
+    private String restoredStudyId="", restoredStudyDate="", restoredTyped="";
+    private boolean restoredRevealed,restoredGraded;
+    private long restoredGradedAt,gradedAt;
     private long workGeneration;
+    private volatile long browseGeneration;
+    private long browseEntry;
+    private long browseRevision=-1;
+    private String browseDate="";
+    private final java.util.concurrent.ThreadPoolExecutor browseWorker = new java.util.concurrent.ThreadPoolExecutor(
+        1,1,20,java.util.concurrent.TimeUnit.SECONDS,new java.util.concurrent.ArrayBlockingQueue<Runnable>(1),
+        r->{Thread t=new Thread(r,"afs-memory-browse");t.setDaemon(true);return t;});
+    private int statsPeriod,statsSubject,cardOffset;
+    private MemoryCardQuery.Filter cardFilter=MemoryCardQuery.Filter.ALL;
+    private String cardSearch="";
+    private void cancelBrowse(){browseEntry++;browseGeneration++;browseWorker.getQueue().clear();}
+    private <R> void readMemory(java.util.concurrent.Callable<R> work,java.util.function.Consumer<R> ready){
+        if(isFinishing()||isDestroyed()||browseWorker.isShutdown())return;
+        final long generation=++browseGeneration;
+        browseWorker.allowCoreThreadTimeOut(true);browseWorker.getQueue().clear();
+        browseWorker.execute(()->{
+            try{R result=work.call();handler.post(()->{if(generation==browseGeneration&&!isFinishing()&&!isDestroyed())ready.accept(result);});}
+            catch(Exception error){handler.post(()->{if(generation==browseGeneration&&!isFinishing()&&!isDestroyed())toast(error.getMessage());});}
+        });
+    }
     private ProgressDialog workProgress;
     private final java.util.WeakHashMap<AlertDialog,Boolean> pageWorkDialogs=new java.util.WeakHashMap<>();
     private void clearPageWorkUi(){finishWorkUi();for(AlertDialog dialog:new java.util.ArrayList<>(pageWorkDialogs.keySet()))if(dialog!=null){try{dialog.dismiss();}catch(RuntimeException ignored){}}pageWorkDialogs.clear();}
@@ -72,31 +93,37 @@ public class MemoryActivity extends ThemedActivity {
         if(workProgress!=null){try{workProgress.dismiss();}catch(RuntimeException ignored){}workProgress=null;
             if(!isFinishing()&&!isDestroyed())setRequestedOrientation(workOrientation);}
     }
-    @Override protected void onDestroy(){deferredUi.clear();handler.removeCallbacksAndMessages(null);clearPageWorkUi();super.onDestroy();}
+    @Override protected void onDestroy(){cancelBrowse();browseWorker.shutdownNow();Speech.release();deferredUi.clear();handler.removeCallbacksAndMessages(null);clearPageWorkUi();super.onDestroy();}
     private boolean managementMode;
     private String flashDate = "";
     private long homeRevision=-1;
     private final Handler handler = new Handler();
     private final Runnable queueTick = new Runnable() {
         public void run() {
-            if (motionResumed && "review".equals(page) && current == null) review();
+            if (motionResumed && current == null) {
+                if ("review".equals(page)) review();
+                else if ("home".equals(page)) home();
+            }
         }
-    };
-    /** Runs after the swipe exit animation; a rated card must never come back into view. */
-    private final Runnable advanceTick = new Runnable() {
-        public void run() { advance(); }
     };
     protected void onCreate(Bundle saved) {
         if (Ui.isDark(this)) setTheme(getResources().getIdentifier("NavThemeDark", "style", getPackageName()));
         super.onCreate(saved); ui = new Ui(this);
         if(saved==null&&getIntent().getBooleanExtra("backup_only",false))getWindow().getDecorView().post(()->ThemeStore.dialog(this).setTitle(T.s("记忆备份"))
             .setItems(new String[]{T.s("导出备份（含图片与复习记录）"),T.s("恢复备份")},(dialog,which)->{if(which==0)pickExport();else confirmRestore();}).show());
-        managementMode=getIntent().getBooleanExtra(CardManagementActivity.EXTRA_MANAGE,false);
+        managementMode=saved==null?getIntent().getBooleanExtra(CardManagementActivity.EXTRA_MANAGE,false)
+            :saved.getBoolean("managementMode",getIntent().getBooleanExtra(CardManagementActivity.EXTRA_MANAGE,false));
         if(managementMode&&saved==null)page="tools";
         deck = saved == null ? getIntent().getStringExtra("deck") : saved.getString("deck", "");
         if (deck == null) deck = "";
         if (saved == null && !deck.isEmpty()) page = "review";
         if (saved != null) {
+            restoredStudyId=saved.getString("studyId","");restoredStudyDate=saved.getString("studyDate","");
+            restoredRevealed=saved.getBoolean("studyRevealed",false);restoredTyped=saved.getString("studyTyped","");
+            restoredGraded=saved.getBoolean("studyGraded",false);restoredGradedAt=saved.getLong("studyGradedAt",0);
+            statsPeriod=Math.max(0,Math.min(2,saved.getInt("statsPeriod",0)));statsSubject=Math.max(0,saved.getInt("statsSubject",0));
+            cardOffset=Math.max(0,saved.getInt("cardOffset",0));cardSearch=saved.getString("cardSearch","");cardBrowseDeck=saved.getString("cardBrowseDeck","");
+            cardFilter=MemoryCardQuery.Filter.values()[Math.max(0,Math.min(3,saved.getInt("cardFilter",0)))];
             page = saved.getString("page", "home"); importType = saved.getString("importType", "qa");lastDeleted=saved.getString("lastDeleted","");
             authorFormat = saved.getInt("authorFormat", 0); authorType = saved.getInt("authorType", 0); authorSubject = saved.getString("authorSubject", "");
             try { String s = saved.getString("draft"); if (s != null) draft = new JSONObject(s); } catch (Exception ignored) { }
@@ -112,11 +139,19 @@ public class MemoryActivity extends ThemedActivity {
     }
     protected void onSaveInstanceState(Bundle out) {
         if ("editor".equals(page)) collectDraft();
+        out.putBoolean("managementMode",managementMode);
+        if(current!=null&&(!graded||!submitting)&&("home".equals(page)||"review".equals(page))){
+            out.putString("studyId",current.optString("id"));out.putString("studyDate",MemoryData.date(System.currentTimeMillis()));
+            out.putBoolean("studyRevealed",revealed);out.putString("studyTyped",typed==null?"":typed.getText().toString());
+            out.putBoolean("studyGraded",graded);out.putLong("studyGradedAt",gradedAt);
+        }
+        out.putInt("statsPeriod",statsPeriod);out.putInt("statsSubject",statsSubject);out.putInt("cardOffset",cardOffset);
+        out.putString("cardSearch",cardSearch);out.putString("cardBrowseDeck",cardBrowseDeck);out.putInt("cardFilter",cardFilter.ordinal());
         out.putString("deck", deck); out.putString("page", page); out.putString("importType", importType);out.putString("lastDeleted",lastDeleted);
         out.putInt("authorFormat", authorFormat); out.putInt("authorType", authorType); out.putString("authorSubject", authorSubject);
         if (draft != null) out.putString("draft", draft.toString()); super.onSaveInstanceState(out);
     }
-    protected void onPause() { motionResumed=false;imageActive(false);if(workProgress!=null)workProgress.hide();if(activeSwipe!=null)activeSwipe.cancelVisual();super.onPause(); handler.removeCallbacks(queueTick); handler.removeCallbacks(advanceTick); }
+    protected void onPause() { if(activeStudyCard!=null)activeStudyCard.stopFeedback();motionResumed=false;imageActive(false);if(workProgress!=null)workProgress.hide();super.onPause(); handler.removeCallbacks(queueTick); }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);
         if("editor".equals(page)&&(intent.getBooleanExtra("from_bottom_nav",false)||intent.getBooleanExtra("open_learning",false))){ThemeStore.dialog(this).setTitle(T.s("离开卡片编辑？")).setMessage(T.s("尚未保存的修改会被放弃。")).setNegativeButton(T.s("继续编辑"),null).setPositiveButton(T.s("放弃并进入记忆"),(d,w)->{setIntent(intent);resetPageScroll();managementMode=false;home();}).show();return;}setIntent(intent);
         if(intent.getBooleanExtra("from_bottom_nav",false)||intent.getBooleanExtra("open_learning",false)){
@@ -131,13 +166,16 @@ public class MemoryActivity extends ThemedActivity {
         super.onResume();
         if (ui != null && ui.dark != Ui.isDark(this)) { recreate(); return; }
         FloatingNav.fullscreen(this);
+        if(("stats".equals(page)||"cards".equals(page))&&(browseRevision!=MemoryStore.revision()||!browseDate.equals(MemoryData.date(System.currentTimeMillis())))){
+            if("stats".equals(page))stats();else cards(false);
+        }
         imageActive(true);
         if(workProgress!=null&&deferredUi.isEmpty())workProgress.show();
         java.util.ArrayList<Runnable> ready=new java.util.ArrayList<>(deferredUi);deferredUi.clear();for(Runnable r:ready)r.run();
-        // The card was already graded before the exit animation; resume must not show it again.
+        // A committed rating is never resubmitted after returning from another page.
         if (submitting) { submitting = false; advance(); return; }
-        if ("home".equals(page) && (homeRevision!=MemoryStore.revision()||!flashDate.equals(MemoryData.date(System.currentTimeMillis())))) { home(); return; }
-        if ("review".equals(page) && current == null) handler.postDelayed(queueTick, 1000);
+        if ("home".equals(page) && (!flashDate.equals(MemoryData.date(System.currentTimeMillis()))||(!revealed&&!graded&&homeRevision!=MemoryStore.revision()))) { home(); return; }
+        if (("review".equals(page)||"home".equals(page)) && current == null) queueTick.run();
     }
     public void onBackPressed() {
         if ("home".equals(page)) { super.onBackPressed(); return; }
@@ -165,12 +203,13 @@ public class MemoryActivity extends ThemedActivity {
     }
 
     private void base(String title, String subtitle) {
+        cancelBrowse();
         clearPageWorkUi();
-        handler.removeCallbacks(queueTick); handler.removeCallbacks(advanceTick); current = null;
+        handler.removeCallbacks(queueTick); current = null;activeStudyCard=null;
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); ui.page(scroll);
         body = new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(ui.dp(20), ui.dp(24), ui.dp(20), ui.dp(32)); scroll.addView(body);
-        swapContent(FloatingNav.wrap(this, scroll, managementMode?4:0)); getWindow().setStatusBarColor(ui.bg()); getWindow().setNavigationBarColor(ui.bg());
+        swapContent(NavPolicy.memoryShowsNav(managementMode,page) ? FloatingNav.wrap(this, scroll, 0) : FloatingNav.plain(this, scroll)); getWindow().setStatusBarColor(ui.bg()); getWindow().setNavigationBarColor(ui.bg());
         FloatingNav.fullscreen(this);
         if (!"home".equals(page)) {
         TextView back = ui.sub("tools".equals(page) ? T.s("‹  卡管理") : T.s("‹  记忆卡设置"));
@@ -226,11 +265,17 @@ public class MemoryActivity extends ThemedActivity {
         try { m = MemoryStore.flashSnapshot(this); homeRevision=MemoryStore.revision(); } catch (RuntimeException e) { errorPage(e); return; }
         long now = System.currentTimeMillis(); flashDate = MemoryData.date(now);
         MemoryFlashcards.Progress p = MemoryFlashcards.progress(m, now);
-        JSONObject next = MemoryFlashcards.next(m, now);
-        revealed = false; submitting = false; incorrect = false; current = next; studyImage = null; typed = null;
+        JSONObject next = restoreStudyCard(m,MemoryFlashcards.next(m, now),now);
+        revealed = false; submitting = false; graded = false; gradedAt=0; current = next; studyImage = null; typed = null;
         if (next == null) {
             base(T.s("本日记忆闪卡"), "");
             LinearLayout empty = ui.card(); body.addView(empty, ui.gap(12));
+            if(p.nextDue>now){
+                text(empty,T.s("本轮回忆已结束，稍后继续巩固"),24);
+                hint(empty,T.s("下次复习：")+dueLabel(p.nextDue,now));
+                hint(empty,T.f("已完成 %d / %d · 待巩固 %d",p.done,p.total,p.total-p.done));
+                scheduleQueue(p.nextDue);return;
+            }
             text(empty, p.total > 0 ? T.s("本日闪卡已完成") : T.s("今天没有该复习的卡片"), 24);
             hint(empty, p.total > 0 ? T.s("复习记录已保存，明天按遗忘曲线重新排队。")
                     : p.available == 0 ? T.s("所选学科里没有卡片。可在守卫 → 卡管理 → 记忆卡中添加学科、制作或导入卡片。")
@@ -243,13 +288,35 @@ public class MemoryActivity extends ThemedActivity {
     }
     /** 卡片舞台：整页只有一张卡，页边距和卡内缩与打卡页一致（20dp 页边 + 18dp 卡缩）。 */
     private void baseStage() {
-        handler.removeCallbacks(queueTick); handler.removeCallbacks(advanceTick); current = null;
+        cancelBrowse();
+        handler.removeCallbacks(queueTick); current = null;activeStudyCard=null;
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(ui.dp(20), ui.dp(16), ui.dp(20), ui.dp(24));
-        swapContent(FloatingNav.wrap(this, body, managementMode ? 4 : 0));
+        swapContent(NavPolicy.memoryShowsNav(managementMode,page) ? FloatingNav.wrap(this, body, 0) : FloatingNav.plain(this, body));
         getWindow().setStatusBarColor(ui.bg()); getWindow().setNavigationBarColor(ui.bg());
         FloatingNav.fullscreen(this);
+    }
+    /** Keep the tool control reachable without repeating the page title. */
+    private void stageHeader() {
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.addView(new View(this), new LinearLayout.LayoutParams(0, 1, 1f));
+        TextView tools = ui.iconButton("•••", ui.text2(), ui.surface());
+        tools.setContentDescription(T.s("记忆工具"));
+        tools.setOnClickListener(v -> tools());
+        head.addView(tools, new LinearLayout.LayoutParams(ui.dp(44), ui.dp(44)));
+        LinearLayout.LayoutParams headLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        headLp.bottomMargin = ui.dp(12);
+        body.addView(head, headLp);
+    }
+    private void scheduleQueue(long due){
+        handler.removeCallbacks(queueTick);
+        Calendar tomorrow=Calendar.getInstance();tomorrow.add(Calendar.DAY_OF_MONTH,1);
+        tomorrow.set(Calendar.HOUR_OF_DAY,0);tomorrow.set(Calendar.MINUTE,0);tomorrow.set(Calendar.SECOND,0);tomorrow.set(Calendar.MILLISECOND,0);
+        handler.postDelayed(queueTick,Math.max(1,Math.min(due,tomorrow.getTimeInMillis())-System.currentTimeMillis()));
     }
     private void flashSettings() {
         MemoryData m = MemoryStore.flashSnapshot(this); JSONArray active = m.activeDecks();
@@ -286,15 +353,16 @@ public class MemoryActivity extends ThemedActivity {
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         hint(box,T.s("按你的表现调整\n使用 FSRS-6，根据每次评分、距上次复习的时间、卡片稳定性和难度计算下一次复习，不固定为第 1、3、7 天。它是排程模型，不保证每个人都能达到同样的记忆效果。"));
         hint(box,T.s("今日怎样抽卡\n到期旧卡先来，按可提取率（此刻还记得的概率）从低到高排；新卡只在旧卡之后补位，数量受每天新学上限约束。旧规则（随机 / 顺序 / 全部池 / 仅到期池）已删除，抽取范围只剩学科选择。"));
-        hint(box,T.s("上滑与下滑\n揭晓答案后，上滑按“记住了”评分，下滑按“忘了”评分。输入题答错时不能上滑，需加入重学。今日闪卡每张每天只复习一次；选“忘了”会记录到错题和重学计划，不会在今日闪卡里反复出现。"));
-        hint(box,T.s("新卡的短期学习\n“忘了”：约 1 分钟后可重学；首次“记住了”：约 10 分钟后再确认，再次记住后转入按天复习。“费力想起”：第一步约 5 分 30 秒，后续学习步约 10 分钟；“很轻松”可直接转入按天复习。分钟间隔表示重学计划的到期时间，不会让今日闪卡当天重复抽到该卡。"));
-        hint(box,T.s("已学卡的复习\n按天复习时选“忘了”，约 10 分钟后进入重学；重学中仍忘记，再等约 10 分钟；重学中“费力想起”约 15 分钟后再学，记住后恢复按天复习。按天间隔根据评分动态计算，并从到期日零点开放，不是一律等满 24 小时。"));
+        hint(box,T.s("按钮与评分\n先回忆，再点“显示答案”，最后选择“认识 / 模糊 / 忘记”。滑动、点卡片和核对输入都不会自动评分。每个按钮显示本程序计算的下次复习时间；提交后直接进入下一张。"));
+        hint(box,T.s("不认识\n揭晓前点“不认识”会记一次遗忘并显示答案。看完后点“下一张”，不会再评分；旋转屏幕仍保留这次结果。"));
+        hint(box,T.s("新卡的短期学习\n“忘记”：约 1 分钟后重学；“模糊”：约 5.5–10 分钟后重学；首次“认识”：约 10 分钟后再确认，再次认识后转入按天复习。今日队列保留未学稳的卡，到期后再次出现；等待期间可以先学习其他卡。"));
+        hint(box,T.s("已学卡的复习\n“忘记”：约 10 分钟后重学；“模糊”：约 15 分钟后再次回忆；认识后恢复按天复习。沿用 FSRS 状态计算，三按钮模式额外将复习卡的“模糊”安排到今日巩固。这是本程序公开的规则，不是墨墨的专有算法。"));
         hint(box,T.s("目标记忆率与间隔\n默认目标记忆率为 90%，可在各学科学习设置中调整为 70–97%。调高目标通常会缩短复习间隔、增加复习量；目标记忆率是模型参数，不是测得的个人记忆率。按天间隔至少 1 天，并受该学科的最大间隔限制。当前未使用个人历史自动训练参数。"));
         for(int i=0;i<decks.length();i++){
             JSONObject deck=decks.optJSONObject(i);if(deck==null)continue;
             hint(box,deck.optString("name")+T.s("：目标记忆率 ")+Math.round(MemoryData.retention(deck)*100)+T.s("% · 最大间隔 ")+MemoryData.maxInterval(deck)+T.s(" 天"));
         }
-        hint(box,T.s("进度怎样计算\n今日闪卡进度表示已复习的卡片数，包含选了“忘了”的卡，不代表全部记牢。学习联动以对应学科的学习目标为准：遗忘不计为有效完成；达到复习阶段的有效评分才可能增加完成量，同一计划内不重复计数。"));
+        hint(box,T.s("进度怎样计算\n卡面进度表示已完成本日学习步骤的卡片数，待巩固的卡不算完成；“已处理”按卡片去重，统计中的评分次数可以包含同日重学。只有选“认识”并进入按天复习才计入学科目标，每张卡在同一计划内只计一次。模糊和忘记不增加有效完成量。"));
     }
     /**
      * 记忆统计：把「复习量 / 记住率 / 到期预测 / 留存曲线」画成曲线。
@@ -302,39 +370,80 @@ public class MemoryActivity extends ThemedActivity {
      * 全部从已有日志和卡片状态现算（{@link MemoryStats}），不另存计数器：
      * 同一份数据重算永远同一个数，和今日闪卡的进度不会各说各话。
      */
+    private static final class StatisticsView {
+        MemoryStats.PeriodSeries series;
+        MemoryStats.Summary summary;
+        int[] forecast,samples=new int[7],hits=new int[7],bands,strength;
+        java.util.List<String> due;
+        String[] bucketLabels=new String[7];
+        int fresh,learning;
+    }
     private void stats() {
-        page = "stats"; flashMode = false; draft = null; MemoryData m;
-        try { m = MemoryStore.snapshot(this); } catch (RuntimeException e) { errorPage(e); return; }
-        final long now = System.currentTimeMillis();
-        base(T.s("记忆统计"), T.s("复习量、记住率与遗忘曲线。"));
-        MemoryStats.Summary sum = MemoryStats.summary(m, now);
-
-        LinearLayout head = ui.card(); body.addView(head, ui.gap(12));
-        TextView title = text(head, T.s("现在的位置"), 18); title.setTypeface(Typeface.DEFAULT_BOLD);
-        hint(head, T.f("卡片 %d 张 · 已学 %d 张 · 今天到期 %d 张", sum.total, sum.learned, sum.dueToday)
-                + "\n" + T.f("今日已复习 %d 张 · 连续 %d 天", sum.reviewedToday, sum.streak)
-                + "\n" + T.f("近 7 天记住率 %.0f%%（%d 次评分里记住 %d 次）",
-                    sum.accuracy7() * 100, sum.reviews7, sum.correct7));
-
-        // 近 14 天：柱是复习张数，线是当天记住率。
-        final int days = 14;
-        int[] reviewed = new int[days], correct = new int[days];
-        String[] labels = new String[days];
-        MemoryStats.daily(m, now, days, reviewed, correct, labels);
-        double[] bars = new double[days], line = new double[days];
-        int total7 = 0;
-        for (int i = 0; i < days; i++) {
-            bars[i] = reviewed[i];
-            line[i] = reviewed[i] == 0 ? -1 : correct[i] / (double) reviewed[i];
-            if (i >= days - 7) total7 += reviewed[i];
-        }
-        LinearLayout daily = ui.card(); body.addView(daily, ui.gap(12));
-        TextView dailyTitle = text(daily, T.s("近 14 天复习量"), 18); dailyTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        hint(daily, T.f("共 %d 张，最近 7 天 %d 张。红线是当天的记住率（评分“记住/轻松”占比），没有复习的日子不画点。", sumReview(reviewed), total7));
-        addChart(daily, bars, line, labels, T.s(" 张"));
-
+        page="stats";
+        browseRevision=MemoryStore.revision();browseDate=MemoryData.date(System.currentTimeMillis());
+        base(T.s("记忆统计"),T.s("复习量、记住率与遗忘曲线。"));
+        final long entry=browseEntry;
+        TextView loading=hint(body,T.s("正在读取记忆统计…"));
+        readMemory(()->MemoryStore.readOnlySnapshot(this),m->{
+            body.removeView(loading);
+            JSONArray decks=m.activeDecks();
+            String[] subjects=new String[decks.length()+1];subjects[0]=T.s("全部学科");
+            for(int i=0;i<decks.length();i++)subjects[i+1]=decks.optJSONObject(i).optString("name");
+            if(statsSubject>=subjects.length)statsSubject=0;
+            Spinner subject=spinner(body,subjects,statsSubject);
+            Spinner period=spinner(body,new String[]{T.s("日 · 近30天"),T.s("周 · 近12周"),T.s("月 · 近12个月")},statsPeriod);
+            LinearLayout plots=new LinearLayout(this);plots.setOrientation(LinearLayout.VERTICAL);body.addView(plots);
+            Runnable render=()->{
+                if(entry!=browseEntry||!"stats".equals(page))return;
+                if(!browseDate.equals(MemoryData.date(System.currentTimeMillis()))){stats();return;}
+                statsPeriod=period.getSelectedItemPosition();statsSubject=subject.getSelectedItemPosition();
+                Set<String> selected=new LinkedHashSet<>();
+                if(statsSubject>0)selected.add(decks.optJSONObject(statsSubject-1).optString("id"));
+                final MemoryStats.Period unit=MemoryStats.Period.values()[statsPeriod];
+                final long now=System.currentTimeMillis();
+                readMemory(()->{
+                    StatisticsView v=new StatisticsView();
+                    v.series=MemoryStats.periods(m,now,unit,unit==MemoryStats.Period.DAY?30:12,selected);
+                    v.summary=MemoryStats.summary(m,now,selected);
+                    v.forecast=MemoryStats.forecast(m,now,7,selected);
+                    MemoryStats.retention(m,v.samples,v.hits,v.bucketLabels,selected);
+                    v.bands=MemoryStats.stabilityBands(m,selected);
+                    v.strength=MemoryStats.strength(m,selected);v.due=MemoryStats.dueByDeck(m,now,selected);
+                    for(int i=0;i<m.cards().length();i++){
+                        JSONObject c=m.cards().optJSONObject(i);if(c==null||m.deleted(c.optString("deck"))||(!selected.isEmpty()&&!selected.contains(c.optString("deck"))))continue;
+                        if(c.optInt("reps")==0)v.fresh++;
+                        else if(c.optInt("state")!=MemoryScheduler.REVIEW)v.learning++;
+                    }
+                    return v;
+                },v->drawStatistics(plots,v,now));
+            };
+            android.widget.AdapterView.OnItemSelectedListener listener=new android.widget.AdapterView.OnItemSelectedListener(){
+                public void onItemSelected(android.widget.AdapterView<?> p,View view,int position,long id){render.run();}
+                public void onNothingSelected(android.widget.AdapterView<?> p){}
+            };
+            subject.setOnItemSelectedListener(listener);period.setOnItemSelectedListener(listener);render.run();
+        });
+    }
+    private void drawStatistics(LinearLayout plots,StatisticsView data,long now){
+        // Chart construction is small; all scans/aggregation ran on browseWorker.
+        plots.removeAllViews();
+        LinearLayout original=body;body=plots;
+        MemoryStats.Summary sum=data.summary;
+        LinearLayout head=ui.card();body.addView(head,ui.gap(12));
+        text(head,T.s("现在的位置"),18);
+        hint(head,T.f("卡片 %d 张 · 已学 %d 张 · 今天到期 %d 张",sum.total,sum.learned,sum.dueToday));
+        hint(head,T.f("今日评分 %d 次 · 连续 %d 天",sum.reviewedToday,sum.streak));
+        hint(head,T.f("近 7 天记住率 %.0f%%（%d 次评分里记住 %d 次）",sum.accuracy7()*100,sum.reviews7,sum.correct7));
+        MemoryStats.PeriodSeries series=data.series;
+        double[] bars=new double[series.reviews.length],line=new double[bars.length];int reviews=0,unique=0;
+        for(int i=0;i<bars.length;i++){bars[i]=series.reviews[i];line[i]=series.reviews[i]==0?-1:series.correct[i]/(double)series.reviews[i];reviews+=series.reviews[i];unique+=series.uniqueCards[i];}
+        LinearLayout history=ui.card();body.addView(history,ui.gap(12));text(history,T.s("学习情况"),18);
+        if(reviews==0)hint(history,T.s("所选范围还没有评分记录。"));
+        hint(history,T.f("所选区间评分 %d 次 · 各周期去重卡数合计 %d 张",reviews,unique));
+        hint(history,T.s("柱为评分次数，折线为认识占比；每周期的卡片数分别去重，跨周期会再次计数。"));
+        addChart(history,bars,line,series.labels,T.s(" 次"));
         // 未来 7 天：到期量。柱高就是那天要还的债。
-        int[] forecast = MemoryStats.forecast(m, now, 7);
+        int[] forecast = data.forecast;
         double[] fc = new double[7];
         String[] fcLabels = new String[7];
         Calendar c = Calendar.getInstance(); c.setTimeInMillis(now);
@@ -352,7 +461,7 @@ public class MemoryActivity extends ThemedActivity {
         // 留存曲线：按「距上次复习多久」分组，看每组还答得出来的比例。
         int[] samples = new int[7], hits = new int[7];
         String[] bucketLabels = new String[7];
-        MemoryStats.retention(m, samples, hits, bucketLabels);
+        samples=data.samples; hits=data.hits; bucketLabels=data.bucketLabels;
         double[] sbars = new double[7], sline = new double[7];
         for (int i = 0; i < 7; i++) {
             sbars[i] = samples[i];
@@ -363,24 +472,23 @@ public class MemoryActivity extends ThemedActivity {
         hint(curve, T.s("柱是这一档的复习次数，线是其中记住的比例。样本少于 3 次的档位不画点——一两张卡撑不起一条曲线。越往右掉得越快，说明间隔该缩短（把目标记忆率调高）。"));
         addChart(curve, sbars, sline, bucketLabels, T.s(" 次"));
 
-        int[] strength = MemoryStats.strength(m);
-        LinearLayout mix = ui.card(); body.addView(mix, ui.gap(12));
-        TextView mixTitle = text(mix, T.s("记忆强度构成"), 18); mixTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        hint(mix, T.f("未学 %d 张 · 学习中 %d 张 · 稳定度 ≤7 天 %d 张 · 稳定度 >7 天 %d 张",
-                strength[MemoryStats.BUCKET_NEW], strength[MemoryStats.BUCKET_LEARNING],
-                strength[MemoryStats.BUCKET_SHORT], strength[MemoryStats.BUCKET_LONG])
-                + "\n" + T.s("稳定度是 FSRS 认为这张卡能撑多久。>7 天的越多，说明长期记忆越扎实。"));
 
-        java.util.List<String> due = MemoryStats.dueByDeck(m, now);
-        if (!due.isEmpty()) {
-            LinearLayout each = ui.card(); body.addView(each, ui.gap(12));
-            TextView eachTitle = text(each, T.s("各学科今天到期"), 18); eachTitle.setTypeface(Typeface.DEFAULT_BOLD);
-            for (String row : due) {
-                String[] parts = row.split("\t");
-                hint(each, parts[0] + T.s(" · ") + (parts.length > 1 ? parts[1] : "0") + T.s(" 张"));
-            }
+        LinearLayout stability=ui.card();body.addView(stability,ui.gap(12));
+        text(stability,T.s("FSRS稳定性分布"),18);
+        hint(stability,T.f("未学 %d 张 · 学习或重学中 %d 张",data.fresh,data.learning));
+        double[] values=new double[5];int eligible=0;for(int i=0;i<5;i++){values[i]=data.bands[i];eligible+=data.bands[i];}
+        hint(stability,T.f("复习阶段共 %d 张；以下五档互不重叠。",eligible));
+        String[] bandNames={"<10", "10–29", "30–59", "60–89", "≥90"};
+        addChart(stability,values,null,bandNames,T.s(" 张"));
+        for(int i=0;i<5;i++)hint(stability,bandNames[i]+T.s(" 天：")+data.bands[i]+T.s(" 张"));
+        hint(stability,T.s("横轴为FSRS稳定性天数，是模型估计；不代表保证记住的时长，也不是实测留存率。"));
+        hint(stability,T.f("未学 %d 张 · 学习中 %d 张 · 稳定度 ≤7 天 %d 张 · 稳定度 >7 天 %d 张",data.strength[0],data.strength[1],data.strength[2],data.strength[3]));
+        if(!data.due.isEmpty()){
+            LinearLayout each=ui.card();body.addView(each,ui.gap(12));text(each,T.s("各学科今天到期"),18);
+            for(String row:data.due){String[] parts=row.split("\t");hint(each,parts[0]+T.s(" · ")+(parts.length>1?parts[1]:"0")+T.s(" 张"));}
         }
-        hint(body, T.s("统计只读：不会改动卡片状态。曲线里的每一次评分都来自日志，删掉学科会一并从曲线里消失。"));
+        hint(body,T.s("统计只读：不会改动卡片状态。曲线里的每一次评分都来自日志，删掉学科会一并从曲线里消失。"));
+        body=original;
     }
 
     private int sumReview(int[] values) { int n = 0; for (int v : values) n += v; return n; }
@@ -397,13 +505,18 @@ public class MemoryActivity extends ThemedActivity {
         page = "tools"; flashMode = false; draft = null; MemoryData m;
         try { m = MemoryStore.snapshot(this); } catch (RuntimeException e) { errorPage(e); return; }
         base(T.s("记忆卡设置"), T.s("学科、卡片、错题与学习设置。"));
+        MemoryFlashcards.Load load=MemoryFlashcards.inspectLoad(m,System.currentTimeMillis());
+        LinearLayout loadBox=ui.card();body.addView(loadBox,ui.gap(12));loadBox.setTag("memory-load-settings");
+        hint(loadBox,T.f("待复习 %d · 待新学 %d · 已处理 %d",load.reviewPending,load.newPending,load.processed));
+        hint(loadBox,T.f("入队 %d / 上限 %d · 新学上限 %d · 所选学科到期 %d",load.queued,load.count,load.newLimit,load.backlog));
+        if(!load.sessionExists)hint(loadBox,T.s("今日队列尚未生成；进入记忆学习时再生成。"));
         MemoryFlashcards.Progress flash = MemoryFlashcards.progress(m, System.currentTimeMillis());
         button(body, T.s("抽取设置  ·  按遗忘曲线  ·  ") + MemoryFlashcards.count(m) + T.s(" 张/天")
                 + T.s(" ·  新学 ") + MemoryFlashcards.newLimit(m), false, v -> flashSettings());
         button(body, T.s("记忆统计  ·  曲线"), false, v -> stats());
         hint(body, T.s("本日已复习 ") + flash.done + "/" + flash.total + T.s(" · 今日累计 ") + flash.reviewedToday + T.s(" 张。")
                 + T.s("\n到期旧卡按遗忘风险排序，新卡按新学上限补位。")
-                + T.s("\n先回忆再揭晓。每张闪卡复习后进入下一张；选择“忘了”会进入错题与重学计划。"));
+                + T.s("\n显示答案后，点认识、模糊或忘记。未学稳的卡会在今日继续巩固，滑动与点卡片不评分。"));
         button(body, T.s("＋ 添加学科"), false, v -> addDeck());
         button(body, T.s("制作 / 导入卡片"), true, v -> authorDialog());
         button(body, T.s("管理学科"), false, v -> manageSubjects());
@@ -653,7 +766,7 @@ public class MemoryActivity extends ThemedActivity {
         linked.setTextColor(ui.text());
         linked.setChecked(LearningLink.memoryEnabled(this, d.optString("id")));
         b.addView(linked);
-        hint(b, T.s("开启后，打卡页显示记忆卡；在记忆页完成目标。20:00 时目标未完成会参与学习联动。\n开始答题后修改设置，次日生效。到期复习积压超过上限时，暂停新增卡片。"));
+        hint(b, T.s("开启后，打卡页显示记忆卡；在记忆页完成目标。目标未完成时会参与学习联动，从应用冻结结束点继续冻结。\n开始答题后修改设置，次日生效。到期复习积压超过上限时，暂停新增卡片。"));
         ScrollView scroll = new ScrollView(this); scroll.addView(b);
         AlertDialog dlg = ThemeStore.dialog(this).setTitle(T.s("学习计划")).setView(scroll)
                 .setPositiveButton(T.s("保存"), null).setNegativeButton(T.s("取消"), null).create();
@@ -670,35 +783,66 @@ public class MemoryActivity extends ThemedActivity {
             } catch (RuntimeException e) { toast(e instanceof NumberFormatException ? T.s("请填写整数") : e.getMessage()); }
         })); dlg.show();
     }
-    private void cards(boolean wrong) {
-        page = "cards"; MemoryData m = MemoryStore.snapshot(this); JSONObject d = m.deck(deck);
-        if (d == null) { home(); return; }
-        base(d.optString("name") + (wrong ? T.s(" · 错题") : T.s(" · 卡片")), wrong ? T.s("收集曾经选择“忘了”的卡片。到期后自动进入学习队列。") : T.s("问答、输入与图片遮挡；点卡片可以编辑。"));
-        button(body, T.s("新建卡片"), true, v -> { draft = MemoryData.newCard(deck, "english".equals(d.optString("subject")) ? "input" : "qa", "", "", "", ""); editor(); });
-        button(body, T.s("批量导入文本 / TSV"), false, v -> importDialog());
-        EditText search = field(body, T.s("搜索题目或答案"), "", false);
-        LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL); body.addView(list);
-        Runnable render = () -> {
-            list.removeAllViews(); String q = search.getText().toString().toLowerCase(Locale.ROOT); int count = 0, shown = 0;
-            for (int i = 0; i < m.cards().length(); i++) {
-                JSONObject c = m.cards().optJSONObject(i);
-                if (!deck.equals(c.optString("deck")) || (wrong && c.optInt("lapses") == 0)) continue;
-                if (!(c.optString("front") + " " + c.optString("answer")).toLowerCase(Locale.ROOT).contains(q)) continue;
-                count++; if (shown++ >= 100) continue;
-                LinearLayout card = ui.card(); list.addView(card, ui.gap(10));
-                TextView title = text(card, c.optString("front"), 16); title.setMaxLines(3);
-                title.setTextIsSelectable(false);
-                hint(card, T.s("复习 ") + c.optInt("reps") + T.s(" 次 · 遗忘 ") + c.optInt("lapses") + T.s(" 次 · 点此编辑"));
-                card.setOnClickListener(v -> { draft = MemoryData.copy(c); editor(); });
-            }
-            hint(list, count == 0 ? T.s("还没有卡片。可手动添加，或导入每行一张的问答文本。") : T.s("共 ") + count + T.s(" 张") + (count > 100 ? T.s("，显示前 100 张，请用搜索缩小范围") : ""));
-        };
-        search.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int a, int c, int f) { }
-            public void onTextChanged(CharSequence s, int a, int b, int c) { render.run(); }
-            public void afterTextChanged(Editable s) { }
-        }); render.run();
+    private String cardBrowseDeck="";
+    private static final class CardPage {
+        int count; boolean sessionExists; java.util.List<JSONObject> cards=new java.util.ArrayList<>();
     }
+    private void cards(boolean wrong) {
+        page="cards";
+        browseRevision=MemoryStore.revision();browseDate=MemoryData.date(System.currentTimeMillis());
+        if(!deck.equals(cardBrowseDeck)){cardBrowseDeck=deck;cardOffset=0;cardSearch="";cardFilter=MemoryCardQuery.Filter.ALL;}
+        if(wrong){cardFilter=MemoryCardQuery.Filter.WRONG;cardOffset=0;}
+        base(T.s("卡片管理"),T.s("难记：累计遗忘至少3次；筛选不会改动学习计划。"));
+        final long entry=browseEntry;
+        final String currentDeck=deck;
+        TextView create=button(body,T.s("新建卡片"),true,v->{});create.setEnabled(false);
+        button(body,T.s("批量导入文本 / TSV"),false,v->importDialog());
+        Spinner filter=spinner(body,new String[]{T.s("全部"),T.s("今日队列"),T.s("难记"),T.s("错题")},cardFilter.ordinal());
+        EditText search=field(body,T.s("搜索题目或答案"),cardSearch,false);
+        LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);body.addView(list);
+        TextView loading=hint(list,T.s("正在读取卡片…"));
+        readMemory(()->MemoryStore.readOnlySnapshot(this),m->{
+            JSONObject d=m.deck(currentDeck);if(d==null){tools();return;}
+            create.setEnabled(true);create.setOnClickListener(v->{draft=MemoryData.newCard(currentDeck,"english".equals(d.optString("subject"))?"input":"qa","","","","");editor();});
+            Runnable render=()->{
+                if(entry!=browseEntry||!"cards".equals(page)||!currentDeck.equals(deck))return;
+                if(!browseDate.equals(MemoryData.date(System.currentTimeMillis()))){cards(false);return;}
+                cardFilter=MemoryCardQuery.Filter.values()[filter.getSelectedItemPosition()];cardSearch=search.getText().toString();
+                final MemoryCardQuery.Filter selected=cardFilter;final String query=cardSearch;final int offset=cardOffset;
+                final Set<String> subjects=new LinkedHashSet<>();subjects.add(currentDeck);
+                readMemory(()->{
+                    CardPage result=new CardPage();long now=System.currentTimeMillis();
+                    result.count=MemoryCardQuery.count(m,selected,subjects,now,query);
+                    result.sessionExists=MemoryFlashcards.inspectLoad(m,now).sessionExists;
+                    for(String id:MemoryCardQuery.page(m,selected,subjects,now,offset,50,query))result.cards.add(m.card(id));
+                    return result;
+                },result->{
+                    list.removeAllViews();
+                    hint(list,T.f("共 %d 张 · 第 %d 页",result.count,offset/50+1));
+                    if(selected==MemoryCardQuery.Filter.TODAY&&!result.sessionExists)
+                        hint(list,T.s("今日队列尚未生成；进入记忆学习时再生成。"));
+                    for(JSONObject c:result.cards){
+                        LinearLayout card=ui.card();list.addView(card,ui.gap(10));
+                        TextView title=text(card,c.optString("front"),16);title.setMaxLines(3);title.setTextIsSelectable(false);
+                        hint(card,T.f("复习 %d 次 · 遗忘 %d 次",c.optInt("reps"),c.optInt("lapses")));
+                        card.setOnClickListener(v->{draft=MemoryData.copy(c);editor();});
+                    }
+                    if(offset>0)button(list,T.s("上一页"),false,v->{cardOffset=Math.max(0,cardOffset-50);renderCardsAgain(filter,search);});
+                    if(offset+50<result.count)button(list,T.s("下一页"),false,v->{cardOffset+=50;renderCardsAgain(filter,search);});
+                    if(result.count==0)hint(list,T.s("没有符合条件的卡片。"));
+                });
+            };
+            search.setTag(render);
+            filter.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+                public void onItemSelected(android.widget.AdapterView<?> parent,View view,int pos,long id){if(entry!=browseEntry)return;if(MemoryCardQuery.Filter.values()[pos]!=cardFilter)cardOffset=0;render.run();}
+                public void onNothingSelected(android.widget.AdapterView<?> parent){}
+            });
+            final Runnable debounce=()->{if(entry!=browseEntry||!"cards".equals(page))return;cardOffset=0;render.run();};
+            search.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence x,int a,int c,int f){}public void afterTextChanged(Editable x){}public void onTextChanged(CharSequence x,int a,int before,int count){handler.removeCallbacks(debounce);handler.postDelayed(debounce,200);}});
+            render.run();
+        });
+    }
+    private void renderCardsAgain(Spinner filter,EditText search){Object action=search.getTag();if(action instanceof Runnable)((Runnable)action).run();}
     private void editor() {
         page = "editor"; base(T.s("编辑卡片"), T.s("图片题请先选图，再拖动框选标注。"));
         int selection = 0; for (int i = 0; i < TYPE_KEYS.length; i++) if (TYPE_KEYS[i].equals(draft.optString("type"))) selection = i;
@@ -734,15 +878,15 @@ public class MemoryActivity extends ThemedActivity {
         page = "review"; MemoryData m = MemoryStore.snapshot(this); JSONObject d = m.deck(deck);
         if (d == null) { home(); return; }
         MemoryData.Progress p = m.progress(deck, System.currentTimeMillis());
-        JSONObject next = m.next(deck, System.currentTimeMillis());
+        JSONObject next = restoreStudyCard(m,m.next(deck, System.currentTimeMillis()),System.currentTimeMillis());
         base(d.optString("name"), T.s("今日有效复习 ") + p.done + " / " + p.target + T.s(" · 队列 ") + p.total + T.s(" 张"));
-        revealed = false; submitting = false; incorrect = false; current = next; studyImage = null; typed = null;
+        revealed = false; submitting = false; graded = false; gradedAt=0; current = next; studyImage = null; typed = null;
         if (next == null) {
             if (p.nextDue > 0) {
-                long seconds = Math.max(1, (p.nextDue - System.currentTimeMillis() + 999) / 1000);
-                text(body, T.s("重学卡片将在 ") + seconds / 60 + T.s(" 分 ") + seconds % 60 + T.s(" 秒后出现"), 21);
+                text(body, T.s("本轮回忆已结束，稍后继续巩固"), 21);
+                hint(body,T.s("下次复习：")+dueLabel(p.nextDue,System.currentTimeMillis()));
                 hint(body, T.s("先休息一下。到期后自动显示下一张，重复翻看不增加完成量。"));
-                handler.postDelayed(queueTick, 1000);
+                scheduleQueue(p.nextDue);
             } else {
                 text(body, p.total == 0 ? T.s("今天没有待学卡片") : T.s("今日队列已完成"), 23);
                 hint(body, p.total == 0 ? T.s("先添加卡片；开始答题后新增的卡片将进入明天的计划。") : T.s("复习进度已保存。放行仍遵守原时间表和其他学习目标。"));
@@ -752,159 +896,188 @@ public class MemoryActivity extends ThemedActivity {
         }
         drawCard(m, d, next);
     }
+    private TextView reviewPreview;
+    private static final class CardReadout {long remember,vague,forget;}
+    /** An already committed "don't know" can remain open across recreation, never be rated twice. */
+    private JSONObject restoreStudyCard(MemoryData m,JSONObject next,long now){
+        if(!restoredGraded)return next;
+        JSONObject held=m.card(restoredStudyId);
+        JSONArray ids=flashMode?MemoryFlashcards.session(m,now).optJSONArray("ids"):m.plan(deck,now).optJSONArray("ids");
+        if(held!=null&&!m.deleted(held.optString("deck"))&&MemoryData.date(now).equals(restoredStudyDate)
+                &&restoredGradedAt>0&&held.optLong("last")==restoredGradedAt&&MemoryData.contains(ids,restoredStudyId))return held;
+        restoredGraded=false;restoredStudyId="";return next;
+    }
+    private String dueLabel(long due,long now){
+        if(due<=0)return "—";
+        if(due<=now)return T.s("现在可复习");
+        if(MemoryData.date(due).equals(MemoryData.date(now)))return T.f("今天约%d分钟后",Math.max(1,(due-now+59999)/60000));
+        return new java.text.SimpleDateFormat("yyyy/M/d",Locale.getDefault()).format(new java.util.Date(due));
+    }
     private void drawCard(MemoryData m, JSONObject d, JSONObject next) {
-        final boolean stage = flashMode;   // 闪卡：整页一张卡，和打卡页同尺寸；学科复习保持可滚动版式
+        final boolean stage = flashMode;
+        current=next;
+        final long entry=browseEntry;
         final String id = next.optString("id"); final boolean isInput = "input".equals(next.optString("type"));
-        final StudyCardSurface card = new StudyCardSurface(this);
-        final SwipeCardView swipe = new SwipeCardView(this);activeSwipe=swipe;
-        swipe.setClipChildren(false); swipe.setClipToPadding(false); body.setClipChildren(false);
-        swipe.addView(card, new FrameLayout.LayoutParams(-1, stage ? -1 : -2));
+        MemoryFlashcards.Progress progress = null;
+        if (stage) {
+            progress = MemoryFlashcards.progress(m, System.currentTimeMillis());
+            stageHeader();
+        }
+        final StudyCardSurface card = new StudyCardSurface(this);activeStudyCard=card;
         if (stage) {
             LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, 0, 1f);
-            int inset = ui.dp(18); slp.setMargins(inset, inset, inset, inset);
-            body.addView(swipe, slp);
-        } else body.addView(swipe, ui.gap(16));
+            int inset = ui.dp(8); slp.setMargins(inset, inset, inset, inset);
+            body.addView(card, slp);
+        } else body.addView(card, ui.gap(16));
 
         if (stage) {
             // 卡面顶行与打卡页同构：左边卡片类型，右边「第几张 / 共几张」。
-            MemoryFlashcards.Progress progress = MemoryFlashcards.progress(m, System.currentTimeMillis());
             LinearLayout tagRow = new LinearLayout(this);
             tagRow.setOrientation(LinearLayout.HORIZONTAL); tagRow.setGravity(Gravity.CENTER_VERTICAL);
             tagRow.setPadding(0, 0, 0, ui.dp(6));
             tagRow.addView(ui.sub(T.s("记忆卡")), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            tagRow.addView(ui.sub((progress.done + 1) + " / " + progress.total));
+            tagRow.addView(ui.sub(progress.done + " / " + progress.total));
             card.addView(tagRow);
         }
-        TextView question = text(card, MemoryData.question(next), 25);
-        // Selectable text would steal long-press/drag away from the swipe gesture (see card list precedent).
-        question.setTextIsSelectable(false);
+        // Content scrolls; explicit actions remain reachable above the bottom dock.
+        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.addView(content);
+        card.addView(scroll,new LinearLayout.LayoutParams(-1,stage?0:-2,stage?1f:0f));
+        LinearLayout wordRow=new LinearLayout(this);wordRow.setGravity(Gravity.TOP);content.addView(wordRow);
+        TextView question = studyText(wordRow,MemoryData.question(next),36,"memory-word");
+        question.setLayoutParams(new LinearLayout.LayoutParams(0,-2,1f));
+        // The single speaker uses US pronunciation; no second accent control on the card.
+        final String spoken = Speech.latinWord(MemoryData.question(next));
+        if (!spoken.isEmpty()) {
+            View speaker=speakerButton(spoken);LinearLayout.LayoutParams voiceLp=new LinearLayout.LayoutParams(ui.dp(48),ui.dp(48));
+            voiceLp.setMargins(ui.dp(8),ui.dp(8),0,0);wordRow.addView(speaker,voiceLp);
+        }
         if (!next.optString("image").isEmpty()) {
             studyImage = new MemoryImageView(this, next.optString("image"), next.optJSONArray("masks"), false);
-            card.addView(studyImage, new LinearLayout.LayoutParams(-1, ui.dp(300)));
+            content.addView(studyImage, new LinearLayout.LayoutParams(-1, ui.dp(300)));
         }
-        if (isInput) typed = field(card, T.s("先输入你的答案"), "", false);
+        if (isInput) typed = field(content, T.s("先输入你的答案"), "", false);
+        reviewPreview=hint(content,"");reviewPreview.setTextIsSelectable(false);reviewPreview.setTextSize(11);
+        final TextView preview=reviewPreview;
         final LinearLayout result = new LinearLayout(this);
-        result.setOrientation(LinearLayout.VERTICAL); result.setVisibility(View.GONE); card.addView(result);
-
-        final LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.VERTICAL);
-        final LinearLayout actionHost;
-        if (stage) {
-            // 卡面撑满：内容顶对齐，评分贴底，不额外占版面
-            card.addView(new View(this), new LinearLayout.LayoutParams(-1, 0, 1f));
-            card.addView(actions);
-            actionHost = actions;
-        } else actionHost = body;
-
+        result.setOrientation(LinearLayout.VERTICAL); result.setVisibility(View.GONE); content.addView(result);
         CardPalette.apply(card, CardPalette.MEMORY, false);
-        // 手势：下滑＝揭晓；揭晓后上滑＝记住了、再下滑＝忘了（卡片消散）。
-        swipe.setDirections(false, true);
-        swipe.setSwipeEnabled(true);
-        swipe.setListener(direction -> {
-            if (!revealed) {
-                if (direction == MemorySwipe.DOWN) {
-                    swipe.settle();   // 拖动位移先归位，再翻面
-                    revealCard(next, d, result, actionHost, swipe, true, false);
-                } else swipe.reset();
-                return;
-            }
-            int rating = MemorySwipe.rating(direction);
-            if (rating == 0) return;
-            if (!grade(id, rating)) { swipe.reset(); return; }
-            swipe.setSwipeEnabled(false);
-            Runnable finished=()->{if(motionResumed&&!isFinishing()&&!isDestroyed()&&swipe.isAttachedToWindow()&&submitting)advance();};
-            if (direction == MemorySwipe.DOWN) swipe.dissolve(finished); else swipe.flyOut(direction,finished);
+        final LinearLayout controls=new LinearLayout(this);controls.setOrientation(LinearLayout.VERTICAL);card.addView(controls);
+        final LinearLayout ratings=new LinearLayout(this);ratings.setOrientation(LinearLayout.HORIZONTAL);ratings.setBaselineAligned(false);
+        ratings.setVisibility(View.GONE);
+        LinearLayout recallActions=new LinearLayout(this);recallActions.setBaselineAligned(false);controls.addView(recallActions,ui.gap(10));
+        final TextView show=button(recallActions,T.s("显示答案"),true,null);show.setTag("memory-show-answer");
+        final TextView unknown=button(recallActions,T.s("不认识"),false,null);unknown.setTag("memory-unknown");
+        for(TextView action:new TextView[]{show,unknown}){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1f);lp.setMargins(ui.dp(3),0,ui.dp(3),0);action.setLayoutParams(lp);action.setMinHeight(ui.dp(54));}
+        final TextView nextCard=button(controls,T.s("下一张"),true,null);nextCard.setTag("memory-next-card");nextCard.setVisibility(View.GONE);
+        controls.addView(ratings,ui.gap(10));
+        final TextView remember=ratingButton(ratings,T.s("认识"),3,0xFF2D8053,entry,next);
+        final TextView vague=ratingButton(ratings,T.s("模糊"),2,0xFF956A16,entry,next);
+        final TextView forget=ratingButton(ratings,T.s("忘记"),1,0xFFC04747,entry,next);
+        show.setOnClickListener(v->{
+            if(entry!=browseEntry||current!=next||graded||submitting)return;
+            revealCard(next,d,result);recallActions.setVisibility(View.GONE);ratings.setVisibility(View.VISIBLE);
         });
-        showRevealActions(actionHost, next, d, result, swipe);
-        if (!stage) hint(body, T.s("先回忆再揭晓。新卡需要完成学习步骤；选择“忘了”不计完成，稍后会再次出现。"));
-    }
-
-    /** 揭晓前卡面底部只有揭晓动作；下滑与按钮走同一条揭晓路径。 */
-    private void showRevealActions(LinearLayout host, JSONObject next, JSONObject d, LinearLayout result, SwipeCardView swipe) {
-        host.removeAllViews();
-        boolean isInput = "input".equals(next.optString("type"));
-        button(host, isInput ? T.s("核对答案") : T.s("显示答案"), true, v -> revealCard(next, d, result, host, swipe, false, false));
-        if (isInput) button(host, T.s("想不起来 · 查看答案"), false, v -> revealCard(next, d, result, host, swipe, true, true));
-    }
-
-    /** 揭晓答案：按钮和下滑共用；fromSwipe 时空白输入按「想不起来」处理。 */
-    private void revealCard(JSONObject next, JSONObject d, LinearLayout result, LinearLayout host,
-                            SwipeCardView swipe, boolean fromSwipe, boolean forceIncorrect) {
-        if (revealed) return;
-        if ("input".equals(next.optString("type"))) {
-            String value = typed == null ? "" : typed.getText().toString().trim();
-            if (forceIncorrect) incorrect = true;
-            else if (value.isEmpty()) {
-                if (!fromSwipe) { toast(T.s("请先尝试输入答案")); return; }
-                incorrect = true;
-            } else {
-                incorrect = !MemoryData.matches(value, next.optString("answer"), "english".equals(d.optString("subject")));
-                hint(result, incorrect ? T.s("答案不匹配，本次计为遗忘，稍后重学") : T.s("答案匹配"));
-            }
-            if (typed != null) typed.setEnabled(false);
+        Runnable committedAnswer=()->{
+            recallActions.setVisibility(View.GONE);ratings.setVisibility(View.GONE);nextCard.setVisibility(View.VISIBLE);
+            preview.setText(T.s("已记为遗忘 · 下次复习：")+dueLabel(MemoryStore.cardDue(this,id),System.currentTimeMillis()));
+        };
+        unknown.setOnClickListener(v->{
+            if(entry!=browseEntry||current!=next||revealed||graded||submitting||!motionResumed)return;
+            show.performClick();
+            if(grade(id,1)){submitting=false;committedAnswer.run();}
+        });
+        nextCard.setOnClickListener(v->{if(entry==browseEntry&&current==next&&graded&&motionResumed)advance();});
+        readMemory(()->{
+            CardReadout out=new CardReadout();long now=System.currentTimeMillis();
+            out.remember=m.previewRating(id,3,now).due;out.vague=m.previewRating(id,2,now).due;out.forget=m.previewRating(id,1,now).due;
+            return out;
+        },out->{if(graded)return;
+            long now=System.currentTimeMillis();preview.setText(T.s("先回忆，再显示答案并选择记忆程度"));
+            ratingLabel(remember,T.s("认识"),out.remember,now);ratingLabel(vague,T.s("模糊"),out.vague,now);ratingLabel(forget,T.s("忘记"),out.forget,now);
+        });
+        if(id.equals(restoredStudyId)&&MemoryData.date(System.currentTimeMillis()).equals(restoredStudyDate)){
+            if(typed!=null)typed.setText(restoredTyped);
+            if(restoredRevealed)show.performClick();
+            if(restoredGraded){graded=true;gradedAt=restoredGradedAt;submitting=false;committedAnswer.run();}
         }
+        restoredStudyId="";restoredStudyDate="";restoredTyped="";restoredRevealed=false;restoredGraded=false;restoredGradedAt=0;
+    }
+    private TextView studyText(LinearLayout parent,String value,int size,String tag){
+        TextView view=text(parent,value,size);SwissTypography.role(view,SwissTypography.Role.KEEP);
+        view.setTextSize(size);view.setLineSpacing(0,1.22f);view.setTag(tag);return view;
+    }
+
+    private TextView ratingButton(LinearLayout row,String label,int rating,int color,long entry,JSONObject card){
+        TextView button=new TextView(this);button.setText(label);button.setTextSize(15);button.setGravity(Gravity.CENTER);
+        SwissTypography.role(button,SwissTypography.Role.BUTTON);button.setMinHeight(ui.dp(64));
+        button.setPadding(ui.dp(4),ui.dp(12),ui.dp(4),ui.dp(12));
+        button.setTextColor(ui.dark?0xFFF5F5F5:color);
+        ActionFeedback.bind(button,ui,ui.dark?ui.surface2():0xFFF5F4EE,12,ui.dark?0xFFF5F5F5:color);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,1f);lp.setMargins(ui.dp(3),0,ui.dp(3),0);row.addView(button,lp);
+        button.setTag("memory-rate-"+rating);
+        button.setOnClickListener(v->{
+            if(entry!=browseEntry||current!=card||!motionResumed)return;
+            if(grade(card.optString("id"),rating))advance();
+        });return button;
+    }
+    private void ratingLabel(TextView button,String label,long due,long now){
+        String time=dueLabel(due,now);android.text.SpannableString text=new android.text.SpannableString(label+"\n"+time);
+        text.setSpan(new android.text.style.RelativeSizeSpan(.72f),label.length()+1,text.length(),0);
+        button.setText(text);button.setContentDescription(label+"，"+time);
+    }
+
+    private View speakerButton(String word) {
+        android.widget.FrameLayout button=new android.widget.FrameLayout(this);button.setTag("memory-speaker");
+        android.graphics.drawable.StateListDrawable states=new android.graphics.drawable.StateListDrawable();
+        states.addState(new int[]{android.R.attr.state_pressed},ui.round(0x3320232A,24));
+        states.addState(new int[]{android.R.attr.state_focused},ui.round(0x3320232A,24));
+        states.addState(new int[]{},ui.round(0x1420232A,24));button.setBackground(states);button.setFocusable(true);
+        LineIcon icon=new LineIcon(this,"🔊",CardPalette.ink(CardPalette.MEMORY));
+        button.addView(icon,new android.widget.FrameLayout.LayoutParams(ui.dp(24),ui.dp(24),Gravity.CENTER));
+        button.setContentDescription(T.s("美音朗读"));button.setOnClickListener(v->pronounce(word,false));
+        button.setAccessibilityDelegate(new View.AccessibilityDelegate(){
+            @Override public void onInitializeAccessibilityNodeInfo(View view,android.view.accessibility.AccessibilityNodeInfo info){super.onInitializeAccessibilityNodeInfo(view,info);info.setClassName(android.widget.Button.class.getName());}
+        });return button;
+    }
+
+    /** 朗读：口音缺语音包或没有引擎时明说，不静默失败。 */
+    private void pronounce(String word, boolean uk) {
+        int r = Speech.speak(this, word, uk);
+        if (r == Speech.NO_VOICE) toast(T.s("系统没有这个口音的语音包"));
+        else if (r == Speech.NO_ENGINE) toast(T.s("系统没有可用的语音引擎"));
+    }
+
+    /** Revealing is read-only. Only one of the three explicit rating buttons can submit. */
+    private void revealCard(JSONObject next, JSONObject d, LinearLayout result) {
+        if (revealed) return;
         revealed = true;
+        if (typed != null) {
+            String value = typed.getText().toString().trim();
+            if (!value.isEmpty())hint(result,MemoryData.matches(value,next.optString("answer"),"english".equals(d.optString("subject")))?T.s("答案匹配，请选择记忆程度"):T.s("答案不匹配，请选择记忆程度"));
+            typed.setEnabled(false);
+            android.view.inputmethod.InputMethodManager keyboard=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
+            if(keyboard!=null)keyboard.hideSoftInputFromWindow(typed.getWindowToken(),0);
+        }
         if (studyImage != null) studyImage.reveal();
-        TextView answer = text(result, MemoryData.answer(next), 20);
-        answer.setTextIsSelectable(false);
+        TextView answer = studyText(result, MemoryData.answer(next), 26,"memory-meaning");
+        answer.setTextIsSelectable(true);
         if (!next.optString("source").isEmpty()) hint(result, T.s("来源：") + next.optString("source"));
         if (!next.optString("note").isEmpty()) hint(result, T.s("备注：") + next.optString("note"));
         CardPalette.textColors(result, CardPalette.MEMORY);
         result.setVisibility(View.VISIBLE);
-        swipe.setDirections(!incorrect, true);
-        showRateActions(host, next.optString("id"), incorrect);
+        if(activeStudyCard!=null)activeStudyCard.highlight();
     }
-
-    /** 评分：手势之外保留四档按钮，卡片撑满页面时它们贴在卡面底部。 */
-    private void showRateActions(LinearLayout host, String id, boolean onlyForget) {
-        host.removeAllViews();
-        if (!onlyForget) {
-            TextView tip = ui.sub(T.s("↑ 上滑＝记住　·　↓ 下滑＝忘了"));
-            tip.setGravity(Gravity.CENTER);
-            tip.setPadding(0, ui.dp(2), 0, ui.dp(4));
-            host.addView(tip);
-        }
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        host.addView(row, ui.gap(6));
-        String[] labels = onlyForget ? new String[]{T.s("继续 · 加入重学")} : new String[]{T.s("忘了"), T.s("费力"), T.s("记住"), T.s("轻松")};
-        int[] ratings = onlyForget ? new int[]{1} : new int[]{1, 2, 3, 4};
-        for (int i = 0; i < labels.length; i++) {
-            final int rating = ratings[i];
-            TextView b = new TextView(this);
-            b.setText(labels[i]); b.setTextSize(13); b.setGravity(Gravity.CENTER);
-            SwissTypography.role(b, SwissTypography.Role.BUTTON);
-            b.setTextColor(rating == 3 ? ui.onAccent() : ui.accent());
-            b.setPadding(ui.dp(4), ui.dp(11), ui.dp(4), ui.dp(11));
-            b.setBackground(ui.round(rating == 3 ? ui.accent() : ui.surface(), 12));
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            if (i > 0) lp.leftMargin = ui.dp(6);
-            row.addView(b, lp);
-            // 手指从按钮上起手往上划时，滑动距离没到拦截阈值就会被当成一次点击 ——
-            // 而「忘了」正好是最左那颗，于是「上滑记住」被记成忘了。这里把位移一起判：
-            // 纵向挪过 8dp 就不算点击，交给上面的滑卡手势。
-            final float[] downY = {0};
-            final boolean[] dragged = {false};
-            b.setOnTouchListener((v, e) -> {
-                if (e.getActionMasked() == MotionEvent.ACTION_DOWN) { downY[0] = e.getRawY(); dragged[0] = false; }
-                else if (e.getActionMasked() == MotionEvent.ACTION_MOVE && Math.abs(e.getRawY() - downY[0]) > ui.dp(8)) dragged[0] = true;
-                return false;
-            });
-            b.setOnClickListener(v -> { if (dragged[0]) return; if (grade(id, rating)) advance(); });
-        }
-    }
-    private int slideDuration() {
-        return !getSharedPreferences(Ui.SP, 0).getBoolean("reduce_motion", false)
-                && (android.os.Build.VERSION.SDK_INT < 26 || android.animation.ValueAnimator.areAnimatorsEnabled()) ? 140 : 0;
-    }
-    /** Single grading path for buttons and swipes: guard, persist, toast. Navigation stays with the caller. */
+    /** Single commit path: must reveal first; repeated/stale button presses cannot resubmit. */
     private boolean grade(String id, int rating) {
-        if (!revealed || submitting) return false;
+        if (!revealed || graded || submitting || current==null || !id.equals(current.optString("id"))) return false;
         submitting = true;
         try {
             LearningLink.Progress before = LearningLink.memory(this);
             if (flashMode) { MemoryStore.rateFlashcard(this, id, rating, flashDate); syncGuard(); }
             else { boolean credited = MemoryStore.rate(this, id, rating); if (credited) toast(T.s("有效复习 +1，进度已保存")); syncGuard(); }
+            graded=true;
+            gradedAt=MemoryStore.cardLast(this,id);
             LearningLink.Progress after = LearningLink.memory(this);
             if (before.target > 0 && !before.complete() && after.complete()) {
                 Intent completed = new Intent(this, CheckinActivity.class);

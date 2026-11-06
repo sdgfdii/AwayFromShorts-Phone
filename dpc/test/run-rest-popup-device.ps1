@@ -34,7 +34,8 @@ Checked "$taskBt/apksigner.bat" ($signArgs+@('--out',"$taskOut/qa.apk","$taskOut
 Checked $taskAdb @('-s',$Serial,'install','-r',"$taskOut/qa.apk")
 $taskPermissionState=(& $taskAdb -s $Serial shell dumpsys package com.afs.guard) -join "`n"
 $taskHadNotifications=$taskPermissionState -match 'android.permission.POST_NOTIFICATIONS: granted=true'
-& $taskAdb -s $Serial shell pm revoke com.afs.guard android.permission.POST_NOTIFICATIONS | Out-Null
+$taskApi=[int](& $taskAdb -s $Serial shell getprop ro.build.version.sdk)
+if($taskApi -ge 33){ & $taskAdb -s $Serial shell pm revoke com.afs.guard android.permission.POST_NOTIFICATIONS | Out-Null }
 try {
     $taskResult=& $taskAdb -s $Serial shell am instrument -w com.afs.guard.restpopupqa/com.afs.guard.RestPopupDeviceTest 2>&1
     $taskResult | Write-Output

@@ -140,7 +140,7 @@ public final class MemoryFlashcards {
         List<String> ids = new ArrayList<>();
         for (JSONObject c : reviews(m, now)) {
             if (ids.size() >= limit) break;
-            String id = c.optString("id"); if (!seen.contains(id)) ids.add(id);
+            String id = c.optString("id"); if (!finished(c, seen)) ids.add(id);
         }
         int room = Math.min(freshLimit, limit - ids.size());
         if (room > 0) {
@@ -157,21 +157,70 @@ public final class MemoryFlashcards {
     }
     public static JSONObject next(MemoryData m, long now) {
         JSONArray ids = session(m, now).optJSONArray("ids"); Set<String> seen = strings(day(m, now).optJSONArray("seen"));
+        JSONObject first = null;
         for (int i = 0; i < ids.length(); i++) {
             JSONObject c = m.card(ids.optString(i));
-            if (c != null && !m.deleted(c.optString("deck")) && !seen.contains(c.optString("id"))) return c;
+            if (c == null || m.deleted(c.optString("deck")) || finished(c, seen) || waiting(c, now)) continue;
+            // Due relearning takes priority; a future minute-step must never block fresh cards.
+            if (seen.contains(c.optString("id"))) return c;
+            if (first == null) first = c;
         }
-        return null;
+        return first;
+    }
+    private static boolean finished(JSONObject c, Set<String> seen) {
+        return seen.contains(c.optString("id")) && c.optInt("state") == MemoryScheduler.REVIEW;
+    }
+    private static boolean waiting(JSONObject c, long now) {
+        return c.optInt("reps") > 0 && c.optInt("state") != MemoryScheduler.REVIEW && c.optLong("due") > now;
+    }
+    public static final class Load {
+        public boolean sessionExists;
+        public int newPending, reviewPending, processed, queued, backlog, availableNew, newLimit, count;
+    }
+    /** Reads only existing state. In particular, never calls root/day/session/settings. */
+    public static Load inspectLoad(MemoryData m, long now) {
+        Load out=new Load();JSONObject r=m.db.optJSONObject("flashcards");
+        JSONObject cfg=r==null?null:r.optJSONObject("settings");
+        out.count=clamp(cfg==null?DEFAULT_COUNT:cfg.optInt("count",DEFAULT_COUNT),1,MAX_COUNT);
+        out.newLimit=clamp(cfg==null?DEFAULT_NEW_LIMIT:cfg.optInt("newLimit",DEFAULT_NEW_LIMIT),0,MAX_COUNT);
+        Set<String> selected=new HashSet<>();JSONArray configured=cfg==null?null:cfg.optJSONArray("subjects");
+        JSONArray active=m.activeDecks();
+        for(int i=0;i<active.length();i++) {
+            String id=active.optJSONObject(i).optString("id");
+            if(configured==null || MemoryData.contains(configured,id))selected.add(id);
+        }
+        java.util.Map<String,JSONObject> cards=new java.util.HashMap<>();JSONArray all=m.cards();long end=endOfDay(now);
+        for(int i=0;i<all.length();i++) {
+            JSONObject c=all.optJSONObject(i);if(c==null || !selected.contains(c.optString("deck")))continue;
+            cards.put(c.optString("id"),c);
+            if(c.optInt("reps")<=0)out.availableNew++;
+            else if(c.optLong("due")<=end)out.backlog++;
+        }
+        String date=MemoryData.date(now);JSONObject day=r==null?null:r.optJSONObject("day");
+        Set<String> seen=day!=null && date.equals(day.optString("date"))?strings(day.optJSONArray("seen")):new HashSet<String>();
+        for(String id:seen)if(cards.containsKey(id))out.processed++;
+        JSONObject session=r==null?null:r.optJSONObject("session");
+        JSONArray ids=session==null?null:session.optJSONArray("ids");
+        out.sessionExists=session!=null && date.equals(session.optString("date")) && ids!=null;
+        if(out.sessionExists)for(int i=0;i<ids.length();i++) {
+            String id=ids.optString(i);JSONObject c=cards.get(id);if(c==null)continue;
+            out.queued++;
+            if(finished(c,seen))continue;
+            if(c.optInt("reps")<=0)out.newPending++;else out.reviewPending++;
+        }
+        return out;
     }
     public static final class Progress {
         public int total, done, requested, available, reviewedToday, newLimit;
+        public long nextDue;
     }
     public static Progress progress(MemoryData m, long now) {
         Progress p = new Progress(); JSONArray ids = session(m, now).optJSONArray("ids");
         Set<String> seen = strings(day(m, now).optJSONArray("seen"));
         for (int i = 0; i < ids.length(); i++) {
             JSONObject c = m.card(ids.optString(i)); if (c == null || m.deleted(c.optString("deck"))) continue;
-            p.total++; if (seen.contains(c.optString("id"))) p.done++;
+            p.total++; if (finished(c, seen)) p.done++;
+            else if (waiting(c, now) && (p.nextDue == 0 || c.optLong("due") < p.nextDue)) p.nextDue = c.optLong("due");
         }
         p.requested = count(m); p.newLimit = newLimit(m);
         p.available = reviews(m, now).size() + fresh(m, now).size();
@@ -181,13 +230,14 @@ public final class MemoryFlashcards {
         if (!MemoryData.date(now).equals(expectedDate)) throw new IllegalArgumentException(T.s("日期已更新，请从今日闪卡继续"));
         JSONObject c = m.card(id);
         if (c == null || m.deleted(c.optString("deck")) || !MemoryData.contains(session(m, now).optJSONArray("ids"), id)
-                || MemoryData.contains(day(m, now).optJSONArray("seen"), id))
+                || finished(c, strings(day(m, now).optJSONArray("seen"))))
             throw new IllegalArgumentException(T.s("这张闪卡已处理或不在当前抽取队列中"));
         JSONObject current = next(m, now);
         if (current == null || !id.equals(current.optString("id"))) throw new IllegalArgumentException(T.s("请按当前闪卡顺序复习"));
     }
     public static void complete(MemoryData m, String id, long now) {
-        day(m, now).optJSONArray("seen").put(id);
+        JSONArray seen = day(m, now).optJSONArray("seen");
+        if (!MemoryData.contains(seen, id)) seen.put(id);
     }
     public static void validate(MemoryData m) {
         Object value = m.db.opt("flashcards"); if (value == null) return;

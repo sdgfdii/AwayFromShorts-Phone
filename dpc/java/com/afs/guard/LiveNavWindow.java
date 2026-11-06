@@ -31,6 +31,7 @@ final class LiveNavWindow {
     private Consumer<Boolean> blurListener;
     private boolean destroyed;
     private boolean pendingShow;
+    private boolean suppressed;
     private int lastWidth,lastBottom;
 
     static void attach(Activity activity,View host,View nav) {
@@ -54,6 +55,7 @@ final class LiveNavWindow {
             public void onViewDetachedFromWindow(View v){window.dispose();}
         });
         host.getViewTreeObserver().addOnGlobalLayoutListener(window::sync);
+        nav.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(l!=ol||t!=ot||r!=or||b!=ob)host.post(window::sync);});
         host.setOnApplyWindowInsetsListener((v,insets)->{v.post(window::sync);return insets;});
         // 注意：这里不 show —— 必须在宿主的窗口真正挂上之后（onViewAttachedToWindow）再挂底栏窗口，
         // 否则窗口层级会排在页面下面，切页那几帧底栏会被新页面盖住（看起来像「后面一页露出来」）。
@@ -62,6 +64,7 @@ final class LiveNavWindow {
     private static LiveNavWindow find(Activity a){WeakReference<LiveNavWindow> ref=windows.get(a);return ref==null?null:ref.get();}
     static void refresh(Activity a){LiveNavWindow w=find(a);if(w!=null)w.appearance(Build.VERSION.SDK_INT>=31&&w.manager.isCrossWindowBlurEnabled());}
     static void focusChanged(Activity a){LiveNavWindow w=find(a);if(w!=null)w.host.post(w::sync);}
+    static void suppress(Activity a,boolean hidden){LiveNavWindow w=find(a);if(w!=null)w.setSuppressed(hidden);}
     private LiveNavWindow(Activity activity,View host,View nav) {
         this.activity=activity;this.host=host;this.nav=nav;ui=new Ui(activity);manager=activity.getWindowManager();
         int theme=activity.getResources().getIdentifier("LiveNavTheme","style",activity.getPackageName());
@@ -107,14 +110,20 @@ final class LiveNavWindow {
             return insets!=null && insets.isVisible(WindowInsets.Type.ime());
         }
         Rect visible=new Rect();host.getWindowVisibleDisplayFrame(visible);
-        return host.getRootView().getHeight()-visible.bottom>ui.dp(150);
+        int[] rootPosition=new int[2];host.getRootView().getLocationOnScreen(rootPosition);
+        return rootPosition[1]+host.getRootView().getHeight()-visible.bottom>ui.dp(150);
     }
     private void sync() {
         if(destroyed || activity.isFinishing() || activity.isDestroyed())return;
+        if(suppressed){hide();return;}
         boolean focused=activity.hasWindowFocus();
-        if(resumed.get()!=activity || !focused || !host.isAttachedToWindow() || host.getWindowVisibility()!=View.VISIBLE || keyboardVisible()){
+        boolean keyboard=keyboardVisible();
+        int contentSafe=0;WindowInsets rootInsets=host.getRootWindowInsets();
+        if(rootInsets!=null)contentSafe=Build.VERSION.SDK_INT>=30?rootInsets.getInsets(WindowInsets.Type.navigationBars()).bottom:rootInsets.getStableInsetBottom();
+        FloatingNav contentDock=(FloatingNav)nav;contentDock.updateContentInsets(keyboard,contentSafe,contentDock.floating()?Math.max(ui.dp(21),contentSafe):0);
+        if(resumed.get()!=activity || !focused || !host.isAttachedToWindow() || host.getWindowVisibility()!=View.VISIBLE || keyboard){
             // 入场那一下还没拿到焦点：别把刚挂上去的底栏又藏了，否则切页会闪一下
-            if(pendingShow && host.isAttachedToWindow() && !keyboardVisible())return;
+            if(pendingShow && host.isAttachedToWindow() && !keyboard)return;
             hide();return;
         }
         pendingShow=false;
@@ -122,6 +131,7 @@ final class LiveNavWindow {
         int width=host.getWidth()-(dock.floating()?ui.dp(42)-room*2:0),bottom=dock.floating()?ui.dp(21):0; if(width<=0)return;
         int safe=0;
         if(Build.VERSION.SDK_INT>=30){WindowInsets insets=host.getRootWindowInsets();if(insets!=null)safe=insets.getInsets(WindowInsets.Type.navigationBars()).bottom;}
+        if(Build.VERSION.SDK_INT<30){WindowInsets legacy=host.getRootWindowInsets();if(legacy!=null)safe=legacy.getStableInsetBottom();}
         if(dock.floating())bottom=Math.max(bottom,safe);
         if(!dialog.isShowing())dialog.show();
         if(lastWidth!=width || lastBottom!=bottom) {
@@ -138,7 +148,7 @@ final class LiveNavWindow {
      * 底部（resume 后的 sync 再按真实 inset 校正一次）。
      */
     private void showImmediately() {
-        if(destroyed || dialog.isShowing())return;
+        if(destroyed || suppressed || dialog.isShowing())return;
         pendingShow=true;
         boolean floating=nav instanceof FloatingNav && ((FloatingNav)nav).floating();
         int room=nav instanceof FloatingNav?ui.dp(((FloatingNav)nav).shadowRoomDp()):ui.dp(16);
@@ -166,6 +176,11 @@ final class LiveNavWindow {
         catch(RuntimeException ignored){pendingShow=false;}
     }
     private void hide(){pendingShow=false;if(nav instanceof FloatingNav)((FloatingNav)nav).glassVisible(false);if(dialog.isShowing())dialog.hide();}
+    private void setSuppressed(boolean hidden) {
+        suppressed=hidden;
+        if(hidden)hide();
+        else host.post(this::sync);
+    }
     private void dispose() {
         if(destroyed)return;destroyed=true;pendingShow=false;
         if(nav instanceof FloatingNav)((FloatingNav)nav).glassVisible(false);

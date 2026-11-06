@@ -408,6 +408,11 @@ final class LanQuota {
                 // 电脑那一份的进程明细：额度页要照着它列出「电脑这一份」
                 .putString("pcAppsJson", pcApps == null ? "[]" : pcApps.toString())
                 .apply();
+        // 预算以电脑为准：手机本地那份 minutes 只是显示用的副本，跟着池子一起改，
+        // 否则电脑把额度调到 90 之后这边还顶着旧数字，进度条和文案全对不上。
+        if (minutes > 0) {
+            DailyQuotaStore.syncSharedMinutes(c, group(c), minutes);
+        }
     }
 
     /**
@@ -458,6 +463,11 @@ final class LanQuota {
                 .putString("source", "gist")
                 .putString("pcAppsJson", pcApps == null ? "[]" : pcApps.toString())
                 .apply();
+        // 预算以电脑为准：手机本地那份 minutes 只是显示用的副本，跟着池子一起改，
+        // 否则电脑把额度调到 90 之后这边还顶着旧数字，进度条和文案全对不上。
+        if (minutes > 0) {
+            DailyQuotaStore.syncSharedMinutes(c, group(c), minutes);
+        }
     }
 
     private static String read(InputStream in) throws Exception {

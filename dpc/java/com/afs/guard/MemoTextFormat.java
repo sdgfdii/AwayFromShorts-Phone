@@ -63,6 +63,7 @@ public final class MemoTextFormat {
         return paragraphs(body,anchor,focus,0,level);
     }
     /** Existing task lines stay task lines, including their checked state. */
+    public static Change quote(String body,int anchor,int focus){return paragraphs(body,anchor,focus,3,0);}
     public static Change list(String body,int anchor,int focus,boolean ordered){return paragraphs(body,anchor,focus,1,ordered?1:0);}
     /** Each level adds two spaces; at most twelve indentation characters. */
     public static Change indent(String body,int anchor,int focus,boolean more){return paragraphs(body,anchor,focus,2,more?1:0);}
@@ -116,7 +117,8 @@ public final class MemoTextFormat {
             }else{
                 if(TASK.matcher(text).find())continue;start+=indentation;end=start;String remainder=text.substring(indentation);
                 Matcher h=HEADING.matcher(remainder);if(h.find())end+=h.end();
-                if(operation==0){replacement=argument==0?"":(argument==1?"# ":argument==2?"## ":"### ");}
+                if(operation==0){if(argument==0&&remainder.startsWith("> "))end=start+2;replacement=argument==0?"":(argument==1?"# ":argument==2?"## ":"### ");}
+                else if(operation==3){replacement=remainder.startsWith("> ")?"":"> ";if(remainder.startsWith("> "))end=start+2;}
                 else{
                     Matcher list=LIST.matcher(remainder.substring(end-start));if(list.find())end+=list.end();
                     replacement=argument==1?numbers.get(line.start)+". ":"- ";

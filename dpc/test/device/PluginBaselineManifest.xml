@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.afs.guard.pluginbaselineqa">
+<application android:label="R2 Baseline QA" />
+<instrumentation android:name="com.afs.guard.PluginBaselineDataTest" android:targetPackage="com.afs.guard" android:functionalTest="true" />
+</manifest>

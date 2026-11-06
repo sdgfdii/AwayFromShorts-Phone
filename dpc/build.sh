@@ -29,8 +29,15 @@ BT="${BT%/}"
 [ -n "$BT" ] || { echo "找不到 build-tools：$SDK/build-tools" >&2; exit 1; }
 
 ANDROID_JAR="$SDK/platforms/android-34/android.jar"
+if [ ! -f "$ANDROID_JAR" ]; then
+  # Android SDK may provide only the newest installed platform on a fresh machine.
+  # The APK still targets 34 below; the compile stub can safely be newer.
+  PLATFORM_DIR="$(ls -d "$SDK"/platforms/android-*/ 2>/dev/null | sort -V | tail -1 || true)"
+  PLATFORM_DIR="${PLATFORM_DIR%/}"
+  ANDROID_JAR="$PLATFORM_DIR/android.jar"
+fi
 [ -f "$ANDROID_JAR" ] || { echo "找不到 android.jar：$ANDROID_JAR" >&2
-  echo "用 sdkmanager 装 platforms;android-34" >&2; exit 1; }
+  echo "用 sdkmanager 安装至少一个 Android platform" >&2; exit 1; }
 
 # Windows 上是 aapt2.exe / d8.bat / apksigner.bat，Unix 上无后缀；-x 在 Git Bash 下不可靠，用 -f
 tool() {
@@ -41,9 +48,11 @@ tool() {
   echo "$BT/$1"
 }
 AAPT2="$(tool aapt2)"
+AIDL="$(tool aidl)"
 D8="$(tool d8)"
 ZIPALIGN="$(tool zipalign)"
 APKSIGNER="$(tool apksigner)"
+[ -x "$AIDL" ] || [ -f "$AIDL" ] || { echo "找不到 aidl：$BT/aidl" >&2; exit 1; }
 
 if [ -z "${JAVA_HOME:-}" ]; then
   JAVA_HOME="$(dirname "$(dirname "$(command -v javac)")")"
@@ -54,22 +63,49 @@ JAR="$JAVA_HOME/bin/jar.exe"
 
 OUT="build"
 rm -rf "$OUT"
-mkdir -p "$OUT/flat" "$OUT/gen" "$OUT/classes" "$OUT/dex"
+mkdir -p "$OUT/flat" "$OUT/gen" "$OUT/aidlgens" "$OUT/classes" "$OUT/dex"
 
 # ---------- 0. Public configuration ----------
 # Credentials are configured per user in the app. Never embed tokens in an APK.
 if [ "${AFS_PREFILL:-0}" != "0" ]; then
   echo "不再支持注入凭据；请在应用内配置个人同步。" >&2; exit 1
 fi
+PLUGIN_TRUST_SHA256="$(tr -d '\r\n ' < release/signing-certificate.sha256)"
+[ -n "$PLUGIN_TRUST_SHA256" ] || { echo "release/signing-certificate.sha256 为空" >&2; exit 1; }
+PLUGIN_TEST_MODE=false
+if [ "${AFS_RELEASE:-0}" = "1" ] && [ "${AFS_PLUGIN_TEST_MODE:-0}" = "1" ]; then
+  echo "Release cannot enable plugin test trust" >&2; exit 1
+fi
+[ "${AFS_PLUGIN_TEST_MODE:-0}" = "1" ] && PLUGIN_TEST_MODE=true
+PLUGIN_STATS_LEGACY=false
+[ "${AFS_STATS_LEGACY:-0}" = "1" ] && PLUGIN_STATS_LEGACY=true
 mkdir -p "$OUT/gen/com/afs/guard"
 cat > "$OUT/gen/com/afs/guard/BuildConfig.java" <<EOF
 package com.afs.guard;
 public final class BuildConfig {
     public static final String PREFILL_TOKEN = "";
+    public static final boolean PLUGIN_TEST_MODE = $PLUGIN_TEST_MODE;
+    public static final String PLUGIN_TRUST_SHA256 = "$PLUGIN_TRUST_SHA256";
+    public static final boolean PLUGIN_STATS_LEGACY = $PLUGIN_STATS_LEGACY;
 }
 EOF
-VERSION_CODE="${AFS_VERSION_CODE:-2260}"
-VERSION_NAME="${AFS_VERSION_NAME:-1.80.1}"
+
+# ---------- 0b. AIDL（宿主与插件各自编译同一份API源） ----------
+echo "[0b/7] aidl"
+API_AIDL="../plugin-api/aidl"
+if command -v cygpath >/dev/null 2>&1; then
+  API_AIDL_ARG="$(cygpath -m "$(cd "$API_AIDL" && pwd)")"
+  AIDL_OUT_ARG="$(cygpath -m "$(cd "$OUT/aidlgens" && pwd)")"
+  while IFS= read -r -d '' f; do
+    "$AIDL" -I "$API_AIDL_ARG" -o "$AIDL_OUT_ARG" "$(cygpath -m "$f")"
+  done < <(find "$API_AIDL" -name '*.aidl' -print0)
+else
+  while IFS= read -r -d '' f; do
+    "$AIDL" -I "$API_AIDL" -o "$OUT/aidlgens" "$f"
+  done < <(find "$API_AIDL" -name '*.aidl' -print0)
+fi
+VERSION_CODE="${AFS_VERSION_CODE:-2313}"
+VERSION_NAME="${AFS_VERSION_NAME:-1.91.19}"
 if [ "${AFS_RELEASE:-0}" = "1" ]; then
   : "${AFS_KEYSTORE:?Release requires an external signing keystore}"
   : "${AFS_STORE_PASS:?Release requires a private signing password}"
@@ -165,7 +201,7 @@ CP_SEP=";"
 case "$(uname -s)" in Linux|Darwin) CP_SEP=":" ;; esac
 COMPILE_ANDROID="$ANDROID_JAR"
 if command -v cygpath >/dev/null 2>&1; then COMPILE_ANDROID="$(cygpath -m "$ANDROID_JAR")"; fi
-find java "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
+find java "$OUT/gen" "$OUT/aidlgens" ../plugin-api/java -name '*.java' > "$OUT/sources.txt"
 # ★ javac 失败必须让构建死掉：以前管道接 grep || true, 编译错了构建照样走到
 #   打包, 装上的是"没有新代码"的旧 dex（PcStats 漏 import 就这么漏装过一次）。
 # --release supplies Java 8's LambdaMetafactory signatures; Android's boot stubs
@@ -246,7 +282,9 @@ fi
 rm -f "$OUT/afs-guard.apk.idsig"
 DEST="${AFS_APK_OUTPUT:-../afs-guard.apk}"
 mkdir -p "$(dirname "$DEST")"
-cp -f "$OUT/afs-guard.apk" "$DEST"
+if [ "$DEST" != "$OUT/afs-guard.apk" ]; then
+  cp -f "$OUT/afs-guard.apk" "$DEST"
+fi
 
 echo
 echo "完成："
